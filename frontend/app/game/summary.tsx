@@ -24,9 +24,29 @@ export default function GameSummaryScreen() {
       let message = `${activeGame.name} - Settlement Summary\n\n`;
       message += `Total Pot: $${summary.totalPot.toFixed(2)}\n\n`;
       message += `Settlements:\n`;
-      summary.settlements.forEach(s => {
-        message += `• ${s.from} pays ${s.to}: $${s.amount.toFixed(2)}\n`;
-      });
+
+      if (summary.settlements.length === 0) {
+        message += `All balanced! No settlements needed.\n`;
+      } else {
+        const settlementsByRecipient = summary.settlements.reduce<Record<string, { from: string; amount: number }[]>>(
+          (acc, settlement) => {
+            const { to, from, amount } = settlement;
+            if (!acc[to]) {
+              acc[to] = [];
+            }
+            acc[to].push({ from, amount });
+            return acc;
+          },
+          {}
+        );
+
+        Object.entries(settlementsByRecipient).forEach(([recipient, incoming]) => {
+          const details = incoming
+            .map(({ from, amount }) => `$${amount.toFixed(2)} from ${from}`)
+            .join(', ');
+          message += `• ${recipient}: ${details}\n`;
+        });
+      }
       
       await Share.share({ message });
     } catch (error) {
@@ -51,7 +71,7 @@ export default function GameSummaryScreen() {
         
         {/* Settlements */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>💰 Settlements</Text>
+          <Text style={styles.sectionTitle}>Settlements</Text>
           <Text style={styles.sectionSubtitle}>
             Optimized to minimize transactions ({summary.settlements.length} payment{summary.settlements.length !== 1 ? 's' : ''})
           </Text>
@@ -76,7 +96,7 @@ export default function GameSummaryScreen() {
         
         {/* Player Balances */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>📊 Final Balances</Text>
+          <Text style={styles.sectionTitle}>Final Balances</Text>
           {summary.balances.map(balance => (
             <View key={balance.playerId} style={styles.balanceCard}>
               <View style={styles.balanceInfo}>
