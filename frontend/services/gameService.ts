@@ -61,6 +61,35 @@ export class GameService {
     game.transactions.push(transaction);
     return transaction;
   }
+
+  static setPlayerTransactionTotal(
+    game: Game,
+    playerId: string,
+    type: 'buyin' | 'cashout',
+    totalAmount: number
+  ): Transaction | null {
+    const filteredTransactions = game.transactions.filter(
+      transaction => !(transaction.playerId === playerId && transaction.type === type)
+    );
+
+    game.transactions.length = 0;
+    game.transactions.push(...filteredTransactions);
+
+    if (totalAmount <= 0) {
+      return null;
+    }
+
+    const transaction: Transaction = {
+      id: `txn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      playerId,
+      type,
+      amount: totalAmount,
+      timestamp: new Date()
+    };
+
+    game.transactions.push(transaction);
+    return transaction;
+  }
   
   static addPlayer(game: Game, name: string): Player {
     const player: Player = {

@@ -1,19 +1,31 @@
-const tintColorLight = '#2f95dc';
-const tintColorDark = '#fff';
+// Black & Gold Premium Theme
+const goldPrimary = '#D4AF37';
+const goldAccent = '#F4D03F';
+const darkBg = '#0A0A0A';
+const cardBg = '#1A1A1A';
+
+const tintColorLight = goldPrimary;
+const tintColorDark = goldPrimary;
 
 export default {
   light: {
     text: '#000',
     background: '#fff',
     tint: tintColorLight,
-    tabIconDefault: '#ccc',
+    tabIconDefault: '#999',
     tabIconSelected: tintColorLight,
   },
   dark: {
-    text: '#fff',
-    background: '#000',
+    text: '#FFFFFF',
+    background: darkBg,
     tint: tintColorDark,
-    tabIconDefault: '#ccc',
-    tabIconSelected: tintColorDark,
+    tabIconDefault: '#666',
+    tabIconSelected: goldPrimary,
+    card: cardBg,
+    border: '#2A2A2A',
+    gold: goldPrimary,
+    goldAccent: goldAccent,
+    success: '#00D66F',
+    danger: '#FF3B5C',
   },
 };

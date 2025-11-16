@@ -49,9 +49,9 @@ export default function HomeScreen() {
       <ScrollView style={styles.scrollView}>
         {/* Active Games Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Active Games</Text>
+          <Text style={styles.sectionTitle}>Active</Text>
           {activeGames.length === 0 ? (
-            <Text style={styles.emptyText}>No active games. Start a new game!</Text>
+            <Text style={styles.emptyText}>No active games</Text>
           ) : (
             activeGames.map(game => (
               <TouchableOpacity
@@ -74,9 +74,9 @@ export default function HomeScreen() {
         
         {/* Completed Games Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Completed Games</Text>
+          <Text style={styles.sectionTitle}>History</Text>
           {completedGames.length === 0 ? (
-            <Text style={styles.emptyText}>No completed games yet</Text>
+            <Text style={styles.emptyText}>No completed games</Text>
           ) : (
             completedGames.map(game => (
               <TouchableOpacity
@@ -103,7 +103,7 @@ export default function HomeScreen() {
         style={styles.newGameButton}
         onPress={() => router.push('/game/new')}
       >
-        <Text style={styles.newGameButtonText}>+ New Game</Text>
+        <Text style={styles.newGameButtonText}>New Game</Text>
       </TouchableOpacity>
     </View>
   );
@@ -112,36 +112,41 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#0A0A0A',
   },
   scrollView: {
     flex: 1,
-    padding: 16,
+    padding: 20,
   },
   section: {
-    marginBottom: 24,
+    marginBottom: 32,
   },
   sectionTitle: {
-    fontSize: 24,
+    fontSize: 14,
     fontWeight: 'bold',
-    marginBottom: 12,
+    marginBottom: 16,
+    color: '#D4AF37',
+    textTransform: 'uppercase',
+    letterSpacing: 2,
   },
   emptyText: {
-    fontSize: 16,
-    opacity: 0.5,
-    fontStyle: 'italic',
+    fontSize: 15,
+    opacity: 0.4,
     textAlign: 'center',
     marginTop: 20,
+    color: '#FFFFFF',
   },
   gameCard: {
-    padding: 16,
-    borderRadius: 12,
+    padding: 20,
+    borderRadius: 8,
     marginBottom: 12,
-    backgroundColor: '#2c2c2e',
-    borderWidth: 1,
-    borderColor: '#3a3a3c',
+    backgroundColor: 'transparent',
+    borderLeftWidth: 4,
+    borderLeftColor: '#D4AF37',
   },
   completedCard: {
-    opacity: 0.8,
+    opacity: 0.6,
+    borderLeftColor: '#666',
   },
   gameCardHeader: {
     flexDirection: 'row',
@@ -150,27 +155,31 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   gameCardTitle: {
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
   },
   gameCardDate: {
-    fontSize: 14,
-    opacity: 0.7,
+    fontSize: 13,
+    opacity: 0.5,
+    color: '#FFFFFF',
   },
   gameCardInfo: {
-    fontSize: 14,
-    opacity: 0.7,
+    fontSize: 13,
+    opacity: 0.6,
+    color: '#D4AF37',
   },
   newGameButton: {
-    margin: 16,
-    padding: 18,
-    borderRadius: 12,
-    backgroundColor: '#007AFF',
+    margin: 20,
+    padding: 20,
+    borderRadius: 8,
+    backgroundColor: '#D4AF37',
     alignItems: 'center',
   },
   newGameButtonText: {
-    color: '#fff',
+    color: '#0A0A0A',
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: 'bold',
+    letterSpacing: 1,
   },
 });

@@ -30,10 +30,11 @@ export default function HistoryScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#0A0A0A',
   },
   scrollView: {
     flex: 1,
-    padding: 16,
+    padding: 20,
   },
   header: {
     marginBottom: 32,
@@ -42,27 +43,32 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: 'bold',
     marginBottom: 8,
+    color: '#D4AF37',
+    letterSpacing: 1,
   },
   subtitle: {
     fontSize: 16,
-    opacity: 0.7,
+    opacity: 0.6,
+    color: '#FFFFFF',
   },
   comingSoon: {
-    backgroundColor: '#2c2c2e',
-    padding: 24,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#3a3a3c',
+    backgroundColor: '#1A1A1A',
+    padding: 28,
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    borderLeftColor: '#D4AF37',
     alignItems: 'center',
   },
   comingSoonTitle: {
     fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 16,
+    color: '#D4AF37',
   },
   comingSoonText: {
     fontSize: 16,
-    opacity: 0.7,
+    opacity: 0.6,
     lineHeight: 28,
+    color: '#FFFFFF',
   },
 });

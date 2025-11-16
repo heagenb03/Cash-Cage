@@ -35,16 +35,16 @@ export default function NewGameScreen() {
       style={styles.container}
     >
       <View style={styles.content}>
-        <Text style={styles.title}>Create New Game</Text>
-        <Text style={styles.subtitle}>Start tracking your poker night</Text>
+        <Text style={styles.title}>New Game</Text>
+        <Text style={styles.subtitle}>Track your game</Text>
         
         <View style={styles.form}>
-          <Text style={styles.label}>Game Name</Text>
+          <Text style={styles.label}>Name</Text>
           <TextInput
             style={styles.input}
             value={gameName}
             onChangeText={setGameName}
-            placeholder="e.g., Friday Night Poker"
+            placeholder="Friday Night Poker"
             placeholderTextColor="#666"
             autoFocus
             returnKeyType="done"
@@ -73,6 +73,7 @@ export default function NewGameScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#0A0A0A',
   },
   content: {
     flex: 1,
@@ -80,57 +81,62 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   title: {
-    fontSize: 32,
+    fontSize: 36,
     fontWeight: 'bold',
     marginBottom: 8,
     textAlign: 'center',
+    color: '#D4AF37',
+    letterSpacing: 1,
   },
   subtitle: {
     fontSize: 16,
-    opacity: 0.7,
+    opacity: 0.6,
     marginBottom: 48,
     textAlign: 'center',
+    color: '#FFFFFF',
   },
   form: {
     width: '100%',
   },
   label: {
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: '600',
     marginBottom: 8,
+    color: '#D4AF37',
+    textTransform: 'uppercase',
+    letterSpacing: 1.5,
   },
   input: {
-    backgroundColor: '#2c2c2e',
-    borderRadius: 12,
-    padding: 16,
+    backgroundColor: '#1A1A1A',
+    borderRadius: 8,
+    padding: 18,
     fontSize: 18,
     color: '#fff',
-    borderWidth: 1,
-    borderColor: '#3a3a3c',
+    borderWidth: 2,
+    borderColor: '#2A2A2A',
     marginBottom: 24,
   },
   createButton: {
-    backgroundColor: '#007AFF',
-    padding: 18,
-    borderRadius: 12,
+    backgroundColor: '#D4AF37',
+    padding: 20,
+    borderRadius: 8,
     alignItems: 'center',
     marginBottom: 12,
   },
   createButtonText: {
-    color: '#fff',
+    color: '#0A0A0A',
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: 'bold',
+    letterSpacing: 1,
   },
   cancelButton: {
     padding: 18,
-    borderRadius: 12,
+    borderRadius: 8,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#3a3a3c',
   },
   cancelButtonText: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
-    opacity: 0.7,
+    color: '#666',
   },
 });

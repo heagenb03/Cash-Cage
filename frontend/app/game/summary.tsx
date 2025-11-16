@@ -73,11 +73,11 @@ export default function GameSummaryScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Settlements</Text>
           <Text style={styles.sectionSubtitle}>
-            Optimized to minimize transactions ({summary.settlements.length} payment{summary.settlements.length !== 1 ? 's' : ''})
+            {summary.settlements.length} payment{summary.settlements.length !== 1 ? 's' : ''}
           </Text>
           
           {summary.settlements.length === 0 ? (
-            <Text style={styles.emptyText}>All balanced! No settlements needed.</Text>
+            <Text style={styles.emptyText}>All balanced</Text>
           ) : (
             summary.settlements.map((settlement, index) => (
               <View key={index} style={styles.settlementCard}>
@@ -101,20 +101,15 @@ export default function GameSummaryScreen() {
             <View key={balance.playerId} style={styles.balanceCard}>
               <View style={styles.balanceInfo}>
                 <Text style={styles.balanceName}>{balance.playerName}</Text>
-                <View style={styles.balanceDetails}>
-                  <Text style={styles.balanceDetail}>
-                    Buyins: ${balance.totalBuyins.toFixed(2)}
-                  </Text>
-                  <Text style={styles.balanceDetail}>
-                    Cashouts: ${balance.totalCashouts.toFixed(2)}
-                  </Text>
-                </View>
+                <Text style={styles.balanceDetail}>
+                  In: ${balance.totalBuyins.toFixed(0)} • Out: ${balance.totalCashouts.toFixed(0)}
+                </Text>
               </View>
               <Text style={[
                 styles.balanceNet,
-                { color: balance.netBalance >= 0 ? '#34C759' : '#FF3B30' }
+                { color: balance.netBalance >= 0 ? '#51A687' : '#C04657' }
               ]}>
-                {balance.netBalance >= 0 ? '+' : ''}{balance.netBalance.toFixed(2)}
+                {balance.netBalance >= 0 ? '+' : ''}{balance.netBalance.toFixed(0)}
               </Text>
             </View>
           ))}
@@ -143,71 +138,83 @@ export default function GameSummaryScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#0A0A0A',
   },
   scrollView: {
     flex: 1,
-    padding: 16,
+    padding: 20,
   },
   header: {
     marginBottom: 32,
     alignItems: 'center',
   },
   title: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: 'bold',
     marginBottom: 4,
     textAlign: 'center',
+    color: '#D4AF37',
+    letterSpacing: 1,
   },
   subtitle: {
-    fontSize: 16,
-    opacity: 0.7,
+    fontSize: 14,
+    opacity: 0.5,
     marginBottom: 24,
+    color: '#FFFFFF',
   },
   totalPotCard: {
-    backgroundColor: '#007AFF',
-    padding: 24,
-    borderRadius: 16,
+    backgroundColor: '#1A1A1A',
+    padding: 28,
+    borderRadius: 8,
     alignItems: 'center',
     width: '100%',
+    borderWidth: 2,
+    borderColor: '#D4AF37',
   },
   totalPotLabel: {
-    fontSize: 16,
-    color: '#fff',
-    opacity: 0.9,
+    fontSize: 12,
+    color: '#D4AF37',
+    opacity: 0.8,
     marginBottom: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 2,
   },
   totalPotAmount: {
-    fontSize: 36,
+    fontSize: 42,
     fontWeight: 'bold',
-    color: '#fff',
+    color: '#D4AF37',
   },
   section: {
     marginBottom: 32,
   },
   sectionTitle: {
-    fontSize: 22,
+    fontSize: 14,
     fontWeight: 'bold',
     marginBottom: 8,
+    color: '#D4AF37',
+    textTransform: 'uppercase',
+    letterSpacing: 2,
   },
   sectionSubtitle: {
-    fontSize: 14,
-    opacity: 0.7,
+    fontSize: 12,
+    opacity: 0.5,
     marginBottom: 16,
+    color: '#FFFFFF',
   },
   emptyText: {
-    fontSize: 16,
-    opacity: 0.5,
-    fontStyle: 'italic',
+    fontSize: 15,
+    opacity: 0.4,
     textAlign: 'center',
     marginTop: 20,
+    color: '#FFFFFF',
   },
   settlementCard: {
-    backgroundColor: '#2c2c2e',
-    padding: 20,
-    borderRadius: 12,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#3a3a3c',
+    backgroundColor: '#1A1A1A',
+    padding: 14,
+    borderRadius: 6,
+    marginBottom: 8,
+    borderLeftWidth: 3,
+    borderLeftColor: '#D4AF37',
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
@@ -216,80 +223,86 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+    backgroundColor: 'transparent',
   },
   settlementFrom: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
+    color: '#FFFFFF',
   },
   settlementArrow: {
-    fontSize: 20,
-    marginHorizontal: 12,
+    fontSize: 16,
+    marginHorizontal: 10,
     opacity: 0.5,
+    color: '#D4AF37',
   },
   settlementTo: {
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: '600',
+    color: '#FFFFFF',
   },
   settlementAmount: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: 'bold',
-    color: '#34C759',
+    color: '#FFFFFF',
   },
   balanceCard: {
-    backgroundColor: '#2c2c2e',
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: '#3a3a3c',
+    backgroundColor: '#1A1A1A',
+    padding: 14,
+    borderRadius: 6,
+    marginBottom: 8,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    borderLeftWidth: 3,
+    borderLeftColor: '#D4AF37',
   },
   balanceInfo: {
     flex: 1,
+    backgroundColor: 'transparent',
   },
   balanceName: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '600',
-    marginBottom: 8,
-  },
-  balanceDetails: {
-    gap: 4,
+    marginBottom: 4,
+    color: '#FFFFFF',
   },
   balanceDetail: {
-    fontSize: 14,
-    opacity: 0.7,
+    fontSize: 13,
+    opacity: 0.6,
+    color: '#FFFFFF',
   },
   balanceNet: {
-    fontSize: 22,
+    fontSize: 20,
     fontWeight: 'bold',
   },
   actions: {
-    padding: 16,
+    padding: 20,
     gap: 12,
   },
   shareButton: {
-    backgroundColor: '#2c2c2e',
+    backgroundColor: 'transparent',
     padding: 18,
-    borderRadius: 12,
+    borderRadius: 8,
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#3a3a3c',
+    borderWidth: 2,
+    borderColor: '#2A2A2A',
   },
   shareButtonText: {
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
+    color: '#666',
   },
   doneButton: {
-    backgroundColor: '#007AFF',
-    padding: 18,
-    borderRadius: 12,
+    backgroundColor: '#D4AF37',
+    padding: 20,
+    borderRadius: 8,
     alignItems: 'center',
   },
   doneButtonText: {
-    color: '#fff',
+    color: '#0A0A0A',
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: 'bold',
+    letterSpacing: 1,
   },
 });

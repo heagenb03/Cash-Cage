@@ -49,9 +49,23 @@ export default function RootLayout() {
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
 
+  // Custom dark theme with black and gold
+  const CustomDarkTheme = {
+    ...DarkTheme,
+    colors: {
+      ...DarkTheme.colors,
+      primary: '#D4AF37',
+      background: '#0A0A0A',
+      card: '#1A1A1A',
+      text: '#FFFFFF',
+      border: '#2A2A2A',
+      notification: '#D4AF37',
+    },
+  };
+
   return (
     <GameProvider>
-      <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+      <ThemeProvider value={CustomDarkTheme}>
         <Stack>
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
           <Stack.Screen name="modal" options={{ presentation: 'modal' }} />

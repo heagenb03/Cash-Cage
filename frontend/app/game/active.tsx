@@ -47,14 +47,29 @@ export default function ActiveGameScreen() {
   
   const handleAddTransaction = async () => {
     if (!selectedPlayer) return;
-    
+
     const amount = parseFloat(transactionAmount);
-    if (isNaN(amount) || amount <= 0) {
+    if (isNaN(amount) || amount < 0) {
       Alert.alert('Error', 'Please enter a valid amount');
       return;
     }
-    
-    GameService.addTransaction(activeGame, selectedPlayer.id, transactionType, amount);
+
+    const playerBalance = GameService
+      .calculateBalances(activeGame)
+      .find(balance => balance.playerId === selectedPlayer.id);
+
+    const currentTotal = transactionType === 'buyin'
+      ? playerBalance?.totalBuyins ?? 0
+      : playerBalance?.totalCashouts ?? 0;
+
+    if (amount === currentTotal) {
+      setTransactionAmount('');
+      setShowAddTransaction(false);
+      setSelectedPlayer(null);
+      return;
+    }
+
+    GameService.setPlayerTransactionTotal(activeGame, selectedPlayer.id, transactionType, amount);
     await updateGame(activeGame);
     setTransactionAmount('');
     setShowAddTransaction(false);
@@ -122,8 +137,14 @@ export default function ActiveGameScreen() {
   };
   
   const openTransactionModal = (player: Player, type: 'buyin' | 'cashout') => {
+    const balance = getPlayerBalance(player.id);
+    const currentTotal = type === 'buyin'
+      ? balance?.totalBuyins ?? 0
+      : balance?.totalCashouts ?? 0;
+
     setSelectedPlayer(player);
     setTransactionType(type);
+    setTransactionAmount(currentTotal.toString());
     setShowAddTransaction(true);
   };
   
@@ -138,7 +159,11 @@ export default function ActiveGameScreen() {
         <View style={styles.header}>
           <Text style={styles.gameTitle}>{activeGame.name}</Text>
           <Text style={styles.gameInfo}>
-            {new Date(activeGame.date).toLocaleDateString()}
+            {new Date(activeGame.date).toLocaleDateString('en-US', { 
+              month: 'short', 
+              day: 'numeric', 
+              year: 'numeric' 
+            })}
           </Text>
         </View>
         
@@ -147,12 +172,12 @@ export default function ActiveGameScreen() {
           <View style={styles.sectionHeader}>
             <Text style={styles.sectionTitle}>Players</Text>
             <TouchableOpacity onPress={() => setShowAddPlayer(true)}>
-              <Text style={styles.addButton}>+ Add</Text>
+              <Text style={styles.addButton}>+</Text>
             </TouchableOpacity>
           </View>
           
           {activeGame.players.length === 0 ? (
-            <Text style={styles.emptyText}>No players yet. Add players to start.</Text>
+            <Text style={styles.emptyText}>Add players to start</Text>
           ) : (
             activeGame.players.map(player => {
               const balance = getPlayerBalance(player.id);
@@ -163,30 +188,20 @@ export default function ActiveGameScreen() {
                     {balance && (
                       <View style={styles.playerStats}>
                         <Text style={styles.statText}>
-                          Buyins: ${balance.totalBuyins.toFixed(2)}
-                        </Text>
-                        <Text style={styles.statText}>
-                          Cashouts: ${balance.totalCashouts.toFixed(2)}
-                        </Text>
-                        <Text style={[
-                          styles.statText,
-                          styles.balanceText,
-                          { color: balance.netBalance >= 0 ? '#34C759' : '#FF3B30' }
-                        ]}>
-                          Balance: {balance.netBalance >= 0 ? '+' : ''}{balance.netBalance.toFixed(2)}
+                          In: ${balance.totalBuyins.toFixed(0)} • Out: ${balance.totalCashouts.toFixed(0)}
                         </Text>
                       </View>
                     )}
                   </View>
                   <View style={styles.playerActions}>
                     <TouchableOpacity
-                      style={[styles.actionButton, styles.buyinButton]}
+                      style={styles.actionButton}
                       onPress={() => openTransactionModal(player, 'buyin')}
                     >
                       <Text style={styles.actionButtonText}>Buy-in</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={[styles.actionButton, styles.cashoutButton]}
+                      style={styles.actionButton}
                       onPress={() => openTransactionModal(player, 'cashout')}
                     >
                       <Text style={styles.actionButtonText}>Cash Out</Text>
@@ -204,7 +219,7 @@ export default function ActiveGameScreen() {
             style={styles.completeButton}
             onPress={handleCompleteGame}
           >
-            <Text style={styles.completeButtonText}>Complete Game & View Settlements</Text>
+            <Text style={styles.completeButtonText}>Complete Game</Text>
           </TouchableOpacity>
         )}
       </ScrollView>
@@ -226,7 +241,7 @@ export default function ActiveGameScreen() {
               style={styles.input}
               value={newPlayerName}
               onChangeText={setNewPlayerName}
-              placeholder="Player name"
+              placeholder="Name"
               placeholderTextColor="#666"
               autoFocus
             />
@@ -303,22 +318,29 @@ export default function ActiveGameScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#0A0A0A',
   },
   scrollView: {
     flex: 1,
-    padding: 16,
+    padding: 20,
   },
   header: {
-    marginBottom: 24,
+    marginBottom: 32,
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#2A2A2A',
   },
   gameTitle: {
-    fontSize: 28,
+    fontSize: 32,
     fontWeight: 'bold',
     marginBottom: 4,
+    color: '#D4AF37',
+    letterSpacing: 1,
   },
   gameInfo: {
-    fontSize: 16,
-    opacity: 0.7,
+    fontSize: 14,
+    opacity: 0.5,
+    color: '#FFFFFF',
   },
   section: {
     marginBottom: 24,
@@ -327,124 +349,135 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#D4AF37',
+    textTransform: 'uppercase',
+    letterSpacing: 2,
   },
   addButton: {
-    fontSize: 16,
-    color: '#007AFF',
-    fontWeight: '600',
+    fontSize: 28,
+    color: '#D4AF37',
+    fontWeight: '300',
   },
   emptyText: {
-    fontSize: 16,
-    opacity: 0.5,
-    fontStyle: 'italic',
+    fontSize: 15,
+    opacity: 0.4,
     textAlign: 'center',
     marginTop: 20,
+    color: '#FFFFFF',
   },
   playerCard: {
-    padding: 16,
-    borderRadius: 12,
-    marginBottom: 12,
-    backgroundColor: '#2c2c2e',
-    borderWidth: 1,
-    borderColor: '#3a3a3c',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    padding: 14,
+    borderRadius: 6,
+    marginBottom: 8,
+    backgroundColor: '#1A1A1A',
+    borderLeftWidth: 3,
+    borderLeftColor: '#D4AF37',
   },
   playerInfo: {
-    marginBottom: 12,
+    flex: 1,
+    marginRight: 12,
+    backgroundColor: 'transparent',
   },
   playerName: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '600',
-    marginBottom: 8,
+    color: '#FFFFFF',
+    marginBottom: 4,
   },
   playerStats: {
-    gap: 4,
+    flexDirection: 'row',
+    backgroundColor: 'transparent',
   },
   statText: {
-    fontSize: 14,
-    opacity: 0.7,
-  },
-  balanceText: {
-    fontWeight: '600',
-    fontSize: 16,
+    fontSize: 13,
+    opacity: 0.6,
+    color: '#FFFFFF',
   },
   playerActions: {
     flexDirection: 'row',
     gap: 8,
+    backgroundColor: 'transparent',
   },
   actionButton: {
-    flex: 1,
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  buyinButton: {
-    backgroundColor: '#FF3B30',
-  },
-  cashoutButton: {
-    backgroundColor: '#34C759',
+    paddingHorizontal: 18,
+    paddingVertical: 8,
+    borderRadius: 4,
+    backgroundColor: '#2A2A2A',
+    borderWidth: 1,
+    borderColor: '#D4AF37',
   },
   actionButtonText: {
-    color: '#fff',
-    fontWeight: '600',
+    color: '#D4AF37',
+    fontWeight: 'bold',
+    fontSize: 13,
+    letterSpacing: 0.5,
   },
   completeButton: {
-    backgroundColor: '#007AFF',
-    padding: 18,
-    borderRadius: 12,
+    backgroundColor: '#D4AF37',
+    padding: 20,
+    borderRadius: 8,
     alignItems: 'center',
     marginTop: 24,
     marginBottom: 32,
   },
   completeButtonText: {
-    color: '#fff',
+    color: '#0A0A0A',
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: 'bold',
+    letterSpacing: 1,
   },
   button: {
-    backgroundColor: '#007AFF',
-    padding: 18,
-    borderRadius: 12,
+    backgroundColor: '#D4AF37',
+    padding: 20,
+    borderRadius: 8,
     alignItems: 'center',
-    margin: 16,
+    margin: 20,
   },
   buttonText: {
-    color: '#fff',
+    color: '#0A0A0A',
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: 'bold',
+    letterSpacing: 1,
   },
   modalOverlay: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.5)',
+    backgroundColor: 'rgba(0,0,0,0.9)',
   },
   modalContent: {
     width: '85%',
-    backgroundColor: '#1c1c1e',
-    borderRadius: 20,
-    padding: 24,
+    backgroundColor: '#1A1A1A',
+    borderRadius: 8,
+    padding: 28,
     alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#2A2A2A',
   },
   modalTitle: {
     fontSize: 20,
-    fontWeight: '600',
-    marginBottom: 20,
+    fontWeight: 'bold',
+    marginBottom: 24,
+    color: '#D4AF37',
   },
   input: {
     width: '100%',
-    backgroundColor: '#2c2c2e',
-    borderRadius: 12,
-    padding: 16,
+    backgroundColor: '#0A0A0A',
+    borderRadius: 6,
+    padding: 18,
     fontSize: 18,
     color: '#fff',
-    borderWidth: 1,
-    borderColor: '#3a3a3c',
-    marginBottom: 20,
+    borderWidth: 2,
+    borderColor: '#2A2A2A',
+    marginBottom: 24,
   },
   modalButtons: {
     flexDirection: 'row',
@@ -454,40 +487,40 @@ const styles = StyleSheet.create({
   modalButton: {
     flex: 1,
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 6,
     alignItems: 'center',
   },
   cancelButton: {
-    backgroundColor: '#2c2c2e',
-    borderWidth: 1,
-    borderColor: '#3a3a3c',
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderColor: '#2A2A2A',
   },
   confirmButton: {
-    backgroundColor: '#007AFF',
+    backgroundColor: '#D4AF37',
   },
   cancelButtonText: {
     fontSize: 16,
     fontWeight: '600',
-    opacity: 0.7,
+    color: '#666',
   },
   confirmButtonText: {
-    color: '#fff',
+    color: '#0A0A0A',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: 'bold',
   },
   validationBox: {
     flexDirection: 'row',
-    backgroundColor: '#3a0a0a',
-    borderRadius: 12,
+    backgroundColor: '#2A0A0A',
+    borderRadius: 8,
     padding: 16,
     marginTop: 16,
     marginBottom: 8,
     borderWidth: 2,
-    borderColor: '#FF3B30',
+    borderColor: '#FF3B5C',
   },
   validationWarningBox: {
-    backgroundColor: '#3a2a0a',
-    borderColor: '#FF9500',
+    backgroundColor: '#2A1A0A',
+    borderColor: '#F4D03F',
   },
   validationIcon: {
     fontSize: 24,
@@ -504,13 +537,13 @@ const styles = StyleSheet.create({
   },
   validationError: {
     fontSize: 14,
-    color: '#FF3B30',
+    color: '#FF3B5C',
     marginBottom: 4,
     lineHeight: 20,
   },
   validationWarning: {
     fontSize: 14,
-    color: '#FF9500',
+    color: '#F4D03F',
     marginBottom: 4,
     lineHeight: 20,
   },
