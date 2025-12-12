@@ -43,7 +43,7 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: 'bold',
     marginBottom: 8,
-    color: '#D4AF37',
+    color: '#B072BB',
     letterSpacing: 1,
   },
   subtitle: {
@@ -56,14 +56,14 @@ const styles = StyleSheet.create({
     padding: 28,
     borderRadius: 8,
     borderLeftWidth: 4,
-    borderLeftColor: '#D4AF37',
+    borderLeftColor: '#B072BB',
     alignItems: 'center',
   },
   comingSoonTitle: {
     fontSize: 24,
     fontWeight: 'bold',
     marginBottom: 16,
-    color: '#D4AF37',
+    color: '#B072BB',
   },
   comingSoonText: {
     fontSize: 16,

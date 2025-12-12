@@ -85,7 +85,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     marginBottom: 8,
     textAlign: 'center',
-    color: '#D4AF37',
+    color: '#B072BB',
     letterSpacing: 1,
   },
   subtitle: {
@@ -102,7 +102,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     marginBottom: 8,
-    color: '#D4AF37',
+    color: '#B072BB',
     textTransform: 'uppercase',
     letterSpacing: 1.5,
   },
@@ -117,7 +117,7 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   createButton: {
-    backgroundColor: '#D4AF37',
+    backgroundColor: '#B072BB',
     padding: 20,
     borderRadius: 8,
     alignItems: 'center',

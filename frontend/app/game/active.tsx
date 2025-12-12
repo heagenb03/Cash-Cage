@@ -360,7 +360,7 @@ const styles = StyleSheet.create({
     fontSize: 32,
     fontWeight: 'bold',
     marginBottom: 4,
-    color: '#D4AF37',
+    color: '#B072BB',
     letterSpacing: 1,
   },
   gameInfo: {
@@ -380,13 +380,13 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: '#D4AF37',
+    color: '#B072BB',
     textTransform: 'uppercase',
     letterSpacing: 2,
   },
   addButton: {
     fontSize: 28,
-    color: '#D4AF37',
+    color: '#B072BB',
     fontWeight: '300',
   },
   emptyText: {
@@ -405,7 +405,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     backgroundColor: '#1A1A1A',
     borderLeftWidth: 3,
-    borderLeftColor: '#D4AF37',
+    borderLeftColor: '#B072BB',
   },
   playerInfo: {
     flex: 1,
@@ -438,16 +438,16 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     backgroundColor: '#2A2A2A',
     borderWidth: 1,
-    borderColor: '#D4AF37',
+    borderColor: '#B072BB',
   },
   actionButtonText: {
-    color: '#D4AF37',
+    color: '#B072BB',
     fontWeight: 'bold',
     fontSize: 13,
     letterSpacing: 0.5,
   },
   completeButton: {
-    backgroundColor: '#D4AF37',
+    backgroundColor: '#B072BB',
     padding: 20,
     borderRadius: 8,
     alignItems: 'center',
@@ -461,7 +461,7 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   button: {
-    backgroundColor: '#D4AF37',
+    backgroundColor: '#B072BB',
     padding: 20,
     borderRadius: 8,
     alignItems: 'center',
@@ -492,7 +492,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
     marginBottom: 24,
-    color: '#D4AF37',
+    color: '#B072BB',
   },
   input: {
     width: '100%',
@@ -524,7 +524,7 @@ const styles = StyleSheet.create({
   confirmButton: {
     backgroundColor: 'transparent',
     borderWidth: 2,
-    borderColor: '#D4AF37',
+    borderColor: '#B072BB',
   },
   cancelButtonText: {
     fontSize: 16,
@@ -532,7 +532,7 @@ const styles = StyleSheet.create({
     color: '#C04657',
   },
   confirmButtonText: {
-    color: '#D4AF37',
+    color: '#B072BB',
     fontSize: 16,
     fontWeight: 'bold',
   },
@@ -548,7 +548,7 @@ const styles = StyleSheet.create({
   },
   validationWarningBox: {
     backgroundColor: '#2A1A0A',
-    borderColor: '#F4D03F',
+    borderColor: '#B072BB',
   },
   validationIcon: {
     fontSize: 24,
@@ -571,7 +571,7 @@ const styles = StyleSheet.create({
   },
   validationWarning: {
     fontSize: 14,
-    color: '#F4D03F',
+    color: '#B072BB',
     marginBottom: 4,
     lineHeight: 20,
   },

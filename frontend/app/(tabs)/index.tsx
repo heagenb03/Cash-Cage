@@ -125,7 +125,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: 'bold',
     marginBottom: 16,
-    color: '#D4AF37',
+    color: '#B072BB',
     textTransform: 'uppercase',
     letterSpacing: 2,
   },
@@ -142,7 +142,7 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     backgroundColor: 'transparent',
     borderLeftWidth: 4,
-    borderLeftColor: '#D4AF37',
+    borderLeftColor: '#B072BB',
   },
   completedCard: {
     opacity: 0.6,
@@ -167,13 +167,13 @@ const styles = StyleSheet.create({
   gameCardInfo: {
     fontSize: 13,
     opacity: 0.6,
-    color: '#D4AF37',
+    color: '#B072BB',
   },
   newGameButton: {
     margin: 20,
     padding: 20,
     borderRadius: 8,
-    backgroundColor: '#D4AF37',
+    backgroundColor: '#B072BB',
     alignItems: 'center',
   },
   newGameButtonText: {

@@ -1,4 +1,34 @@
-import { PlayerBalance, Settlement, Validation } from '@/types/game';
+import {
+  PlayerBalance,
+  Settlement,
+  SettlementRequestSettings,
+  SettlementResult,
+  Validation,
+} from '@/types/game';
+
+const DEFAULT_TIMEOUT_MS = 2500;
+const SETTLEMENT_ENDPOINT_PATH = '/settlements/optimal';
+
+export interface SettlementOptions {
+  /** Optional fully qualified endpoint overriding the default base + path. */
+  endpoint?: string;
+  /** Milliseconds to wait before aborting the server request. */
+  timeoutMs?: number;
+  /** Forces the calculation to stay on-device even if a server endpoint exists. */
+  forceLocal?: boolean;
+  /** Lets callers pass their own AbortSignal (used for screen unmounts). */
+  signal?: AbortSignal;
+  /** Extra tuning flags forwarded to the backend solver. */
+  settings?: SettlementRequestSettings;
+}
+
+interface SettlementApiResponse {
+  settlements: Settlement[];
+  algorithm?: string;
+  generatedAt?: string;
+  requestId?: string;
+  warnings?: string[];
+}
 
 export function calculateOptimalSettlements(balances: PlayerBalance[]): Settlement[] {
   const settlements: Settlement[] = [];
@@ -38,6 +68,152 @@ export function calculateOptimalSettlements(balances: PlayerBalance[]): Settleme
   }
   
   return settlements;
+}
+
+const LOCAL_ALGORITHM_ID = 'client-greedy-v1';
+const DEFAULT_SERVER_ALGORITHM_ID = 'server-milp-v1';
+
+function createLocalSettlementResult(
+  balances: PlayerBalance[],
+  reason?: string
+): SettlementResult {
+  return {
+    settlements: calculateOptimalSettlements(balances),
+    algorithm: LOCAL_ALGORITHM_ID,
+    source: 'client',
+    generatedAt: new Date().toISOString(),
+    error: reason,
+  };
+}
+
+function resolveEndpoint(customEndpoint?: string): string | undefined {
+  if (customEndpoint) {
+    return customEndpoint;
+  }
+
+  const baseUrl = process.env.EXPO_PUBLIC_API_BASE_URL;
+  if (!baseUrl) {
+    return undefined;
+  }
+
+  return `${baseUrl.replace(/\/$/, '')}${SETTLEMENT_ENDPOINT_PATH}`;
+}
+
+function sanitizeSettings(
+  settings?: SettlementRequestSettings
+): SettlementRequestSettings | undefined {
+  if (!settings) {
+    return undefined;
+  }
+
+  const entries = Object.entries(settings).filter(([, value]) =>
+    typeof value === 'number' && Number.isFinite(value)
+  );
+
+  if (entries.length === 0) {
+    return undefined;
+  }
+
+  return Object.fromEntries(entries) as SettlementRequestSettings;
+}
+
+function normalizeSettlements(raw: Settlement[]): Settlement[] {
+  return raw
+    .filter(
+      (item): item is Settlement =>
+        Boolean(item) &&
+        typeof item.from === 'string' &&
+        typeof item.to === 'string' &&
+        (typeof item.amount === 'number' || typeof item.amount === 'string')
+    )
+    .map(item => ({
+      from: item.from,
+      to: item.to,
+      amount: Number(item.amount),
+    }))
+    .filter(item => Number.isFinite(item.amount));
+}
+
+function toSerializableBalances(balances: PlayerBalance[]): PlayerBalance[] {
+  return balances.map(balance => ({
+    ...balance,
+    totalBuyins: Number(balance.totalBuyins),
+    totalCashouts: Number(balance.totalCashouts),
+    netBalance: Number(balance.netBalance),
+  }));
+}
+
+/**
+ * Server-first settlement resolver (POST /settlements/optimal):
+ * Request body → { balances: PlayerBalance[], settings?: SettlementRequestSettings }
+ * Response body → { settlements: Settlement[], algorithm?: string, generatedAt?: string, requestId?: string, warnings?: string[] }
+ * Falls back to the local greedy solver whenever the remote endpoint is unavailable.
+ */
+export async function getSettlements(
+  balances: PlayerBalance[],
+  options: SettlementOptions = {}
+): Promise<SettlementResult> {
+  const fallbackReason = options.forceLocal ? 'force-local' : undefined;
+
+  if (options.forceLocal || balances.length === 0) {
+    return createLocalSettlementResult(balances, fallbackReason);
+  }
+
+  const endpoint = resolveEndpoint(options.endpoint);
+  if (!endpoint) {
+    return createLocalSettlementResult(balances, 'missing-endpoint');
+  }
+
+  const controller = options.signal ? null : new AbortController();
+  const signal = options.signal ?? controller?.signal;
+  const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const timeoutId = controller ? setTimeout(() => controller.abort(), timeoutMs) : undefined;
+
+  try {
+    const response = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        balances: toSerializableBalances(balances),
+        settings: sanitizeSettings(options.settings),
+      }),
+      signal,
+    });
+
+    if (!response.ok) {
+      throw new Error(`Server responded with status ${response.status}`);
+    }
+
+    const payload = (await response.json()) as SettlementApiResponse;
+
+    if (!Array.isArray(payload.settlements) || payload.settlements.length === 0) {
+      throw new Error('Invalid settlement payload received');
+    }
+
+    const normalized = normalizeSettlements(payload.settlements);
+    if (normalized.length === 0) {
+      throw new Error('No valid settlements returned from server');
+    }
+
+    return {
+      settlements: normalized,
+      algorithm: payload.algorithm ?? DEFAULT_SERVER_ALGORITHM_ID,
+      source: 'server',
+      generatedAt: payload.generatedAt ?? new Date().toISOString(),
+      serverRequestId: payload.requestId,
+      warnings: payload.warnings,
+    } satisfies SettlementResult;
+  } catch (error) {
+    console.warn('[settlements] Falling back to local solver:', error);
+    const message = error instanceof Error ? error.message : 'unknown-error';
+    return createLocalSettlementResult(balances, message);
+  } finally {
+    if (timeoutId) {
+      clearTimeout(timeoutId);
+    }
+  }
 }
 
 export function validateSettlements(balances: PlayerBalance[]): Validation {

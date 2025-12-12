@@ -1,4 +1,12 @@
-import { Game, Transaction, Player, PlayerBalance, GameSummary, Validation } from '@/types/game';
+import {
+  Game,
+  Transaction,
+  Player,
+  PlayerBalance,
+  GameSummary,
+  SettlementMeta,
+  Validation,
+} from '@/types/game';
 import { calculateOptimalSettlements, validateSettlements } from './settlementService';
 
 export class GameService {
@@ -35,12 +43,18 @@ export class GameService {
     const balances = this.calculateBalances(game);
     const settlements = calculateOptimalSettlements(balances);
     const totalPot = balances.reduce((sum, b) => sum + b.totalBuyins, 0);
+    const settlementMeta: SettlementMeta = {
+      algorithm: 'client-greedy-v1',
+      source: 'client',
+      generatedAt: new Date().toISOString(),
+    };
 
     return {
       game,
       balances,
       settlements,
-      totalPot
+      totalPot,
+      settlementMeta,
     };
   }
   

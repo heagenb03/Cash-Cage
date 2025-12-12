@@ -39,6 +39,26 @@ export interface Settlement {
   amount: number;
 }
 
+export type SettlementSource = 'server' | 'client';
+
+export interface SettlementMeta {
+  algorithm: string;
+  source: SettlementSource;
+  generatedAt: string;
+  serverRequestId?: string;
+  warnings?: string[];
+  error?: string;
+}
+
+export interface SettlementResult extends SettlementMeta {
+  settlements: Settlement[];
+}
+
+export interface SettlementRequestSettings {
+  maxTransfersPerPlayer?: number;
+  minTransferAmount?: number;
+}
+
 export interface Validation {
   isValid: boolean;
   errors: string[];
@@ -53,4 +73,5 @@ export interface GameSummary {
   balances: PlayerBalance[];
   settlements: Settlement[];
   totalPot: number;
+  settlementMeta: SettlementMeta;
 }
