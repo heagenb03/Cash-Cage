@@ -13,6 +13,7 @@ export default function ActiveGameScreen() {
   const [showAddPlayer, setShowAddPlayer] = useState(false);
   const [showAddTransaction, setShowAddTransaction] = useState(false);
   const [newPlayerName, setNewPlayerName] = useState('');
+  const [newPlayerBuyIn, setNewPlayerBuyIn] = useState('');
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [transactionAmount, setTransactionAmount] = useState('');
   const [transactionType, setTransactionType] = useState<'buyin' | 'cashout'>('buyin');
@@ -39,9 +40,22 @@ export default function ActiveGameScreen() {
       return;
     }
     
+    const buyInAmount = parseFloat(newPlayerBuyIn);
+    if (newPlayerBuyIn.trim() && (isNaN(buyInAmount) || buyInAmount <= 0)) {
+      Alert.alert('Error', 'Please enter a valid buy-in amount or leave it empty');
+      return;
+    }
+    
     const player = GameService.addPlayer(activeGame, newPlayerName.trim());
+    
+    // Add initial buy-in if amount was provided
+    if (!isNaN(buyInAmount) && buyInAmount > 0) {
+      GameService.addTransaction(activeGame, player.id, 'buyin', buyInAmount);
+    }
+    
     await updateGame(activeGame);
     setNewPlayerName('');
+    setNewPlayerBuyIn('');
     setShowAddPlayer(false);
   };
   
@@ -244,12 +258,24 @@ export default function ActiveGameScreen() {
               placeholder="Name"
               placeholderTextColor="#666"
               autoFocus
+              returnKeyType="next"
+            />
+            <TextInput
+              style={styles.input}
+              value={newPlayerBuyIn}
+              onChangeText={setNewPlayerBuyIn}
+              placeholder="Initial Buy-in"
+              placeholderTextColor="#666"
+              keyboardType="decimal-pad"
+              returnKeyType="done"
+              onSubmitEditing={handleAddPlayer}
             />
             <View style={styles.modalButtons}>
               <TouchableOpacity
                 style={[styles.modalButton, styles.cancelButton]}
                 onPress={() => {
                   setNewPlayerName('');
+                  setNewPlayerBuyIn('');
                   setShowAddPlayer(false);
                 }}
               >
@@ -460,7 +486,7 @@ const styles = StyleSheet.create({
     padding: 28,
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: '#2A2A2A',
+    borderColor: '#5A5A5A',
   },
   modalTitle: {
     fontSize: 20,
@@ -493,18 +519,20 @@ const styles = StyleSheet.create({
   cancelButton: {
     backgroundColor: 'transparent',
     borderWidth: 2,
-    borderColor: '#2A2A2A',
+    borderColor: '#C04657',
   },
   confirmButton: {
-    backgroundColor: '#D4AF37',
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderColor: '#D4AF37',
   },
   cancelButtonText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#666',
+    fontWeight: 'bold',
+    color: '#C04657',
   },
   confirmButtonText: {
-    color: '#0A0A0A',
+    color: '#D4AF37',
     fontSize: 16,
     fontWeight: 'bold',
   },
