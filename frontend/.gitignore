@@ -39,3 +39,6 @@ yarn-error.*
 
 # config json files
 *.json
+
+# claude
+CLAUDE.md

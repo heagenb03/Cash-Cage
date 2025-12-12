@@ -1,1 +1,1 @@
-# Dealr
+# Dealr - Poker Buyin/Cashout Tracker
