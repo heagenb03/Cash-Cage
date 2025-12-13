@@ -54,12 +54,12 @@ function RootLayoutNav() {
     ...DarkTheme,
     colors: {
       ...DarkTheme.colors,
-      primary: '#D4AF37',
+      primary: '#B072BB',
       background: '#0A0A0A',
       card: '#1A1A1A',
       text: '#FFFFFF',
       border: '#2A2A2A',
-      notification: '#D4AF37',
+      notification: '#B072BB',
     },
   };
 
