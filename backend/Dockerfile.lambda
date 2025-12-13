@@ -1,0 +1,65 @@
+# Build stage
+FROM ubuntu:22.04 AS builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    cmake \
+    git \
+    wget \
+    curl \
+    ca-certificates \
+    libboost-all-dev \
+    libssl-dev \
+    libcurl4-openssl-dev \
+    zlib1g-dev \
+    libasio-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Google OR-Tools
+RUN wget https://github.com/google/or-tools/releases/download/v9.8/or-tools_amd64_ubuntu-22.04_cpp_v9.8.3296.tar.gz \
+    && tar -xzf or-tools_*.tar.gz \
+    && rm or-tools_*.tar.gz \
+    && mv or-tools_* /opt/or-tools
+
+# Build and install AWS Lambda C++ Runtime
+RUN git clone --depth 1 --branch v0.2.8 https://github.com/awslabs/aws-lambda-cpp.git /tmp/aws-lambda-cpp \
+    && cd /tmp/aws-lambda-cpp \
+    && mkdir build && cd build \
+    && cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_INSTALL_PREFIX=/opt/aws-lambda-runtime \
+    && make -j$(nproc) \
+    && make install \
+    && rm -rf /tmp/aws-lambda-cpp
+
+# Set working directory
+WORKDIR /app
+
+# Copy source code
+COPY . .
+
+# Build the Lambda handler
+RUN mkdir -p build && cd build \
+    && cmake -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_PREFIX_PATH="/opt/or-tools;/opt/aws-lambda-runtime" .. \
+    && make dealr-lambda -j$(nproc)
+
+# Runtime stage
+FROM ubuntu:22.04
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    libboost-system1.74.0 \
+    libssl3 \
+    libcurl4 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /app/build/dealr-lambda /var/task/bootstrap
+COPY --from=builder /opt/or-tools/lib /usr/local/lib/ortools/
+COPY --from=builder /opt/aws-lambda-runtime/lib /usr/local/lib/aws-lambda/
+
+ENV LD_LIBRARY_PATH=/usr/local/lib/ortools:/usr/local/lib/aws-lambda
+
+WORKDIR /var/task
+
+ENTRYPOINT ["/var/task/bootstrap"]
