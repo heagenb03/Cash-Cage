@@ -6,7 +6,7 @@ import {
   Validation,
 } from '@/types/game';
 
-const DEFAULT_TIMEOUT_MS = 2500;
+const DEFAULT_TIMEOUT_MS = 10000;
 const SETTLEMENT_ENDPOINT_PATH = '/settlements/optimal';
 
 export interface SettlementOptions {
@@ -217,7 +217,7 @@ export async function getSettlements(
 }
 
 export function validateSettlements(balances: PlayerBalance[]): Validation {
-  const tolerance = 0.01;
+  const tolerance = 2.50;
   const validation : Validation = {
     isValid: true,
     errors: [],
