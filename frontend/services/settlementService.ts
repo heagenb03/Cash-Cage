@@ -241,7 +241,9 @@ export function validateSettlements(balances: PlayerBalance[]): Validation {
   validation.netDifference = Math.abs(validation.totalBuyins - validation.totalCashouts);
 
   if (validation.netDifference > tolerance) {
-    validation.warnings.push(`Total buyins ($${validation.totalBuyins.toFixed(2)}) and cashouts ($${validation.totalCashouts.toFixed(2)}) differ by $${validation.netDifference.toFixed(2)}, which exceeds the tolerance of $${tolerance.toFixed(2)}.`);
+    validation.warnings.push(
+      `Total buyins of $${validation.totalBuyins.toFixed(2)} does not equal the cashouts of $${validation.totalCashouts.toFixed(2)}, a $${validation.netDifference.toFixed(2)} difference.`
+    );
   }
 
   if (validation.errors.length === 0) {

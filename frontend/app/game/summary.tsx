@@ -174,7 +174,8 @@ export default function GameSummaryScreen() {
           </View>
         </View>
         
-        {/* Settlements */}
+        {/* Debug - Server/Client Status Card */}
+        {/*
         <View style={styles.statusCard}>
           <View style={styles.statusRow}>
             <View
@@ -211,6 +212,8 @@ export default function GameSummaryScreen() {
             )}
           </View>
         </View>
+        */}
+        {/* Settlements */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Settlements</Text>
           <Text style={styles.sectionSubtitle}>

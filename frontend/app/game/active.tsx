@@ -105,7 +105,7 @@ export default function ActiveGameScreen() {
     
     if (validation.warnings.length > 0) {
       Alert.alert(
-        'Game Data Warning',
+        'Warning',
         `The following issues were detected:\n\n${validation.warnings.join('\n\n')}\n\nDo you want to complete the game anyway?`,
         [
           { text: 'Cancel', style: 'cancel' },
