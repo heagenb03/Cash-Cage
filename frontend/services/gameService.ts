@@ -6,8 +6,10 @@ import {
   GameSummary,
   SettlementMeta,
   Validation,
+  SettlementResult,
 } from '@/types/game';
 import { calculateOptimalSettlements, validateSettlements } from './settlementService';
+import { hashTransactions } from '@/utils/hashUtils';
 
 export class GameService {
   static calculateBalances(game: Game): PlayerBalance[] {
@@ -82,6 +84,11 @@ export class GameService {
     type: 'buyin' | 'cashout',
     totalAmount: number
   ): Transaction | null {
+    // Clear settlement cache when modifying completed games
+    if (game.status === 'completed') {
+      this.clearSettlementCache(game);
+    }
+
     const filteredTransactions = game.transactions.filter(
       transaction => !(transaction.playerId === playerId && transaction.type === type)
     );
@@ -135,5 +142,40 @@ export class GameService {
       transactions: [],
       createdAt: new Date()
     };
+  }
+
+  /**
+   * Cache settlement result in game object
+   * Updates transaction hash for invalidation detection
+   */
+  static cacheSettlements(game: Game, settlementResult: SettlementResult): void {
+    game.cachedSettlements = settlementResult;
+    game.transactionHash = hashTransactions(game.transactions);
+  }
+
+  /**
+   * Check if cached settlements are still valid
+   * Returns cached result if valid, null if invalid or missing
+   */
+  static getCachedSettlements(game: Game): SettlementResult | null {
+    if (!game.cachedSettlements || !game.transactionHash) {
+      return null;
+    }
+
+    const currentHash = hashTransactions(game.transactions);
+    if (currentHash !== game.transactionHash) {
+      console.warn('[cache] Settlement cache invalidated - transactions changed');
+      return null;
+    }
+
+    return game.cachedSettlements;
+  }
+
+  /**
+   * Clear settlement cache (e.g., when game data changes)
+   */
+  static clearSettlementCache(game: Game): void {
+    game.cachedSettlements = undefined;
+    game.transactionHash = undefined;
   }
 }

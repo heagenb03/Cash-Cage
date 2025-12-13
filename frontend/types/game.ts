@@ -23,6 +23,10 @@ export interface Game {
   transactions: Transaction[];
   createdAt: Date;
   completedAt?: Date;
+
+  // Settlement cache
+  cachedSettlements?: SettlementResult;
+  transactionHash?: string; // For cache invalidation
 }
 
 export interface PlayerBalance {

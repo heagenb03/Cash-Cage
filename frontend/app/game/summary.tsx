@@ -6,9 +6,10 @@ import { useRouter } from 'expo-router';
 import { GameService } from '@/services/gameService';
 import { getSettlements } from '@/services/settlementService';
 import { PlayerBalance, SettlementResult } from '@/types/game';
+import { groupSettlementsByRecipient } from '@/utils/settlementUtils';
 
 export default function GameSummaryScreen() {
-  const { activeGame } = useGame();
+  const { activeGame, updateGame } = useGame();
   const router = useRouter();
   const summary = useMemo(
     () => (activeGame ? GameService.generateGameSummary(activeGame) : null),
@@ -36,6 +37,28 @@ export default function GameSummaryScreen() {
       return;
     }
 
+    // Check for cached settlements first
+    const cachedResult = activeGame
+      ? GameService.getCachedSettlements(activeGame)
+      : null;
+
+    if (cachedResult) {
+      console.log('[cache] Using cached settlements:', cachedResult.algorithm);
+      setSettlementResult(cachedResult);
+      setIsLoadingSettlements(false);
+
+      // If server result, we're done
+      if (cachedResult.source === 'server') {
+        setLastError(undefined);
+        return;
+      }
+
+      // If greedy fallback, show cached but allow manual retry
+      setLastError(cachedResult.error ?? 'Using cached on-device result');
+      return;
+    }
+
+    // No valid cache - fetch from server
     let cancelled = false;
     setSettlementResult({
       settlements: summary.settlements,
@@ -47,19 +70,24 @@ export default function GameSummaryScreen() {
     (async () => {
       try {
         const result = await getSettlements(summary.balances);
-        if (cancelled) {
-          return;
-        }
+        if (cancelled) return;
+
         setSettlementResult(result);
+
+        // Cache the result
+        if (activeGame) {
+          GameService.cacheSettlements(activeGame, result);
+          await updateGame(activeGame);
+        }
+
         if (result.source !== 'server') {
           setLastError(result.error ?? 'Using on-device fallback');
         } else {
           setLastError(undefined);
         }
       } catch (error) {
-        if (cancelled) {
-          return;
-        }
+        if (cancelled) return;
+
         const message = error instanceof Error ? error.message : 'unknown-error';
         setLastError(message);
         setSettlementResult(prev =>
@@ -82,15 +110,19 @@ export default function GameSummaryScreen() {
   }, [summary?.game.id]);
 
   const handleRetry = async () => {
-    if (!summary) {
-      return;
-    }
+    if (!summary || !activeGame) return;
 
     setIsLoadingSettlements(true);
     setLastError(undefined);
+
     try {
       const result = await getSettlements(balancesRef.current, { timeoutMs: 5000 });
       setSettlementResult(result);
+
+      // Cache the new result
+      GameService.cacheSettlements(activeGame, result);
+      await updateGame(activeGame);
+
       if (result.source !== 'server') {
         setLastError(result.error ?? 'Using on-device fallback');
       }
@@ -123,6 +155,11 @@ export default function GameSummaryScreen() {
       ...summary.settlementMeta,
     };
   const settlementsToDisplay = activeSettlementResult.settlements;
+
+  const groupedSettlements = useMemo(
+    () => groupSettlementsByRecipient(settlementsToDisplay),
+    [settlementsToDisplay]
+  );
   
   const handleShare = async () => {
     try {
@@ -133,20 +170,8 @@ export default function GameSummaryScreen() {
       if (settlementsToDisplay.length === 0) {
         message += `All balanced! No settlements needed.\n`;
       } else {
-        const settlementsByRecipient = settlementsToDisplay.reduce<Record<string, { from: string; amount: number }[]>>(
-          (acc, settlement) => {
-            const { to, from, amount } = settlement;
-            if (!acc[to]) {
-              acc[to] = [];
-            }
-            acc[to].push({ from, amount });
-            return acc;
-          },
-          {}
-        );
-
-        Object.entries(settlementsByRecipient).forEach(([recipient, incoming]) => {
-          const details = incoming
+        groupedSettlements.forEach(({ recipient, payments }) => {
+          const details = payments
             .map(({ from, amount }) => `$${amount.toFixed(2)} from ${from}`)
             .join(', ');
           message += `• ${recipient}: ${details}\n`;
@@ -217,22 +242,27 @@ export default function GameSummaryScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Settlements</Text>
           <Text style={styles.sectionSubtitle}>
-            {settlementsToDisplay.length} payment{settlementsToDisplay.length !== 1 ? 's' : ''}
+            {groupedSettlements.length} recipient{groupedSettlements.length !== 1 ? 's' : ''}
           </Text>
-          
-          {settlementsToDisplay.length === 0 ? (
+
+          {groupedSettlements.length === 0 ? (
             <Text style={styles.emptyText}>All balanced</Text>
           ) : (
-            settlementsToDisplay.map((settlement, index) => (
+            groupedSettlements.map((groupedSettlement, index) => (
               <View key={index} style={styles.settlementCard}>
-                <View style={styles.settlementInfo}>
-                  <Text style={styles.settlementFrom}>{settlement.from}</Text>
-                  <Text style={styles.settlementArrow}>→</Text>
-                  <Text style={styles.settlementTo}>{settlement.to}</Text>
+                <View style={styles.settlementHeader}>
+                  <Text style={styles.recipientName}>{groupedSettlement.recipient}</Text>
+                  <Text style={styles.recipientTotal}>
+                    ${groupedSettlement.totalAmount.toFixed(2)}
+                  </Text>
                 </View>
-                <Text style={styles.settlementAmount}>
-                  ${settlement.amount.toFixed(2)}
-                </Text>
+                <View style={styles.paymentsContainer}>
+                  {groupedSettlement.payments.map((payment, paymentIndex) => (
+                    <Text key={paymentIndex} style={styles.paymentDetail}>
+                      ${payment.amount.toFixed(2)} from {payment.from}
+                    </Text>
+                  ))}
+                </View>
               </View>
             ))
           )}
@@ -411,41 +441,39 @@ const styles = StyleSheet.create({
   },
   settlementCard: {
     backgroundColor: '#1A1A1A',
-    padding: 14,
+    padding: 16,
     borderRadius: 6,
     marginBottom: 8,
     borderLeftWidth: 3,
     borderLeftColor: '#B072BB',
+  },
+  settlementHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-  },
-  settlementInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
+    marginBottom: 12,
     backgroundColor: 'transparent',
   },
-  settlementFrom: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  settlementArrow: {
-    fontSize: 16,
-    marginHorizontal: 10,
-    opacity: 0.5,
-    color: '#B072BB',
-  },
-  settlementTo: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#FFFFFF',
-  },
-  settlementAmount: {
-    fontSize: 18,
+  recipientName: {
+    fontSize: 17,
     fontWeight: 'bold',
     color: '#FFFFFF',
+    letterSpacing: 0.5,
+  },
+  recipientTotal: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#B072BB',
+  },
+  paymentsContainer: {
+    gap: 6,
+    backgroundColor: 'transparent',
+  },
+  paymentDetail: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    opacity: 0.6,
+    paddingLeft: 0,
   },
   balanceCard: {
     backgroundColor: '#1A1A1A',

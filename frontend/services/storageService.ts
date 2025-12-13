@@ -1,28 +1,75 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Game } from '@/types/game';
 
-export class StorageService {
-  private static games: Game[] = [];
-  private static activeGameId: string | null = null;
-  
+const GAMES_KEY = '@dealr:games';
+const ACTIVE_GAME_ID_KEY = '@dealr:activeGameId';
 
+export class StorageService {
   static async saveGames(games: Game[]): Promise<void> {
-    this.games = games;
+    try {
+      await AsyncStorage.setItem(GAMES_KEY, JSON.stringify(games));
+    } catch (error) {
+      console.error('Error saving games:', error);
+      throw error;
+    }
   }
-  
+
   static async loadGames(): Promise<Game[]> {
-    return this.games;
+    try {
+      const jsonValue = await AsyncStorage.getItem(GAMES_KEY);
+      if (!jsonValue) return [];
+
+      const games = JSON.parse(jsonValue);
+
+      // Deserialize Date objects (AsyncStorage stores JSON, dates become strings)
+      return games.map((game: any) => ({
+        ...game,
+        date: new Date(game.date),
+        createdAt: new Date(game.createdAt),
+        completedAt: game.completedAt ? new Date(game.completedAt) : undefined,
+        players: game.players.map((p: any) => ({
+          ...p,
+          createdAt: new Date(p.createdAt),
+        })),
+        transactions: game.transactions.map((t: any) => ({
+          ...t,
+          timestamp: new Date(t.timestamp),
+        })),
+      }));
+    } catch (error) {
+      console.error('Error loading games:', error);
+      return [];
+    }
   }
-  
+
   static async saveActiveGameId(gameId: string | null): Promise<void> {
-    this.activeGameId = gameId;
+    try {
+      if (gameId === null) {
+        await AsyncStorage.removeItem(ACTIVE_GAME_ID_KEY);
+      } else {
+        await AsyncStorage.setItem(ACTIVE_GAME_ID_KEY, gameId);
+      }
+    } catch (error) {
+      console.error('Error saving active game ID:', error);
+      throw error;
+    }
   }
-  
+
   static async loadActiveGameId(): Promise<string | null> {
-    return this.activeGameId;
+    try {
+      return await AsyncStorage.getItem(ACTIVE_GAME_ID_KEY);
+    } catch (error) {
+      console.error('Error loading active game ID:', error);
+      return null;
+    }
   }
-  
+
   static async clearAll(): Promise<void> {
-    this.games = [];
-    this.activeGameId = null;
+    try {
+      await AsyncStorage.multiRemove([GAMES_KEY, ACTIVE_GAME_ID_KEY]);
+    } catch (error) {
+      console.error('Error clearing storage:', error);
+      throw error;
+    }
   }
 }
