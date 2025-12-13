@@ -24,8 +24,8 @@ npm-debug.*
 yarn-debug.*
 yarn-error.*
 
-# local env files
-.env*.local
+# env files
+.env*
 
 # typescript
 *.tsbuildinfo

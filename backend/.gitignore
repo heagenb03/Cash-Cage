@@ -1,0 +1,64 @@
+# Build directories
+build/
+cmake-build-*/
+.cmake/
+
+# Compiled binaries
+*.exe
+*.out
+*.app
+dealr-backend
+
+# CMake files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+!CMakeLists.txt
+
+# Object files
+*.o
+*.obj
+*.lo
+*.slo
+
+# Static libraries
+*.a
+*.lib
+
+# Shared libraries
+*.so
+*.so.*
+*.dylib
+*.dll
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# vcpkg
+vcpkg_installed/
+
+# Logs
+*.log
+
+# Docker
+.dockerignore
+
+# OR-Tools downloaded files
+or-tools_*.tar.gz
+
+# scripts
+scripts/
+*.yaml
+*.yml
+*.toml
+
+#misc 
+test-data/
+tests/
