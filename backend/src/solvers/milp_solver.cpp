@@ -3,36 +3,195 @@
 #include <map>
 #include <cmath>
 #include <iostream>
+#include <sstream>
+#include <iomanip>
 
 namespace dealr {
 
-std::vector<Settlement> solveMILP(
+// Helper function to adjust balances for small imbalances
+struct BalanceAdjustmentResult {
+    std::vector<PlayerBalance> adjustedBalances;
+    std::vector<std::string> warnings;
+    bool success;
+};
+
+BalanceAdjustmentResult adjustBalancesForSolver(
+    const std::vector<PlayerBalance>& balances
+) {
+    const double TOLERANCE = 2.50;
+    const double ROUNDING_THRESHOLD = 0.01;
+
+    BalanceAdjustmentResult result;
+    result.success = true;
+
+    // Calculate total imbalance
+    double totalDebts = 0.0;
+    double totalCredits = 0.0;
+
+    for (const auto& balance : balances) {
+        if (balance.netBalance < -ROUNDING_THRESHOLD) {
+            totalDebts += std::abs(balance.netBalance);
+        } else if (balance.netBalance > ROUNDING_THRESHOLD) {
+            totalCredits += balance.netBalance;
+        }
+    }
+
+    double imbalance = totalDebts - totalCredits;
+
+    // If imbalance is within rounding error, no adjustment needed
+    if (std::abs(imbalance) <= ROUNDING_THRESHOLD) {
+        result.adjustedBalances = balances;
+        return result;
+    }
+
+    // If imbalance exceeds tolerance, reject
+    if (std::abs(imbalance) > TOLERANCE) {
+        result.success = false;
+        std::ostringstream oss;
+        oss << "Game imbalance ($" << std::fixed << std::setprecision(2)
+            << std::abs(imbalance) << ") exceeds tolerance ($" << TOLERANCE << ")";
+        result.warnings.push_back(oss.str());
+        return result;
+    }
+
+    // Distribute imbalance proportionally
+    result.adjustedBalances = balances;
+
+    // Calculate sum of absolute balances for proportional distribution
+    double sumOfAbsBalances = 0.0;
+    for (const auto& balance : balances) {
+        if (std::abs(balance.netBalance) > ROUNDING_THRESHOLD) {
+            sumOfAbsBalances += std::abs(balance.netBalance);
+        }
+    }
+
+    if (sumOfAbsBalances > ROUNDING_THRESHOLD) {
+        // Apply proportional adjustment
+        for (auto& balance : result.adjustedBalances) {
+            if (std::abs(balance.netBalance) > ROUNDING_THRESHOLD) {
+                double proportion = std::abs(balance.netBalance) / sumOfAbsBalances;
+                balance.netBalance += imbalance * proportion;
+                // Round to 2 decimal places
+                balance.netBalance = std::round(balance.netBalance * 100) / 100.0;
+            }
+        }
+
+        // Add warning message
+        std::ostringstream oss;
+        oss << "Balances adjusted by $" << std::fixed << std::setprecision(2)
+            << std::abs(imbalance) << " to resolve imbalance (distributed proportionally)";
+        result.warnings.push_back(oss.str());
+    }
+
+    return result;
+}
+
+// Round balances to dollar increments, with biggest winner absorbing error
+std::vector<PlayerBalance> roundBalancesToDollars(
+    const std::vector<PlayerBalance>& balances,
+    int increment = 5  // Round to $5 by default
+) {
+    const double ROUNDING_THRESHOLD = 0.01;
+    std::vector<PlayerBalance> rounded = balances;
+
+    // Round all balances to nearest increment
+    for (auto& balance : rounded) {
+        if (std::abs(balance.netBalance) > ROUNDING_THRESHOLD) {
+            double roundedValue = std::round(balance.netBalance / increment) * increment;
+            balance.netBalance = roundedValue;
+        } else {
+            balance.netBalance = 0.0;
+        }
+    }
+
+    // Calculate rounding error
+    double totalError = 0.0;
+    for (const auto& balance : rounded) {
+        totalError += balance.netBalance;
+    }
+
+    // If there's a rounding error, adjust the biggest winner
+    if (std::abs(totalError) > ROUNDING_THRESHOLD) {
+        // Find the player with the largest positive balance (biggest winner)
+        size_t biggestWinnerIdx = 0;
+        double maxWin = 0.0;
+
+        for (size_t i = 0; i < rounded.size(); ++i) {
+            if (rounded[i].netBalance > maxWin) {
+                maxWin = rounded[i].netBalance;
+                biggestWinnerIdx = i;
+            }
+        }
+
+        // Adjust biggest winner to absorb the error
+        if (maxWin > 0) {
+            rounded[biggestWinnerIdx].netBalance -= totalError;
+            // Round to nearest increment again
+            rounded[biggestWinnerIdx].netBalance =
+                std::round(rounded[biggestWinnerIdx].netBalance / increment) * increment;
+        }
+    }
+
+    return rounded;
+}
+
+MILPResult solveMILP(
     const std::vector<PlayerBalance>& balances,
     std::optional<int> maxTransfersPerPlayer,
     std::optional<double> minTransferAmount
 ) {
     using namespace operations_research;
 
+    MILPResult result;
+
+    // Step 1: Adjust balances for imbalance if needed
+    auto adjustmentResult = adjustBalancesForSolver(balances);
+
+    if (!adjustmentResult.success) {
+        result.warnings = adjustmentResult.warnings;
+        return result;
+    }
+
+    result.warnings = adjustmentResult.warnings;
+
+    // Step 2: Round to $5 increments for easier cash payments
+    auto roundedBalances = roundBalancesToDollars(adjustmentResult.adjustedBalances, 5);
+
+    // Add rounding warning if different from adjusted
+    bool wasRounded = false;
+    for (size_t i = 0; i < adjustmentResult.adjustedBalances.size(); ++i) {
+        if (std::abs(adjustmentResult.adjustedBalances[i].netBalance - roundedBalances[i].netBalance) > 0.01) {
+            wasRounded = true;
+            break;
+        }
+    }
+
+    if (wasRounded) {
+        result.warnings.push_back("Balances rounded to $5 increments for easier cash payments");
+    }
+
+    const auto& adjustedBalances = roundedBalances;
+
     // Separate debtors and creditors
     std::vector<int> debtorIdx, creditorIdx;
-    for (size_t i = 0; i < balances.size(); ++i) {
-        if (balances[i].netBalance < -0.01) {
+    for (size_t i = 0; i < adjustedBalances.size(); ++i) {
+        if (adjustedBalances[i].netBalance < -0.01) {
             debtorIdx.push_back(i);
-        } else if (balances[i].netBalance > 0.01) {
+        } else if (adjustedBalances[i].netBalance > 0.01) {
             creditorIdx.push_back(i);
         }
     }
 
     // Handle edge cases
     if (debtorIdx.empty() || creditorIdx.empty()) {
-        return {};
+        return result;
     }
 
     // Create solver
     std::unique_ptr<MPSolver> solver(MPSolver::CreateSolver("CBC"));
     if (!solver) {
         std::cerr << "Failed to create CBC solver" << std::endl;
-        return {};
+        return result;
     }
 
     // Variables: x[d][c] = amount debtor d pays creditor c
@@ -42,7 +201,7 @@ std::vector<Settlement> solveMILP(
     // Big-M = sum of all debts
     double M = 0;
     for (int d : debtorIdx) {
-        M += std::abs(balances[d].netBalance);
+        M += std::abs(adjustedBalances[d].netBalance);
     }
 
     // Create variables
@@ -60,7 +219,7 @@ std::vector<Settlement> solveMILP(
 
     // Constraints: each debtor pays exactly their debt
     for (int d : debtorIdx) {
-        double debt = std::abs(balances[d].netBalance);
+        double debt = std::abs(adjustedBalances[d].netBalance);
         MPConstraint* ct = solver->MakeRowConstraint(debt, debt);
         for (int c : creditorIdx) {
             ct->SetCoefficient(x[{d, c}], 1);
@@ -69,7 +228,7 @@ std::vector<Settlement> solveMILP(
 
     // Constraints: each creditor receives exactly their credit
     for (int c : creditorIdx) {
-        double credit = balances[c].netBalance;
+        double credit = adjustedBalances[c].netBalance;
         MPConstraint* ct = solver->MakeRowConstraint(credit, credit);
         for (int d : debtorIdx) {
             ct->SetCoefficient(x[{d, c}], 1);
@@ -133,25 +292,24 @@ std::vector<Settlement> solveMILP(
     if (result_status != MPSolver::OPTIMAL &&
         result_status != MPSolver::FEASIBLE) {
         std::cerr << "No solution found. Status: " << result_status << std::endl;
-        return {};
+        return result;
     }
 
     // Extract results
-    std::vector<Settlement> settlements;
     for (int d : debtorIdx) {
         for (int c : creditorIdx) {
             double amount = x[{d, c}]->solution_value();
             if (amount > 0.01) {
-                settlements.push_back({
-                    balances[d].playerName,
-                    balances[c].playerName,
+                result.settlements.push_back({
+                    adjustedBalances[d].playerName,
+                    adjustedBalances[c].playerName,
                     std::round(amount * 100) / 100.0
                 });
             }
         }
     }
 
-    return settlements;
+    return result;
 }
 
 }
