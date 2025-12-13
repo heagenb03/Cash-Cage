@@ -94,19 +94,24 @@ inline HttpResponse handleSettlementOptimal(const HttpRequest& req) {
         std::string requestId = generateUUID();
 
         // Solve MILP
-        auto settlements = solveMILP(
+        auto milpResult = solveMILP(
             request.balances,
             request.maxTransfersPerPlayer,
             request.minTransferAmount
         );
 
         // Build response
+        nlohmann::json warningsArray = nlohmann::json::array();
+        for (const auto& warning : milpResult.warnings) {
+            warningsArray.push_back(warning);
+        }
+
         nlohmann::json response = {
-            {"settlements", serializeSettlements(settlements)},
+            {"settlements", serializeSettlements(milpResult.settlements)},
             {"algorithm", "server-milp-v1"},
             {"generatedAt", currentISOTimestamp()},
             {"requestId", requestId},
-            {"warnings", nlohmann::json::array()}
+            {"warnings", warningsArray}
         };
 
         HttpResponse res(200, response.dump());
