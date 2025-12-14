@@ -9,7 +9,7 @@ import { Player, PlayerBalance } from '@/types/game';
 export default function ActiveGameScreen() {
   const { activeGame, updateGame, setActiveGame } = useGame();
   const router = useRouter();
-  
+
   const [showAddPlayer, setShowAddPlayer] = useState(false);
   const [showAddTransaction, setShowAddTransaction] = useState(false);
   const [newPlayerName, setNewPlayerName] = useState('');
@@ -17,6 +17,8 @@ export default function ActiveGameScreen() {
   const [selectedPlayer, setSelectedPlayer] = useState<Player | null>(null);
   const [transactionAmount, setTransactionAmount] = useState('');
   const [transactionType, setTransactionType] = useState<'buyin' | 'cashout'>('buyin');
+  const [isEditingTitle, setIsEditingTitle] = useState(false);
+  const [editedTitle, setEditedTitle] = useState('');
   
   if (!activeGame) {
     return (
@@ -165,18 +167,63 @@ export default function ActiveGameScreen() {
   const getPlayerBalance = (playerId: string): PlayerBalance | undefined => {
     return balances.find(b => b.playerId === playerId);
   };
-  
+
+  const handleTitlePress = () => {
+    setEditedTitle(activeGame.name);
+    setIsEditingTitle(true);
+  };
+
+  const handleTitleBlur = async () => {
+    const trimmedTitle = editedTitle.trim();
+
+    // Validation: empty title
+    if (!trimmedTitle) {
+      Alert.alert('Error', 'Game name cannot be empty');
+      setEditedTitle(activeGame.name);
+      setIsEditingTitle(false);
+      return;
+    }
+
+    // Only update if changed
+    if (trimmedTitle !== activeGame.name) {
+      activeGame.name = trimmedTitle;
+      await updateGame(activeGame);
+    }
+
+    setIsEditingTitle(false);
+  };
+
   return (
     <View style={styles.container}>
       <ScrollView style={styles.scrollView}>
         {/* Game Info */}
         <View style={styles.header}>
-          <Text style={styles.gameTitle}>{activeGame.name}</Text>
+          {isEditingTitle ? (
+            <TextInput
+              style={styles.gameTitleInput}
+              value={editedTitle}
+              onChangeText={setEditedTitle}
+              onBlur={handleTitleBlur}
+              onSubmitEditing={handleTitleBlur}
+              autoFocus
+              returnKeyType="done"
+              maxLength={50}
+              placeholder="Game name"
+              placeholderTextColor="#666"
+            />
+          ) : (
+            <TouchableOpacity onPress={handleTitlePress} activeOpacity={0.7}>
+              <View style={styles.titleContainer}>
+                <Text style={styles.gameTitle}>{activeGame.name}</Text>
+                <Text style={styles.editIcon}>✎</Text>
+              </View>
+            </TouchableOpacity>
+          )}
           <Text style={styles.gameInfo}>
-            {new Date(activeGame.date).toLocaleDateString('en-US', { 
-              month: 'short', 
-              day: 'numeric', 
-              year: 'numeric' 
+            {new Date(activeGame.date).toLocaleDateString('en-US', {
+              month: 'short',
+              day: 'numeric',
+              year: 'numeric'
             })}
           </Text>
         </View>
@@ -350,12 +397,37 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: '#2A2A2A',
   },
+  titleContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    gap: 8,
+    backgroundColor: 'transparent',
+  },
   gameTitle: {
     fontSize: 32,
     fontWeight: 'bold',
     marginBottom: 4,
     color: '#B072BB',
     letterSpacing: 1,
+  },
+  gameTitleInput: {
+    fontSize: 32,
+    fontWeight: 'bold',
+    color: '#B072BB',
+    letterSpacing: 1,
+    textAlign: 'left',
+    borderBottomWidth: 2,
+    borderBottomColor: '#B072BB',
+    paddingBottom: 4,
+    marginBottom: 4,
+    minWidth: 200,
+  },
+  editIcon: {
+    fontSize: 20,
+    color: '#B072BB',
+    opacity: 0.5,
+    marginBottom: 4,
   },
   gameInfo: {
     fontSize: 14,
