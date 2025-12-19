@@ -118,11 +118,26 @@ export class GameService {
       name,
       createdAt: new Date()
     };
-    
+
     game.players.push(player);
     return player;
   }
-  
+
+  static removePlayer(game: Game, playerId: string): void {
+    // Clear settlement cache when modifying completed games
+    if (game.status === 'completed') {
+      this.clearSettlementCache(game);
+    }
+
+    // Remove player from players array
+    game.players = game.players.filter(player => player.id !== playerId);
+
+    // Cascade delete: remove all transactions for this player
+    game.transactions = game.transactions.filter(
+      transaction => transaction.playerId !== playerId
+    );
+  }
+
   static validateGame(balances: PlayerBalance[]): Validation {
     return validateSettlements(balances);
   }
