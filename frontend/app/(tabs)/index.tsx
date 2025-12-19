@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 import { GameService } from '@/services/gameService';
 
 export default function HomeScreen() {
-  const { games, activeGame, setActiveGame, deleteGame } = useGame();
+  const { games, activeGame, setActiveGame, deleteGame, createGame } = useGame();
   const router = useRouter();
   
   const activeGames = games.filter(g => g.status === 'active');
@@ -27,15 +27,26 @@ export default function HomeScreen() {
       `Are you sure you want to delete "${gameName}"?`,
       [
         { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Delete', 
+        {
+          text: 'Delete',
           style: 'destructive',
           onPress: () => deleteGame(gameId)
         }
       ]
     );
   };
-  
+
+  const handleCreateNewGame = async () => {
+    try {
+      await createGame('Untitled Game');
+      // Game is automatically set as active in createGame
+      router.push('/game/active' as any);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to create game');
+      console.error('Error creating game:', error);
+    }
+  };
+
   const formatDate = (date: Date) => {
     return new Date(date).toLocaleDateString('en-US', {
       month: 'short',
@@ -99,9 +110,9 @@ export default function HomeScreen() {
       </ScrollView>
       
       {/* New Game Button */}
-      <TouchableOpacity 
+      <TouchableOpacity
         style={styles.newGameButton}
-        onPress={() => router.push('/game/new')}
+        onPress={handleCreateNewGame}
       >
         <Text style={styles.newGameButtonText}>New Game</Text>
       </TouchableOpacity>
