@@ -1,3 +1,5 @@
+import 'react-native-gesture-handler';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { useFonts } from 'expo-font';
@@ -64,32 +66,34 @@ function RootLayoutNav() {
   };
 
   return (
-    <GameProvider>
-      <ThemeProvider value={CustomDarkTheme}>
-        <Stack>
-          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-          <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
-          <Stack.Screen 
-            name="game/new" 
-            options={{ 
-              presentation: 'modal',
-              title: 'New Game'
-            }} 
-          />
-          <Stack.Screen 
-            name="game/active" 
-            options={{ 
-              title: 'Active Game'
-            }} 
-          />
-          <Stack.Screen 
-            name="game/summary" 
-            options={{ 
-              title: 'Game Summary'
-            }} 
-          />
-        </Stack>
-      </ThemeProvider>
-    </GameProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <GameProvider>
+        <ThemeProvider value={CustomDarkTheme}>
+          <Stack>
+            <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+            <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
+            <Stack.Screen
+              name="game/new"
+              options={{
+                presentation: 'modal',
+                title: 'New Game'
+              }}
+            />
+            <Stack.Screen
+              name="game/active"
+              options={{
+                title: 'Active Game'
+              }}
+            />
+            <Stack.Screen
+              name="game/summary"
+              options={{
+                title: 'Game Summary'
+              }}
+            />
+          </Stack>
+        </ThemeProvider>
+      </GameProvider>
+    </GestureHandlerRootView>
   );
 }
