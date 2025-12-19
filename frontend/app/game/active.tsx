@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Modal } from 'react-native';
+import { Swipeable } from 'react-native-gesture-handler';
+import { Ionicons } from '@expo/vector-icons';
 import { Text, View } from '@/components/Themed';
 import { useGame } from '@/contexts/GameContext';
 import { useRouter } from 'expo-router';
@@ -7,7 +9,7 @@ import { GameService } from '@/services/gameService';
 import { Player, PlayerBalance } from '@/types/game';
 
 export default function ActiveGameScreen() {
-  const { activeGame, updateGame, setActiveGame } = useGame();
+  const { activeGame, updateGame, setActiveGame, createGame } = useGame();
   const router = useRouter();
 
   const [showAddPlayer, setShowAddPlayer] = useState(false);
@@ -19,14 +21,26 @@ export default function ActiveGameScreen() {
   const [transactionType, setTransactionType] = useState<'buyin' | 'cashout'>('buyin');
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editedTitle, setEditedTitle] = useState('');
-  
+  const [playerToDelete, setPlayerToDelete] = useState<Player | null>(null);
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+
+  const handleCreateNewGame = async () => {
+    try {
+      await createGame('Untitled Game');
+      // The useEffect or state update will automatically handle the active game change
+    } catch (error) {
+      Alert.alert('Error', 'Failed to create game');
+      console.error('Error creating game:', error);
+    }
+  };
+
   if (!activeGame) {
     return (
       <View style={styles.container}>
         <Text style={styles.emptyText}>No active game. Please select or create a game.</Text>
-        <TouchableOpacity 
+        <TouchableOpacity
           style={styles.button}
-          onPress={() => router.push('/game/new')}
+          onPress={handleCreateNewGame}
         >
           <Text style={styles.buttonText}>Create New Game</Text>
         </TouchableOpacity>
@@ -193,6 +207,50 @@ export default function ActiveGameScreen() {
     setIsEditingTitle(false);
   };
 
+  const renderRightActions = (player: Player) => {
+    return (
+      <TouchableOpacity
+        style={styles.deleteAction}
+        onPress={() => confirmDeletePlayer(player)}
+        activeOpacity={0.8}
+      >
+        <Ionicons name="trash" size={24} color="#FFFFFF" />
+      </TouchableOpacity>
+    );
+  };
+
+  const confirmDeletePlayer = (player: Player) => {
+    setPlayerToDelete(player);
+    setShowDeleteConfirmation(true);
+  };
+
+  const handleDeletePlayer = async () => {
+    if (!playerToDelete || !activeGame) return;
+
+    // Validate: Prevent deletion if only 1-2 players remain
+    if (activeGame.players.length <= 2) {
+      Alert.alert(
+        'Cannot Delete Player',
+        'A game must have at least 2 players. Add more players before deleting this one.',
+        [{ text: 'OK' }]
+      );
+      setShowDeleteConfirmation(false);
+      setPlayerToDelete(null);
+      return;
+    }
+
+    try {
+      GameService.removePlayer(activeGame, playerToDelete.id);
+      await updateGame(activeGame);
+
+      setShowDeleteConfirmation(false);
+      setPlayerToDelete(null);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to delete player. Please try again.');
+      console.error('Error deleting player:', error);
+    }
+  };
+
   return (
     <View style={styles.container}>
       <ScrollView style={styles.scrollView}>
@@ -243,32 +301,40 @@ export default function ActiveGameScreen() {
             activeGame.players.map(player => {
               const balance = getPlayerBalance(player.id);
               return (
-                <View key={player.id} style={styles.playerCard}>
-                  <View style={styles.playerInfo}>
-                    <Text style={styles.playerName}>{player.name}</Text>
-                    {balance && (
-                      <View style={styles.playerStats}>
-                        <Text style={styles.statText}>
-                          In: ${balance.totalBuyins.toFixed(0)} • Out: ${balance.totalCashouts.toFixed(0)}
-                        </Text>
-                      </View>
-                    )}
+                <Swipeable
+                  key={player.id}
+                  renderRightActions={() => renderRightActions(player)}
+                  overshootRight={false}
+                  friction={2}
+                  rightThreshold={40}
+                >
+                  <View style={styles.playerCard}>
+                    <View style={styles.playerInfo}>
+                      <Text style={styles.playerName}>{player.name}</Text>
+                      {balance && (
+                        <View style={styles.playerStats}>
+                          <Text style={styles.statText}>
+                            In: ${balance.totalBuyins.toFixed(0)} • Out: ${balance.totalCashouts.toFixed(0)}
+                          </Text>
+                        </View>
+                      )}
+                    </View>
+                    <View style={styles.playerActions}>
+                      <TouchableOpacity
+                        style={styles.actionButton}
+                        onPress={() => openTransactionModal(player, 'buyin')}
+                      >
+                        <Text style={styles.actionButtonText}>Buy-in</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={styles.actionButton}
+                        onPress={() => openTransactionModal(player, 'cashout')}
+                      >
+                        <Text style={styles.actionButtonText}>Cash Out</Text>
+                      </TouchableOpacity>
+                    </View>
                   </View>
-                  <View style={styles.playerActions}>
-                    <TouchableOpacity
-                      style={styles.actionButton}
-                      onPress={() => openTransactionModal(player, 'buyin')}
-                    >
-                      <Text style={styles.actionButtonText}>Buy-in</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.actionButton}
-                      onPress={() => openTransactionModal(player, 'cashout')}
-                    >
-                      <Text style={styles.actionButtonText}>Cash Out</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
+                </Swipeable>
               );
             })
           )}
@@ -373,6 +439,41 @@ export default function ActiveGameScreen() {
                 onPress={handleAddTransaction}
               >
                 <Text style={styles.confirmButtonText}>Confirm</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Delete Player Confirmation Modal */}
+      <Modal
+        visible={showDeleteConfirmation}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowDeleteConfirmation(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Ionicons name="warning" size={48} color="#C04657" style={styles.warningIcon} />
+            <Text style={styles.modalTitle}>Delete Player?</Text>
+            <Text style={styles.deleteWarningText}>
+              This will remove {playerToDelete?.name} and all their transactions from this game. This action cannot be undone.
+            </Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => {
+                  setShowDeleteConfirmation(false);
+                  setPlayerToDelete(null);
+                }}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.deleteConfirmButton]}
+                onPress={handleDeletePlayer}
+              >
+                <Text style={styles.deleteConfirmButtonText}>Delete</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -640,5 +741,33 @@ const styles = StyleSheet.create({
     color: '#B072BB',
     marginBottom: 4,
     lineHeight: 20,
+  },
+  deleteAction: {
+    backgroundColor: '#C04657',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 80,
+    borderRadius: 6,
+    marginBottom: 8,
+  },
+  warningIcon: {
+    marginBottom: 16,
+  },
+  deleteWarningText: {
+    fontSize: 15,
+    color: '#FFFFFF',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 24,
+    opacity: 0.8,
+  },
+  deleteConfirmButton: {
+    backgroundColor: '#C04657',
+    borderWidth: 0,
+  },
+  deleteConfirmButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
 });
