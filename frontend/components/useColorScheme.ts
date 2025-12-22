@@ -1,4 +1,4 @@
-// Force dark mode for black and gold theme
+// Force dark mode for black and purple theme
 export function useColorScheme(): 'light' | 'dark' | null {
   return 'dark';
 }
