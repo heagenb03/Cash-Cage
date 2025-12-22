@@ -1,25 +1,14 @@
 import { StyleSheet, ScrollView } from 'react-native';
 import { Text, View } from '@/components/Themed';
 
-export default function HistoryScreen() {
+export default function AccountScreen() {
   return (
     <View style={styles.container}>
       <ScrollView style={styles.scrollView}>
         <View style={styles.header}>
-          <Text style={styles.title}>History</Text>
+          <Text style={styles.title}>Account</Text>
           <Text style={styles.subtitle}>
-            View past games and statistics
-          </Text>
-        </View>
-        
-        <View style={styles.comingSoon}>
-          <Text style={styles.comingSoonTitle}>📊 Coming Soon</Text>
-          <Text style={styles.comingSoonText}>
-            • Player statistics{'\n'}
-            • Win/loss tracking{'\n'}
-            • Historical analytics{'\n'}
-            • Game trends{'\n'}
-            • Export reports
+            View account
           </Text>
         </View>
       </ScrollView>
