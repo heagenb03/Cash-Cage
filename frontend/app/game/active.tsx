@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import { StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Modal } from 'react-native';
 import { Swipeable } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
@@ -49,7 +49,10 @@ export default function ActiveGameScreen() {
   }
   
   const balances = GameService.calculateBalances(activeGame);
-  
+
+  const activePlayers = activeGame.players.filter(p => !p.completedAt);
+  const completedPlayers = activeGame.players.filter(p => p.completedAt);
+
   const handleAddPlayer = async () => {
     if (!newPlayerName.trim()) {
       Alert.alert('Error', 'Please enter a player name');
@@ -207,7 +210,7 @@ export default function ActiveGameScreen() {
     setIsEditingTitle(false);
   };
 
-  const renderRightActions = (player: Player) => {
+  const renderRightActions = useCallback((player: Player) => {
     return (
       <TouchableOpacity
         style={styles.deleteAction}
@@ -217,7 +220,33 @@ export default function ActiveGameScreen() {
         <Ionicons name="trash" size={24} color="#FFFFFF" />
       </TouchableOpacity>
     );
-  };
+  }, []);
+
+  const renderLeftActions = useCallback((player: Player) => {
+    const isCompleted = !!player.completedAt;
+
+    if (isCompleted) {
+      return (
+        <TouchableOpacity
+          style={styles.reactivateAction}
+          onPress={() => handleReactivatePlayer(player)}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="arrow-undo" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
+      );
+    } else {
+      return (
+        <TouchableOpacity
+          style={styles.completeAction}
+          onPress={() => handleCompletePlayer(player)}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="checkmark-circle" size={24} color="#FFFFFF" />
+        </TouchableOpacity>
+      );
+    }
+  }, []);
 
   const confirmDeletePlayer = (player: Player) => {
     setPlayerToDelete(player);
@@ -226,18 +255,6 @@ export default function ActiveGameScreen() {
 
   const handleDeletePlayer = async () => {
     if (!playerToDelete || !activeGame) return;
-
-    // Validate: Prevent deletion if only 1-2 players remain
-    if (activeGame.players.length <= 2) {
-      Alert.alert(
-        'Cannot Delete Player',
-        'A game must have at least 2 players. Add more players before deleting this one.',
-        [{ text: 'OK' }]
-      );
-      setShowDeleteConfirmation(false);
-      setPlayerToDelete(null);
-      return;
-    }
 
     try {
       GameService.removePlayer(activeGame, playerToDelete.id);
@@ -248,6 +265,30 @@ export default function ActiveGameScreen() {
     } catch (error) {
       Alert.alert('Error', 'Failed to delete player. Please try again.');
       console.error('Error deleting player:', error);
+    }
+  };
+
+  const handleCompletePlayer = async (player: Player) => {
+    if (!activeGame) return;
+
+    try {
+      GameService.markPlayerAsCompleted(activeGame, player.id);
+      await updateGame(activeGame);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to mark player as completed. Please try again.');
+      console.error('Error completing player:', error);
+    }
+  };
+
+  const handleReactivatePlayer = async (player: Player) => {
+    if (!activeGame) return;
+
+    try {
+      GameService.markPlayerAsActive(activeGame, player.id);
+      await updateGame(activeGame);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to reactivate player. Please try again.');
+      console.error('Error reactivating player:', error);
     }
   };
 
@@ -286,59 +327,119 @@ export default function ActiveGameScreen() {
           </Text>
         </View>
         
-        {/* Players List */}
+        {/* Active Players List */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Players</Text>
+            <Text style={styles.sectionTitle}>Active Players</Text>
             <TouchableOpacity onPress={() => setShowAddPlayer(true)}>
               <Text style={styles.addButton}>+</Text>
             </TouchableOpacity>
           </View>
-          
-          {activeGame.players.length === 0 ? (
+
+          {activePlayers.length === 0 ? (
             <Text style={styles.emptyText}>Add players to start</Text>
           ) : (
-            activeGame.players.map(player => {
+            activePlayers.map(player => {
               const balance = getPlayerBalance(player.id);
               return (
-                <Swipeable
-                  key={player.id}
-                  renderRightActions={() => renderRightActions(player)}
-                  overshootRight={false}
-                  friction={2}
-                  rightThreshold={40}
-                >
-                  <View style={styles.playerCard}>
-                    <View style={styles.playerInfo}>
-                      <Text style={styles.playerName}>{player.name}</Text>
-                      {balance && (
-                        <View style={styles.playerStats}>
-                          <Text style={styles.statText}>
-                            In: ${balance.totalBuyins.toFixed(0)} • Out: ${balance.totalCashouts.toFixed(0)}
-                          </Text>
-                        </View>
-                      )}
+                <View key={player.id} style={{ marginBottom: 8 }}>
+                  <Swipeable
+                    renderLeftActions={() => renderLeftActions(player)}
+                    renderRightActions={() => renderRightActions(player)}
+                    overshootLeft={false}
+                    overshootRight={false}
+                    friction={2}
+                    leftThreshold={40}
+                    rightThreshold={40}
+                  >
+                    <View style={styles.playerCard}>
+                      <View style={styles.playerInfo}>
+                        <Text style={styles.playerName}>{player.name}</Text>
+                        {balance && (
+                          <View style={styles.playerStats}>
+                            <Text style={styles.statText}>
+                              In: ${balance.totalBuyins.toFixed(0)} • Out: ${balance.totalCashouts.toFixed(0)}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                      <View style={styles.playerActions}>
+                        <TouchableOpacity
+                          style={styles.actionButton}
+                          onPress={() => openTransactionModal(player, 'buyin')}
+                        >
+                          <Text style={styles.actionButtonText}>Buy-in</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={styles.actionButton}
+                          onPress={() => openTransactionModal(player, 'cashout')}
+                        >
+                          <Text style={styles.actionButtonText}>Cash Out</Text>
+                        </TouchableOpacity>
+                      </View>
                     </View>
-                    <View style={styles.playerActions}>
-                      <TouchableOpacity
-                        style={styles.actionButton}
-                        onPress={() => openTransactionModal(player, 'buyin')}
-                      >
-                        <Text style={styles.actionButtonText}>Buy-in</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={styles.actionButton}
-                        onPress={() => openTransactionModal(player, 'cashout')}
-                      >
-                        <Text style={styles.actionButtonText}>Cash Out</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                </Swipeable>
+                  </Swipeable>
+                </View>
               );
             })
           )}
         </View>
+
+        {/* Completed Players List */}
+        {completedPlayers.length > 0 && (
+          <View style={styles.section}>
+            <View style={styles.sectionHeader}>
+              <Text style={styles.sectionTitle}>Completed Players</Text>
+            </View>
+
+            {completedPlayers.map(player => {
+              const balance = getPlayerBalance(player.id);
+              return (
+                <View key={player.id} style={{ marginBottom: 8 }}>
+                  <Swipeable
+                    key={player.id}
+                    renderLeftActions={() => renderLeftActions(player)}
+                    renderRightActions={() => renderRightActions(player)}
+                    overshootLeft={false}
+                    overshootRight={false}
+                    friction={2}
+                    leftThreshold={40}
+                    rightThreshold={40}
+                  >
+                    <View style={[styles.playerCard, styles.completedPlayerCard]}>
+                      <View style={styles.playerInfo}>
+                        <Text style={[styles.playerName, styles.completedPlayerText]}>
+                          {player.name}
+                        </Text>
+                        {balance && (
+                          <View style={styles.playerStats}>
+                            <Text style={[styles.statText, styles.completedPlayerText]}>
+                              In: ${balance.totalBuyins.toFixed(0)} • Out: ${balance.totalCashouts.toFixed(0)}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                      <View style={styles.playerActions}>
+                        <TouchableOpacity
+                          style={[styles.actionButton, styles.completedActionButton]}
+                          onPress={() => openTransactionModal(player, 'buyin')}
+                        >
+                          <Text style={[styles.actionButtonText, styles.completedActionButtonText]}>Buy-in</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.actionButton, styles.completedActionButton]}
+                          onPress={() => openTransactionModal(player, 'cashout')}
+                        >
+                          <Text style={[styles.actionButtonText, styles.completedActionButtonText]}>Cash Out</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </Swipeable>
+                </View>
+              );
+            })}
+          </View>
+        )}
         
         {/* Complete Game Button */}
         {activeGame.players.length > 1 && activeGame.transactions.length > 0 && (
@@ -479,6 +580,7 @@ export default function ActiveGameScreen() {
           </View>
         </View>
       </Modal>
+
     </View>
   );
 }
@@ -569,10 +671,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: 14,
     borderRadius: 6,
-    marginBottom: 8,
     backgroundColor: '#1A1A1A',
-    borderLeftWidth: 3,
-    borderLeftColor: '#B072BB',
   },
   playerInfo: {
     flex: 1,
@@ -676,6 +775,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     width: '100%',
+    backgroundColor: 'transparent',
   },
   modalButton: {
     flex: 1,
@@ -748,7 +848,42 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: 80,
     borderRadius: 6,
-    marginBottom: 8,
+  },
+  completeAction: {
+    backgroundColor: '#4CAF50',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 80,
+    borderRadius: 6,
+  },
+  reactivateAction: {
+    backgroundColor: '#B072BB',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 80,
+    borderRadius: 6,
+  },
+  completedPlayerCard: {
+    backgroundColor: '#0F0F0F',
+  },
+  completedPlayerText: {
+    opacity: 0.5,
+  },
+  completedActionButton: {
+    backgroundColor: '#141414',
+    borderColor: '#4A3C4A',
+  },
+  completedActionButtonText: {
+    opacity: 0.6,
+  },
+  completeConfirmButton: {
+    backgroundColor: '#4CAF50',
+    borderWidth: 0,
+  },
+  completeConfirmButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: 'bold',
   },
   warningIcon: {
     marginBottom: 16,
