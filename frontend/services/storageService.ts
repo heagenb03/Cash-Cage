@@ -30,6 +30,7 @@ export class StorageService {
         players: game.players.map((p: any) => ({
           ...p,
           createdAt: new Date(p.createdAt),
+          completedAt: p.completedAt ? new Date(p.completedAt) : undefined,
         })),
         transactions: game.transactions.map((t: any) => ({
           ...t,

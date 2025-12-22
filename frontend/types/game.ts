@@ -4,6 +4,7 @@ export interface Player {
   id: string;
   name: string;
   createdAt: Date;
+  completedAt?: Date;
 }
 
 export interface Transaction {

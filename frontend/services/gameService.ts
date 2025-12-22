@@ -116,7 +116,8 @@ export class GameService {
     const player: Player = {
       id: `player_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       name,
-      createdAt: new Date()
+      createdAt: new Date(),
+      completedAt: undefined
     };
 
     game.players.push(player);
@@ -136,6 +137,38 @@ export class GameService {
     game.transactions = game.transactions.filter(
       transaction => transaction.playerId !== playerId
     );
+  }
+
+  /**
+   * Mark a player as completed (left the game)
+   * Clears settlement cache if game is completed
+   */
+  static markPlayerAsCompleted(game: Game, playerId: string): void {
+    // Clear settlement cache when modifying completed games
+    if (game.status === 'completed') {
+      this.clearSettlementCache(game);
+    }
+
+    const player = game.players.find(p => p.id === playerId);
+    if (player) {
+      player.completedAt = new Date();
+    }
+  }
+
+  /**
+   * Reactivate a completed player (return to active status)
+   * Clears settlement cache if game is completed
+   */
+  static markPlayerAsActive(game: Game, playerId: string): void {
+    // Clear settlement cache when modifying completed games
+    if (game.status === 'completed') {
+      this.clearSettlementCache(game);
+    }
+
+    const player = game.players.find(p => p.id === playerId);
+    if (player) {
+      player.completedAt = undefined;
+    }
   }
 
   static validateGame(balances: PlayerBalance[]): Validation {
