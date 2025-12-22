@@ -51,7 +51,7 @@ export default function RootLayout() {
 function RootLayoutNav() {
   const colorScheme = useColorScheme();
 
-  // Custom dark theme with black and gold
+  // Custom dark theme with black and purple
   const CustomDarkTheme = {
     ...DarkTheme,
     colors: {
