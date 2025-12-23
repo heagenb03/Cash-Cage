@@ -1,15 +1,37 @@
-import { StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { StyleSheet, ScrollView, TouchableOpacity, Alert, Modal, AccessibilityInfo } from 'react-native';
 import { Text, View } from '@/components/Themed';
 import { useGame } from '@/contexts/GameContext';
 import { useRouter } from 'expo-router';
 import { GameService } from '@/services/gameService';
+import { Ionicons } from '@expo/vector-icons';
+import { useState, useCallback, useEffect } from 'react';
+import GameCard from '@/components/GameCard';
 
 export default function HomeScreen() {
   const { games, activeGame, setActiveGame, deleteGame, createGame } = useGame();
   const router = useRouter();
-  
+
+  const [gameToDelete, setGameToDelete] = useState<{ id: string; name: string } | null>(null);
+  const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+  const [reduceMotionEnabled, setReduceMotionEnabled] = useState(false);
+
   const activeGames = games.filter(g => g.status === 'active');
   const completedGames = games.filter(g => g.status === 'completed');
+
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled().then(enabled => {
+      setReduceMotionEnabled(enabled ?? false);
+    });
+
+    const subscription = AccessibilityInfo.addEventListener(
+      'reduceMotionChanged',
+      setReduceMotionEnabled
+    );
+
+    return () => {
+      subscription.remove();
+    };
+  }, []);
   
   const handleGamePress = async (gameId: string) => {
     await setActiveGame(gameId);
@@ -20,20 +42,23 @@ export default function HomeScreen() {
       router.push('/game/summary' as any);
     }
   };
-  
-  const handleDeleteGame = (gameId: string, gameName: string) => {
-    Alert.alert(
-      'Delete Game',
-      `Are you sure you want to delete "${gameName}"?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => deleteGame(gameId)
-        }
-      ]
-    );
+
+  const confirmDeleteGame = (game: { id: string; name: string }) => {
+    setGameToDelete(game);
+    setShowDeleteConfirmation(true);
+  };
+
+  const handleDeleteGame = async () => {
+    if (!gameToDelete) return;
+
+    try {
+      await deleteGame(gameToDelete.id);
+      setShowDeleteConfirmation(false);
+      setGameToDelete(null);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to delete game. Please try again.');
+      console.error('Error deleting game:', error);
+    }
   };
 
   const handleCreateNewGame = async () => {
@@ -47,14 +72,6 @@ export default function HomeScreen() {
     }
   };
 
-  const formatDate = (date: Date) => {
-    return new Date(date).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    });
-  };
-  
   return (
     <View style={styles.container}>
       <ScrollView style={styles.scrollView}>
@@ -65,20 +82,14 @@ export default function HomeScreen() {
             <Text style={styles.emptyText}>No active games</Text>
           ) : (
             activeGames.map(game => (
-              <TouchableOpacity
+              <GameCard
                 key={game.id}
-                style={styles.gameCard}
-                onPress={() => handleGamePress(game.id)}
-                onLongPress={() => handleDeleteGame(game.id, game.name)}
-              >
-                <View style={styles.gameCardHeader}>
-                  <Text style={styles.gameCardTitle}>{game.name}</Text>
-                  <Text style={styles.gameCardDate}>{formatDate(game.date)}</Text>
-                </View>
-                <Text style={styles.gameCardInfo}>
-                  {game.players.length} players • {game.transactions.length} transactions
-                </Text>
-              </TouchableOpacity>
+                game={game}
+                onPress={handleGamePress}
+                onDelete={confirmDeleteGame}
+                isCompleted={false}
+                reduceMotion={reduceMotionEnabled}
+              />
             ))
           )}
         </View>
@@ -90,20 +101,14 @@ export default function HomeScreen() {
             <Text style={styles.emptyText}>No completed games</Text>
           ) : (
             completedGames.map(game => (
-              <TouchableOpacity
+              <GameCard
                 key={game.id}
-                style={[styles.gameCard, styles.completedCard]}
-                onPress={() => handleGamePress(game.id)}
-                onLongPress={() => handleDeleteGame(game.id, game.name)}
-              >
-                <View style={styles.gameCardHeader}>
-                  <Text style={styles.gameCardTitle}>{game.name}</Text>
-                  <Text style={styles.gameCardDate}>{formatDate(game.date)}</Text>
-                </View>
-                <Text style={styles.gameCardInfo}>
-                  {game.players.length} players • ${GameService.generateGameSummary(game).totalPot.toFixed(2)} pot
-                </Text>
-              </TouchableOpacity>
+                game={game}
+                onPress={handleGamePress}
+                onDelete={confirmDeleteGame}
+                isCompleted={true}
+                reduceMotion={reduceMotionEnabled}
+              />
             ))
           )}
         </View>
@@ -116,6 +121,42 @@ export default function HomeScreen() {
       >
         <Text style={styles.newGameButtonText}>New Game</Text>
       </TouchableOpacity>
+
+      {/* Delete Confirmation Modal */}
+      <Modal
+        visible={showDeleteConfirmation}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowDeleteConfirmation(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Ionicons name="warning" size={48} color="#C04657" style={styles.warningIcon} />
+            <Text style={styles.modalTitle}>Delete Game?</Text>
+            <Text style={styles.deleteWarningText}>
+              Are you sure you want to delete "{gameToDelete?.name}"? This will remove all players,
+              transactions, and settlements. This action cannot be undone.
+            </Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => {
+                  setShowDeleteConfirmation(false);
+                  setGameToDelete(null);
+                }}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.deleteConfirmButton]}
+                onPress={handleDeleteGame}
+              >
+                <Text style={styles.deleteConfirmButtonText}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -147,39 +188,6 @@ const styles = StyleSheet.create({
     marginTop: 20,
     color: '#FFFFFF',
   },
-  gameCard: {
-    padding: 20,
-    borderRadius: 8,
-    marginBottom: 12,
-    backgroundColor: 'transparent',
-    borderLeftWidth: 4,
-    borderLeftColor: '#B072BB',
-  },
-  completedCard: {
-    opacity: 0.6,
-    borderLeftColor: '#666',
-  },
-  gameCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  gameCardTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-  },
-  gameCardDate: {
-    fontSize: 13,
-    opacity: 0.5,
-    color: '#FFFFFF',
-  },
-  gameCardInfo: {
-    fontSize: 13,
-    opacity: 0.6,
-    color: '#B072BB',
-  },
   newGameButton: {
     margin: 20,
     padding: 20,
@@ -192,5 +200,67 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     letterSpacing: 1,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalContent: {
+    backgroundColor: '#1A1A1A',
+    borderRadius: 12,
+    padding: 24,
+    width: '85%',
+    maxWidth: 400,
+    alignItems: 'center',
+  },
+  warningIcon: {
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  deleteWarningText: {
+    fontSize: 15,
+    color: '#FFFFFF',
+    opacity: 0.8,
+    marginBottom: 24,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 1.5,
+    borderColor: '#666',
+  },
+  cancelButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  deleteConfirmButton: {
+    backgroundColor: '#C04657',
+  },
+  deleteConfirmButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
   },
 });
