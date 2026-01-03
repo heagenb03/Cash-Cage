@@ -1,8 +1,7 @@
-import React, { useRef, memo } from 'react';
+import React, { useRef } from 'react';
 import { Animated, StyleSheet, TouchableOpacity } from 'react-native';
 import { Text, View } from '@/components/Themed';
 import { TapGestureHandler, State, Swipeable, HandlerStateChangeEvent, TapGestureHandlerEventPayload } from 'react-native-gesture-handler';
-import * as Haptics from 'expo-haptics';
 import { Ionicons } from '@expo/vector-icons';
 import { Game } from '@/types/game';
 import { GameService } from '@/services/gameService';
@@ -31,7 +30,6 @@ const GameCard: React.FC<GameCardProps> = ({ game, onPress, onDelete, isComplete
 
     switch (state) {
       case State.BEGAN:
-        // Scale down animation (60-80ms feel)
         if (!reduceMotion) {
           Animated.spring(scaleAnim, {
             toValue: 0.975,
@@ -43,16 +41,14 @@ const GameCard: React.FC<GameCardProps> = ({ game, onPress, onDelete, isComplete
         break;
 
       case State.END:
-        // Navigate immediately (0ms delay)
         onPress(game.id);
 
-        // Scale up with micro-bounce (100-120ms feel)
         if (!reduceMotion) {
           Animated.spring(scaleAnim, {
             toValue: 1,
             tension: 200,
             friction: 15,
-            velocity: -0.5, // Creates overshoot
+            velocity: -0.5,
             useNativeDriver: true
           }).start();
         }
@@ -60,7 +56,6 @@ const GameCard: React.FC<GameCardProps> = ({ game, onPress, onDelete, isComplete
 
       case State.FAILED:
       case State.CANCELLED:
-        // Spring back without navigating
         if (!reduceMotion) {
           Animated.spring(scaleAnim, {
             toValue: 1,

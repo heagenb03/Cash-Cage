@@ -71,7 +71,6 @@ function RootLayoutNav() {
         <ThemeProvider value={CustomDarkTheme}>
           <Stack>
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen name="modal" options={{ presentation: 'modal' }} />
             <Stack.Screen
               name="game/active"
               options={{

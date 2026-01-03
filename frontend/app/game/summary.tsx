@@ -163,7 +163,7 @@ export default function GameSummaryScreen() {
   
   const handleShare = async () => {
     try {
-      let message = `${activeGame.name} - Settlement Summary\n\n`;
+      let message = `${activeGame.name}\n\n`;
       message += `Total Pot: $${summary.totalPot.toFixed(2)}\n\n`;
       message += `Settlements:\n`;
 
