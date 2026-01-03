@@ -1,6 +1,5 @@
-import React, { useState, useCallback } from 'react';
-import { StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Modal } from 'react-native';
-import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
+import React, { useState, useCallback, useEffect } from 'react';
+import { StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Modal, AccessibilityInfo } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Text, View } from '@/components/Themed';
 import { useGame } from '@/contexts/GameContext';
@@ -8,6 +7,8 @@ import { useRouter } from 'expo-router';
 import { GameService } from '@/services/gameService';
 import { Player, PlayerBalance } from '@/types/game';
 import { getNetBalanceColor, formatNetBalanceDisplay } from '@/utils/formatUtils';
+import PlayerCardActive from '@/components/PlayerCardActive';
+import PlayerCardCompleted from '@/components/PlayerCardCompleted';
 
 export default function ActiveGameScreen() {
   const { activeGame, updateGame, setActiveGame, createGame } = useGame();
@@ -24,6 +25,20 @@ export default function ActiveGameScreen() {
   const [editedTitle, setEditedTitle] = useState('');
   const [playerToDelete, setPlayerToDelete] = useState<Player | null>(null);
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
+  const [reduceMotionEnabled, setReduceMotionEnabled] = useState(false);
+
+  useEffect(() => {
+    AccessibilityInfo.isReduceMotionEnabled().then(enabled => {
+      setReduceMotionEnabled(enabled ?? false);
+    });
+
+    const subscription = AccessibilityInfo.addEventListener(
+      'reduceMotionChanged',
+      setReduceMotionEnabled
+    );
+
+    return () => subscription.remove();
+  }, []);
 
   const handleCreateNewGame = async () => {
     try {
@@ -170,7 +185,7 @@ export default function ActiveGameScreen() {
     );
   };
   
-  const openTransactionModal = (player: Player, type: 'buyin' | 'cashout') => {
+  const openTransactionModal = useCallback((player: Player, type: 'buyin' | 'cashout') => {
     const balance = getPlayerBalance(player.id);
     const currentTotal = type === 'buyin'
       ? balance?.totalBuyins ?? 0
@@ -180,7 +195,7 @@ export default function ActiveGameScreen() {
     setTransactionType(type);
     setTransactionAmount(currentTotal.toString());
     setShowAddTransaction(true);
-  };
+  }, [balances]);
   
   const getPlayerBalance = (playerId: string): PlayerBalance | undefined => {
     return balances.find(b => b.playerId === playerId);
@@ -210,44 +225,6 @@ export default function ActiveGameScreen() {
 
     setIsEditingTitle(false);
   };
-
-  const renderRightActions = useCallback((player: Player) => {
-    return (
-      <TouchableOpacity
-        style={styles.deleteAction}
-        onPress={() => confirmDeletePlayer(player)}
-        activeOpacity={0.8}
-      >
-        <Ionicons name="trash" size={24} color="#FFFFFF" />
-      </TouchableOpacity>
-    );
-  }, []);
-
-  const renderLeftActions = useCallback((player: Player) => {
-    const isCompleted = !!player.completedAt;
-
-    if (isCompleted) {
-      return (
-        <TouchableOpacity
-          style={styles.reactivateAction}
-          onPress={() => handleReactivatePlayer(player)}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="arrow-undo" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
-      );
-    } else {
-      return (
-        <TouchableOpacity
-          style={styles.completeAction}
-          onPress={() => handleCompletePlayer(player)}
-          activeOpacity={0.8}
-        >
-          <Ionicons name="checkmark-circle" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
-      );
-    }
-  }, []);
 
   const confirmDeletePlayer = (player: Player) => {
     setPlayerToDelete(player);
@@ -344,42 +321,15 @@ export default function ActiveGameScreen() {
               const balance = getPlayerBalance(player.id);
               return (
                 <View key={player.id} style={{ marginBottom: 8 }}>
-                  <Swipeable
-                    renderLeftActions={() => renderLeftActions(player)}
-                    renderRightActions={() => renderRightActions(player)}
-                    overshootLeft={false}
-                    overshootRight={false}
-                    friction={2}
-                    leftThreshold={40}
-                    rightThreshold={40}
-                  >
-                    <View style={styles.playerCard}>
-                      <View style={styles.playerInfo}>
-                        <Text style={styles.playerName}>{player.name}</Text>
-                        {balance && (
-                          <View style={styles.playerStats}>
-                            <Text style={styles.statText}>
-                              In: ${balance.totalBuyins.toFixed(0)} • Out: ${balance.totalCashouts.toFixed(0)}
-                            </Text>
-                          </View>
-                        )}
-                      </View>
-                      <View style={styles.playerActions}>
-                        <TouchableOpacity
-                          style={styles.actionButton}
-                          onPress={() => openTransactionModal(player, 'buyin')}
-                        >
-                          <Text style={styles.actionButtonText}>Buy-in</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={styles.actionButton}
-                          onPress={() => openTransactionModal(player, 'cashout')}
-                        >
-                          <Text style={styles.actionButtonText}>Cash Out</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  </Swipeable>
+                  <PlayerCardActive
+                    player={player}
+                    balance={balance}
+                    onBuyIn={(player) => openTransactionModal(player, 'buyin')}
+                    onCashOut={(player) => openTransactionModal(player, 'cashout')}
+                    onComplete={handleCompletePlayer}
+                    onDelete={confirmDeletePlayer}
+                    reduceMotion={reduceMotionEnabled}
+                  />
                 </View>
               );
             })
@@ -397,50 +347,13 @@ export default function ActiveGameScreen() {
               const balance = getPlayerBalance(player.id);
               return (
                 <View key={player.id} style={{ marginBottom: 8 }}>
-                  <Swipeable
-                    key={player.id}
-                    renderLeftActions={() => renderLeftActions(player)}
-                    renderRightActions={() => renderRightActions(player)}
-                    overshootLeft={false}
-                    overshootRight={false}
-                    friction={2}
-                    leftThreshold={40}
-                    rightThreshold={40}
-                  >
-                    <View style={[styles.playerCard, styles.completedCardHero]}>
-                      {balance ? (
-                        <View style={styles.completedContent}>
-                          <View style={styles.completedRow}>
-                            {/* Column 1: Name */}
-                            <View style={styles.completedNameColumn}>
-                              <Text style={styles.completedName}>{player.name}</Text>
-                            </View>
-
-                            {/* Column 2: In/Out (stacked vertically, centered) */}
-                            <View style={styles.completedInOutColumn}>
-                              <Text style={styles.completedInOut}>In ${balance.totalBuyins.toFixed(0)}</Text>
-                              <Text style={styles.completedInOut}>Out ${balance.totalCashouts.toFixed(0)}</Text>
-                            </View>
-
-                            {/* Column 3: Net Balance (right-aligned) */}
-                            <View style={styles.completedNetColumn}>
-                              <Text style={[
-                                styles.netBalanceHero,
-                                { color: getNetBalanceColor(balance.netBalance) }
-                              ]}>
-                                {formatNetBalanceDisplay(balance.netBalance)}
-                              </Text>
-                            </View>
-                          </View>
-                        </View>
-                      ) : (
-                        <View style={styles.completedContent}>
-                          <Text style={styles.completedName}>{player.name}</Text>
-                          <Text style={styles.completedInOut}>No transaction data</Text>
-                        </View>
-                      )}
-                    </View>
-                  </Swipeable>
+                  <PlayerCardCompleted
+                    player={player}
+                    balance={balance}
+                    onReactivate={handleReactivatePlayer}
+                    onDelete={confirmDeletePlayer}
+                    reduceMotion={reduceMotionEnabled}
+                  />
                 </View>
               );
             })}
@@ -671,53 +584,6 @@ const styles = StyleSheet.create({
     marginTop: 20,
     color: '#FFFFFF',
   },
-  playerCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 14,
-    borderRadius: 6,
-    backgroundColor: '#1A1A1A',
-  },
-  playerInfo: {
-    flex: 1,
-    marginRight: 12,
-    backgroundColor: 'transparent',
-  },
-  playerName: {
-    fontSize: 17,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    marginBottom: 4,
-  },
-  playerStats: {
-    flexDirection: 'row',
-    backgroundColor: 'transparent',
-  },
-  statText: {
-    fontSize: 13,
-    opacity: 0.6,
-    color: '#FFFFFF',
-  },
-  playerActions: {
-    flexDirection: 'row',
-    gap: 8,
-    backgroundColor: 'transparent',
-  },
-  actionButton: {
-    paddingHorizontal: 18,
-    paddingVertical: 8,
-    borderRadius: 4,
-    backgroundColor: '#2A2A2A',
-    borderWidth: 1,
-    borderColor: '#B072BB',
-  },
-  actionButtonText: {
-    color: '#B072BB',
-    fontWeight: 'bold',
-    fontSize: 13,
-    letterSpacing: 0.5,
-  },
   completeButton: {
     backgroundColor: '#B072BB',
     padding: 20,
@@ -848,89 +714,12 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     lineHeight: 20,
   },
-  deleteAction: {
-    backgroundColor: '#C04657',
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: 80,
-    borderRadius: 6,
-  },
-  completeAction: {
-    backgroundColor: '#4CAF50',
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: 80,
-    borderRadius: 6,
-  },
-  reactivateAction: {
-    backgroundColor: '#4CAF50',
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: 80,
-    borderRadius: 6,
-  },
   completedActionButton: {
     backgroundColor: '#141414',
     borderColor: '#4A3C4A',
   },
   completedActionButtonText: {
     opacity: 0.6,
-  },
-  completedCardHero: {
-    backgroundColor: '#121212',
-    height: 70,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#1A1A1A',
-  },
-  completedContent: {
-    flex: 1,
-    justifyContent: 'center',
-    backgroundColor: 'transparent',
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-  },
-  completedRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: 'transparent',
-    gap: 8,
-  },
-  completedNameColumn: {
-    flex: 1.5,
-    backgroundColor: 'transparent',
-    justifyContent: 'center',
-  },
-  completedInOutColumn: {
-    flex: 1.5,
-    backgroundColor: 'transparent',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 2,
-  },
-  completedInOut: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    opacity: 0.7,
-    backgroundColor: 'transparent',
-  },
-  completedNetColumn: {
-    flex: 1.5,
-    backgroundColor: 'transparent',
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-  },
-  completedName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    opacity: 0.7,
-  },
-  netBalanceHero: {
-    fontSize: 22,
-    fontWeight: 'bold',
   },
   completeConfirmButton: {
     backgroundColor: '#4CAF50',
