@@ -7,6 +7,7 @@ import { useGame } from '@/contexts/GameContext';
 import { useRouter } from 'expo-router';
 import { GameService } from '@/services/gameService';
 import { Player, PlayerBalance } from '@/types/game';
+import { getNetBalanceColor, formatNetBalanceDisplay } from '@/utils/formatUtils';
 
 export default function ActiveGameScreen() {
   const { activeGame, updateGame, setActiveGame, createGame } = useGame();
@@ -406,33 +407,38 @@ export default function ActiveGameScreen() {
                     leftThreshold={40}
                     rightThreshold={40}
                   >
-                    <View style={[styles.playerCard, styles.completedPlayerCard]}>
-                      <View style={styles.playerInfo}>
-                        <Text style={[styles.playerName, styles.completedPlayerText]}>
-                          {player.name}
-                        </Text>
-                        {balance && (
-                          <View style={styles.playerStats}>
-                            <Text style={[styles.statText, styles.completedPlayerText]}>
-                              In: ${balance.totalBuyins.toFixed(0)} • Out: ${balance.totalCashouts.toFixed(0)}
-                            </Text>
+                    <View style={[styles.playerCard, styles.completedCardHero]}>
+                      {balance ? (
+                        <View style={styles.completedContent}>
+                          <View style={styles.completedRow}>
+                            {/* Column 1: Name */}
+                            <View style={styles.completedNameColumn}>
+                              <Text style={styles.completedName}>{player.name}</Text>
+                            </View>
+
+                            {/* Column 2: In/Out (stacked vertically, centered) */}
+                            <View style={styles.completedInOutColumn}>
+                              <Text style={styles.completedInOut}>In ${balance.totalBuyins.toFixed(0)}</Text>
+                              <Text style={styles.completedInOut}>Out ${balance.totalCashouts.toFixed(0)}</Text>
+                            </View>
+
+                            {/* Column 3: Net Balance (right-aligned) */}
+                            <View style={styles.completedNetColumn}>
+                              <Text style={[
+                                styles.netBalanceHero,
+                                { color: getNetBalanceColor(balance.netBalance) }
+                              ]}>
+                                {formatNetBalanceDisplay(balance.netBalance)}
+                              </Text>
+                            </View>
                           </View>
-                        )}
-                      </View>
-                      <View style={styles.playerActions}>
-                        <TouchableOpacity
-                          style={[styles.actionButton, styles.completedActionButton]}
-                          onPress={() => openTransactionModal(player, 'buyin')}
-                        >
-                          <Text style={[styles.actionButtonText, styles.completedActionButtonText]}>Buy-in</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[styles.actionButton, styles.completedActionButton]}
-                          onPress={() => openTransactionModal(player, 'cashout')}
-                        >
-                          <Text style={[styles.actionButtonText, styles.completedActionButtonText]}>Cash Out</Text>
-                        </TouchableOpacity>
-                      </View>
+                        </View>
+                      ) : (
+                        <View style={styles.completedContent}>
+                          <Text style={styles.completedName}>{player.name}</Text>
+                          <Text style={styles.completedInOut}>No transaction data</Text>
+                        </View>
+                      )}
                     </View>
                   </Swipeable>
                 </View>
@@ -857,17 +863,11 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   reactivateAction: {
-    backgroundColor: '#B072BB',
+    backgroundColor: '#4CAF50',
     justifyContent: 'center',
     alignItems: 'center',
     width: 80,
     borderRadius: 6,
-  },
-  completedPlayerCard: {
-    backgroundColor: '#0F0F0F',
-  },
-  completedPlayerText: {
-    opacity: 0.5,
   },
   completedActionButton: {
     backgroundColor: '#141414',
@@ -875,6 +875,62 @@ const styles = StyleSheet.create({
   },
   completedActionButtonText: {
     opacity: 0.6,
+  },
+  completedCardHero: {
+    backgroundColor: '#121212',
+    height: 70,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#1A1A1A',
+  },
+  completedContent: {
+    flex: 1,
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+  },
+  completedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: 'transparent',
+    gap: 8,
+  },
+  completedNameColumn: {
+    flex: 1.5,
+    backgroundColor: 'transparent',
+    justifyContent: 'center',
+  },
+  completedInOutColumn: {
+    flex: 1.5,
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+  },
+  completedInOut: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    opacity: 0.7,
+    backgroundColor: 'transparent',
+  },
+  completedNetColumn: {
+    flex: 1.5,
+    backgroundColor: 'transparent',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
+  completedName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    opacity: 0.7,
+  },
+  netBalanceHero: {
+    fontSize: 22,
+    fontWeight: 'bold',
   },
   completeConfirmButton: {
     backgroundColor: '#4CAF50',
