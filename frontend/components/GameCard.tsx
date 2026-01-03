@@ -1,7 +1,9 @@
-import React, { useRef } from 'react';
+import React, { useRef, useCallback } from 'react';
 import { Animated, StyleSheet, TouchableOpacity } from 'react-native';
 import { Text, View } from '@/components/Themed';
-import { TapGestureHandler, State, Swipeable, HandlerStateChangeEvent, TapGestureHandlerEventPayload } from 'react-native-gesture-handler';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { runOnJS } from 'react-native-reanimated';
+import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { Ionicons } from '@expo/vector-icons';
 import { Game } from '@/types/game';
 import { GameService } from '@/services/gameService';
@@ -25,48 +27,47 @@ const GameCard: React.FC<GameCardProps> = ({ game, onPress, onDelete, isComplete
     });
   };
 
-  const handleStateChange = (event: HandlerStateChangeEvent<TapGestureHandlerEventPayload>) => {
-    const { state } = event.nativeEvent;
-
-    switch (state) {
-      case State.BEGAN:
-        if (!reduceMotion) {
-          Animated.spring(scaleAnim, {
-            toValue: 0.975,
-            tension: 300,
-            friction: 20,
-            useNativeDriver: true
-          }).start();
-        }
-        break;
-
-      case State.END:
-        onPress(game.id);
-
-        if (!reduceMotion) {
-          Animated.spring(scaleAnim, {
-            toValue: 1,
-            tension: 200,
-            friction: 15,
-            velocity: -0.5,
-            useNativeDriver: true
-          }).start();
-        }
-        break;
-
-      case State.FAILED:
-      case State.CANCELLED:
-        if (!reduceMotion) {
-          Animated.spring(scaleAnim, {
-            toValue: 1,
-            tension: 200,
-            friction: 15,
-            useNativeDriver: true
-          }).start();
-        }
-        break;
+  const animateScaleDown = useCallback(() => {
+    if (!reduceMotion) {
+      Animated.spring(scaleAnim, {
+        toValue: 0.975,
+        tension: 300,
+        friction: 20,
+        useNativeDriver: true
+      }).start();
     }
-  };
+  }, [reduceMotion, scaleAnim]);
+
+  const animateScaleUp = useCallback((velocity: number = 0) => {
+    if (!reduceMotion) {
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 200,
+        friction: 15,
+        velocity,
+        useNativeDriver: true
+      }).start();
+    }
+  }, [reduceMotion, scaleAnim]);
+
+  const handleTapSuccess = useCallback(() => {
+    onPress(game.id);
+  }, [onPress, game.id]);
+
+  const tapGesture = Gesture.Tap()
+    .maxDuration(200)
+    .maxDistance(10)
+    .onBegin(() => {
+      runOnJS(animateScaleDown)();
+    })
+    .onFinalize((_, success) => {
+      if (success) {
+        runOnJS(handleTapSuccess)();
+        runOnJS(animateScaleUp)(-0.5);
+      } else {
+        runOnJS(animateScaleUp)(0);
+      }
+    });
 
   return (
     <Swipeable
@@ -84,11 +85,7 @@ const GameCard: React.FC<GameCardProps> = ({ game, onPress, onDelete, isComplete
       friction={2}
       rightThreshold={40}
     >
-      <TapGestureHandler
-        onHandlerStateChange={handleStateChange}
-        maxDurationMs={200}
-        maxDist={10}
-      >
+      <GestureDetector gesture={tapGesture}>
         <Animated.View
           accessible={true}
           accessibilityRole="button"
@@ -111,7 +108,7 @@ const GameCard: React.FC<GameCardProps> = ({ game, onPress, onDelete, isComplete
             }
           </Text>
         </Animated.View>
-      </TapGestureHandler>
+      </GestureDetector>
     </Swipeable>
   );
 };
