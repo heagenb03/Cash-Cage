@@ -10,6 +10,7 @@ import { getNetBalanceColor, formatNetBalanceDisplay } from '@/utils/formatUtils
 import PlayerCardActive from '@/components/PlayerCardActive';
 import PlayerCardCompleted from '@/components/PlayerCardCompleted';
 import Button from '@/components/Button';
+import ModalButton from '@/components/ModalButton';
 
 export default function ActiveGameScreen() {
   const { activeGame, updateGame, setActiveGame, createGame } = useGame();
@@ -406,22 +407,20 @@ export default function ActiveGameScreen() {
               onSubmitEditing={handleAddPlayer}
             />
             <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
+              <ModalButton
+                variant="cancel"
+                title="Cancel"
                 onPress={() => {
                   setNewPlayerName('');
                   setNewPlayerBuyIn('');
                   setShowAddPlayer(false);
                 }}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.confirmButton]}
+              />
+              <ModalButton
+                variant="confirm"
+                title="Add"
                 onPress={handleAddPlayer}
-              >
-                <Text style={styles.confirmButtonText}>Add</Text>
-              </TouchableOpacity>
+              />
             </View>
           </View>
         </View>
@@ -449,22 +448,20 @@ export default function ActiveGameScreen() {
               autoFocus
             />
             <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
+              <ModalButton
+                variant="cancel"
+                title="Cancel"
                 onPress={() => {
                   setTransactionAmount('');
                   setShowAddTransaction(false);
                   setSelectedPlayer(null);
                 }}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.confirmButton]}
+              />
+              <ModalButton
+                variant="confirm"
+                title="Confirm"
                 onPress={handleAddTransaction}
-              >
-                <Text style={styles.confirmButtonText}>Confirm</Text>
-              </TouchableOpacity>
+              />
             </View>
           </View>
         </View>
@@ -485,21 +482,19 @@ export default function ActiveGameScreen() {
               This will remove {playerToDelete?.name} and all their transactions from this game. This action cannot be undone.
             </Text>
             <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
+              <ModalButton
+                variant="cancel"
+                title="Cancel"
                 onPress={() => {
                   setShowDeleteConfirmation(false);
                   setPlayerToDelete(null);
                 }}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.deleteConfirmButton]}
+              />
+              <ModalButton
+                variant="destructive"
+                title="Delete"
                 onPress={handleDeletePlayer}
-              >
-                <Text style={styles.deleteConfirmButtonText}>Delete</Text>
-              </TouchableOpacity>
+              />
             </View>
           </View>
         </View>
@@ -644,32 +639,6 @@ const styles = StyleSheet.create({
     width: '100%',
     backgroundColor: 'transparent',
   },
-  modalButton: {
-    flex: 1,
-    padding: 16,
-    borderRadius: 6,
-    alignItems: 'center',
-  },
-  cancelButton: {
-    backgroundColor: 'transparent',
-    borderWidth: 2,
-    borderColor: '#C04657',
-  },
-  confirmButton: {
-    backgroundColor: 'transparent',
-    borderWidth: 2,
-    borderColor: '#B072BB',
-  },
-  cancelButtonText: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#C04657',
-  },
-  confirmButtonText: {
-    color: '#B072BB',
-    fontSize: 16,
-    fontWeight: 'bold',
-  },
   validationBox: {
     flexDirection: 'row',
     backgroundColor: '#2A0A0A',
@@ -735,14 +704,5 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     marginBottom: 24,
     opacity: 0.8,
-  },
-  deleteConfirmButton: {
-    backgroundColor: '#C04657',
-    borderWidth: 0,
-  },
-  deleteConfirmButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: 'bold',
   },
 });

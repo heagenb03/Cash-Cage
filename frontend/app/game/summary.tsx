@@ -543,32 +543,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   actions: {
-    padding: 20,
+    paddingVertical: 20,
     gap: 12,
-  },
-  shareButton: {
-    backgroundColor: 'transparent',
-    padding: 18,
-    borderRadius: 8,
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#2A2A2A',
-  },
-  shareButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#666',
-  },
-  doneButton: {
-    backgroundColor: '#B072BB',
-    padding: 20,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  doneButtonText: {
-    color: '#0A0A0A',
-    fontSize: 18,
-    fontWeight: 'bold',
-    letterSpacing: 1,
   },
 });
