@@ -7,6 +7,7 @@ import { GameService } from '@/services/gameService';
 import { getSettlements } from '@/services/settlementService';
 import { PlayerBalance, SettlementResult } from '@/types/game';
 import { groupSettlementsByRecipient } from '@/utils/settlementUtils';
+import Button from '@/components/Button';
 
 export default function GameSummaryScreen() {
   const { activeGame, updateGame } = useGame();
@@ -303,18 +304,20 @@ export default function GameSummaryScreen() {
       
       {/* Actions */}
       <View style={styles.actions}>
-        <TouchableOpacity 
-          style={styles.shareButton}
+        <Button
           onPress={handleShare}
-        >
-          <Text style={styles.shareButtonText}>Share Summary</Text>
-        </TouchableOpacity>
-        <TouchableOpacity 
-          style={styles.doneButton}
+          title="Share Summary"
+          variant="secondary"
+          fullWidth
+          accessibilityHint="Shares the game summary via available apps"
+        />
+        <Button 
           onPress={() => router.push('/')}
-        >
-          <Text style={styles.doneButtonText}>Done</Text>
-        </TouchableOpacity>
+          title="Done"
+          variant="primary"
+          fullWidth
+          accessibilityHint="Returns to the home screen"
+        />
       </View>
     </View>
   );
