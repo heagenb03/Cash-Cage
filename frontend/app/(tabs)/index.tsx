@@ -114,15 +114,17 @@ export default function HomeScreen() {
           )}
         </View>
       </ScrollView>
-      
-      {/* New Game Button */}
-      <Button
-        onPress={handleCreateNewGame}
-        title="New Game"
-        variant="primary"
-        fullWidth
-        accessibilityHint="Creates a new poker game session"
-      />
+
+      {/* Actions */}
+      <View style={styles.actions}>
+        <Button
+          onPress={handleCreateNewGame}
+          title="New Game"
+          variant="primary"
+          fullWidth
+          accessibilityHint="Creates a new poker game session"
+        />
+      </View>
 
       {/* Delete Confirmation Modal */}
       <Modal
@@ -189,6 +191,10 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 20,
     color: '#FFFFFF',
+  },
+  actions: {
+    paddingVertical: 20,
+    gap: 12,
   },
   modalOverlay: {
     flex: 1,
