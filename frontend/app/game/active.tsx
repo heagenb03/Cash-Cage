@@ -9,6 +9,7 @@ import { Player, PlayerBalance } from '@/types/game';
 import { getNetBalanceColor, formatNetBalanceDisplay } from '@/utils/formatUtils';
 import PlayerCardActive from '@/components/PlayerCardActive';
 import PlayerCardCompleted from '@/components/PlayerCardCompleted';
+import Button from '@/components/Button';
 
 export default function ActiveGameScreen() {
   const { activeGame, updateGame, setActiveGame, createGame } = useGame();
@@ -363,12 +364,15 @@ export default function ActiveGameScreen() {
         
         {/* Complete Game Button */}
         {activeGame.players.length > 1 && activeGame.transactions.length > 0 && (
-          <TouchableOpacity 
-            style={styles.completeButton}
-            onPress={handleCompleteGame}
-          >
-            <Text style={styles.completeButtonText}>Complete Game</Text>
-          </TouchableOpacity>
+          <View style={styles.completeButtonContainer}>
+            <Button
+              onPress={handleCompleteGame}
+              title="Complete Game"
+              variant="primary"
+              fullWidth
+              accessibilityHint="Finalize game and calculate settlements"
+            />
+          </View>
         )}
       </ScrollView>
       
@@ -585,19 +589,9 @@ const styles = StyleSheet.create({
     marginTop: 20,
     color: '#FFFFFF',
   },
-  completeButton: {
-    backgroundColor: '#B072BB',
-    padding: 20,
-    borderRadius: 8,
-    alignItems: 'center',
+  completeButtonContainer: {
     marginTop: 24,
     marginBottom: 32,
-  },
-  completeButtonText: {
-    color: '#0A0A0A',
-    fontSize: 18,
-    fontWeight: 'bold',
-    letterSpacing: 1,
   },
   button: {
     backgroundColor: '#B072BB',

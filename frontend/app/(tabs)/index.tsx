@@ -6,6 +6,7 @@ import { GameService } from '@/services/gameService';
 import { Ionicons } from '@expo/vector-icons';
 import { useState, useCallback, useEffect } from 'react';
 import GameCard from '@/components/GameCard';
+import Button from '@/components/Button';
 
 export default function HomeScreen() {
   const { games, activeGame, setActiveGame, deleteGame, createGame } = useGame();
@@ -115,12 +116,13 @@ export default function HomeScreen() {
       </ScrollView>
       
       {/* New Game Button */}
-      <TouchableOpacity
-        style={styles.newGameButton}
+      <Button
         onPress={handleCreateNewGame}
-      >
-        <Text style={styles.newGameButtonText}>New Game</Text>
-      </TouchableOpacity>
+        title="New Game"
+        variant="primary"
+        fullWidth
+        accessibilityHint="Creates a new poker game session"
+      />
 
       {/* Delete Confirmation Modal */}
       <Modal
@@ -188,19 +190,6 @@ const styles = StyleSheet.create({
     marginTop: 20,
     color: '#FFFFFF',
   },
-  newGameButton: {
-    margin: 20,
-    padding: 20,
-    borderRadius: 8,
-    backgroundColor: '#B072BB',
-    alignItems: 'center',
-  },
-  newGameButtonText: {
-    color: '#0A0A0A',
-    fontSize: 18,
-    fontWeight: 'bold',
-    letterSpacing: 1,
-  },
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.8)',
@@ -237,6 +226,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: 12,
     width: '100%',
+    backgroundColor: 'transparent',
   },
   modalButton: {
     flex: 1,
