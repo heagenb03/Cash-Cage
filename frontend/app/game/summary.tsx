@@ -11,6 +11,7 @@ import { groupSettlementsByRecipient } from '@/utils/settlementUtils';
 export default function GameSummaryScreen() {
   const { activeGame, updateGame } = useGame();
   const router = useRouter();
+
   const summary = useMemo(
     () => (activeGame ? GameService.generateGameSummary(activeGame) : null),
     [activeGame]
@@ -140,7 +141,19 @@ export default function GameSummaryScreen() {
       setIsLoadingSettlements(false);
     }
   };
-  
+
+  const activeSettlementResult: SettlementResult | null =
+    settlementResult ?? (summary ? {
+      settlements: summary.settlements,
+      ...summary.settlementMeta,
+    } : null);
+  const settlementsToDisplay = activeSettlementResult?.settlements ?? [];
+
+  const groupedSettlements = useMemo(
+    () => groupSettlementsByRecipient(settlementsToDisplay),
+    [settlementsToDisplay]
+  );
+
   if (!activeGame || !summary) {
     return (
       <View style={styles.container}>
@@ -148,19 +161,7 @@ export default function GameSummaryScreen() {
       </View>
     );
   }
-  
-  const activeSettlementResult: SettlementResult =
-    settlementResult ?? {
-      settlements: summary.settlements,
-      ...summary.settlementMeta,
-    };
-  const settlementsToDisplay = activeSettlementResult.settlements;
 
-  const groupedSettlements = useMemo(
-    () => groupSettlementsByRecipient(settlementsToDisplay),
-    [settlementsToDisplay]
-  );
-  
   const handleShare = async () => {
     try {
       let message = `${activeGame.name}\n\n`;
@@ -273,18 +274,28 @@ export default function GameSummaryScreen() {
           <Text style={styles.sectionTitle}>Final Balances</Text>
           {summary.balances.map(balance => (
             <View key={balance.playerId} style={styles.balanceCard}>
-              <View style={styles.balanceInfo}>
-                <Text style={styles.balanceName}>{balance.playerName}</Text>
-                <Text style={styles.balanceDetail}>
-                  In: ${balance.totalBuyins.toFixed(0)} • Out: ${balance.totalCashouts.toFixed(0)}
-                </Text>
+              <View style={styles.balanceRow}>
+                {/* Column 1: Name */}
+                <View style={styles.balanceNameColumn}>
+                  <Text style={styles.balanceName}>{balance.playerName}</Text>
+                </View>
+
+                {/* Column 2: In/Out (stacked) */}
+                <View style={styles.balanceInOutColumn}>
+                  <Text style={styles.balanceInOut}>In ${balance.totalBuyins.toFixed(0)}</Text>
+                  <Text style={styles.balanceInOut}>Out ${balance.totalCashouts.toFixed(0)}</Text>
+                </View>
+
+                {/* Column 3: Net Balance */}
+                <View style={styles.balanceNetColumn}>
+                  <Text style={[
+                    styles.balanceNetHero,
+                    { color: balance.netBalance >= 0 ? '#4CAF50' : '#C04657' }
+                  ]}>
+                    {balance.netBalance >= 0 ? '+' : ''}{balance.netBalance.toFixed(0)}
+                  </Text>
+                </View>
               </View>
-              <Text style={[
-                styles.balanceNet,
-                { color: balance.netBalance >= 0 ? '#51A687' : '#C04657' }
-              ]}>
-                {balance.netBalance >= 0 ? '+' : ''}{balance.netBalance.toFixed(0)}
-              </Text>
             </View>
           ))}
         </View>
@@ -477,32 +488,55 @@ const styles = StyleSheet.create({
   },
   balanceCard: {
     backgroundColor: '#1A1A1A',
-    padding: 14,
+    height: 70,
     borderRadius: 6,
     marginBottom: 8,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    borderLeftWidth: 3,
-    borderLeftColor: '#B072BB',
+    borderWidth: 1,
+    borderColor: '#1A1A1A',
+    paddingHorizontal: 14,
+    paddingVertical: 6,
   },
-  balanceInfo: {
+  balanceRow: {
     flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     backgroundColor: 'transparent',
+    gap: 8,
+  },
+  balanceNameColumn: {
+    flex: 1.5,
+    backgroundColor: 'transparent',
+    justifyContent: 'center',
+  },
+  balanceInOutColumn: {
+    flex: 1.5,
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 2,
+  },
+  balanceNetColumn: {
+    flex: 1.5,
+    backgroundColor: 'transparent',
+    alignItems: 'flex-end',
+    justifyContent: 'center',
   },
   balanceName: {
-    fontSize: 17,
+    fontSize: 15,
     fontWeight: '600',
-    marginBottom: 4,
     color: '#FFFFFF',
+    opacity: 0.7,
   },
-  balanceDetail: {
-    fontSize: 13,
-    opacity: 0.6,
+  balanceInOut: {
+    fontSize: 15,
+    fontWeight: '600',
     color: '#FFFFFF',
+    opacity: 0.7,
+    backgroundColor: 'transparent',
   },
-  balanceNet: {
-    fontSize: 20,
+  balanceNetHero: {
+    fontSize: 22,
     fontWeight: 'bold',
   },
   actions: {

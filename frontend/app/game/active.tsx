@@ -50,6 +50,25 @@ export default function ActiveGameScreen() {
     }
   };
 
+  // Calculate balances - must be before early return to avoid hooks error
+  const balances = activeGame ? GameService.calculateBalances(activeGame) : [];
+
+  const getPlayerBalance = (playerId: string): PlayerBalance | undefined => {
+    return balances.find(b => b.playerId === playerId);
+  };
+
+  const openTransactionModal = useCallback((player: Player, type: 'buyin' | 'cashout') => {
+    const balance = getPlayerBalance(player.id);
+    const currentTotal = type === 'buyin'
+      ? balance?.totalBuyins ?? 0
+      : balance?.totalCashouts ?? 0;
+
+    setSelectedPlayer(player);
+    setTransactionType(type);
+    setTransactionAmount(currentTotal.toString());
+    setShowAddTransaction(true);
+  }, [balances]);
+
   if (!activeGame) {
     return (
       <View style={styles.container}>
@@ -63,8 +82,6 @@ export default function ActiveGameScreen() {
       </View>
     );
   }
-  
-  const balances = GameService.calculateBalances(activeGame);
 
   const activePlayers = activeGame.players.filter(p => !p.completedAt);
   const completedPlayers = activeGame.players.filter(p => p.completedAt);
@@ -183,22 +200,6 @@ export default function ActiveGameScreen() {
         }
       ]
     );
-  };
-  
-  const openTransactionModal = useCallback((player: Player, type: 'buyin' | 'cashout') => {
-    const balance = getPlayerBalance(player.id);
-    const currentTotal = type === 'buyin'
-      ? balance?.totalBuyins ?? 0
-      : balance?.totalCashouts ?? 0;
-
-    setSelectedPlayer(player);
-    setTransactionType(type);
-    setTransactionAmount(currentTotal.toString());
-    setShowAddTransaction(true);
-  }, [balances]);
-  
-  const getPlayerBalance = (playerId: string): PlayerBalance | undefined => {
-    return balances.find(b => b.playerId === playerId);
   };
 
   const handleTitlePress = () => {
