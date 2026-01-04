@@ -7,6 +7,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useState, useCallback, useEffect } from 'react';
 import GameCard from '@/components/GameCard';
 import Button from '@/components/Button';
+import ModalButton from '@/components/ModalButton';
 
 export default function HomeScreen() {
   const { games, activeGame, setActiveGame, deleteGame, createGame } = useGame();
@@ -142,21 +143,19 @@ export default function HomeScreen() {
               transactions, and settlements. This action cannot be undone.
             </Text>
             <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.cancelButton]}
+              <ModalButton
+                variant="cancel"
+                title="Cancel"
                 onPress={() => {
                   setShowDeleteConfirmation(false);
                   setGameToDelete(null);
                 }}
-              >
-                <Text style={styles.cancelButtonText}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.deleteConfirmButton]}
+              />
+              <ModalButton
+                variant="destructive"
+                title="Delete"
                 onPress={handleDeleteGame}
-              >
-                <Text style={styles.deleteConfirmButtonText}>Delete</Text>
-              </TouchableOpacity>
+              />
             </View>
           </View>
         </View>
@@ -233,30 +232,5 @@ const styles = StyleSheet.create({
     gap: 12,
     width: '100%',
     backgroundColor: 'transparent',
-  },
-  modalButton: {
-    flex: 1,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  cancelButton: {
-    backgroundColor: 'transparent',
-    borderWidth: 1.5,
-    borderColor: '#666',
-  },
-  cancelButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  deleteConfirmButton: {
-    backgroundColor: '#C04657',
-  },
-  deleteConfirmButtonText: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '600',
   },
 });
