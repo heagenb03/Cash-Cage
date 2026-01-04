@@ -361,21 +361,21 @@ export default function ActiveGameScreen() {
             })}
           </View>
         )}
-        
-        {/* Complete Game Button */}
-        {activeGame.players.length > 1 && activeGame.transactions.length > 0 && (
-          <View style={styles.completeButtonContainer}>
-            <Button
-              onPress={handleCompleteGame}
-              title="Complete Game"
-              variant="primary"
-              fullWidth
-              accessibilityHint="Finalize game and calculate settlements"
-            />
-          </View>
-        )}
       </ScrollView>
-      
+
+      {/* Actions */}
+      {activeGame.players.length > 1 && activeGame.transactions.length > 0 && (
+        <View style={styles.actions}>
+          <Button
+            onPress={handleCompleteGame}
+            title="Complete Game"
+            variant="primary"
+            fullWidth
+            accessibilityHint="Finalize game and calculate settlements"
+          />
+        </View>
+      )}
+
       {/* Add Player Modal */}
       <Modal
         visible={showAddPlayer}
@@ -589,9 +589,9 @@ const styles = StyleSheet.create({
     marginTop: 20,
     color: '#FFFFFF',
   },
-  completeButtonContainer: {
-    marginTop: 24,
-    marginBottom: 32,
+  actions: {
+    paddingVertical: 20,
+    gap: 12,
   },
   button: {
     backgroundColor: '#B072BB',
