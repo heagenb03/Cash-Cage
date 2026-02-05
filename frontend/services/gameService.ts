@@ -171,6 +171,18 @@ export class GameService {
     }
   }
 
+  /**
+   * Rename a player
+   * Deliberately does NOT clear settlement cache — name is cosmetic and
+   * does not affect settlement calculations (hash is transaction-based).
+   */
+  static renamePlayer(game: Game, playerId: string, newName: string): void {
+    const index = game.players.findIndex(p => p.id === playerId);
+    if (index !== -1) {
+      game.players[index] = { ...game.players[index], name: newName };
+    }
+  }
+
   static validateGame(balances: PlayerBalance[]): Validation {
     return validateSettlements(balances);
   }
