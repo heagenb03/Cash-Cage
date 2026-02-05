@@ -144,7 +144,8 @@ const Button: React.FC<ButtonProps> = ({
 
 const styles = StyleSheet.create({
   button: {
-    padding: 20,
+    paddingVertical: 16,
+    paddingHorizontal: 20,
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
@@ -157,11 +158,16 @@ const styles = StyleSheet.create({
   },
   primaryButton: {
     backgroundColor: '#B072BB',
+    shadowColor: '#B072BB',
+    shadowOffset: { width: 0, height: 0 },
+    shadowRadius: 14,
+    shadowOpacity: 0.35,
+    elevation: 6,
   },
   secondaryButton: {
     backgroundColor: 'transparent',
     borderWidth: 1,
-    borderColor: '#B072BB',
+    borderColor: 'rgba(176,114,187,0.5)',
   },
   destructiveButton: {
     backgroundColor: '#C04657',
@@ -170,9 +176,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#4CAF50',
   },
   buttonText: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    letterSpacing: 1,
+    fontSize: 15,
+    fontWeight: '600',
+    letterSpacing: 2,
+    textTransform: 'uppercase',
   },
   primaryButtonText: {
     color: '#0A0A0A',
