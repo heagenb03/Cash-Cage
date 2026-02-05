@@ -63,7 +63,7 @@ const PlayerCardCompleted: React.FC<PlayerCardCompletedProps> = ({
       onPress={() => onReactivate(player)}
       activeOpacity={0.8}
     >
-      <Ionicons name="arrow-undo" size={24} color="#FFFFFF" />
+      <Ionicons name="arrow-undo" size={22} color="rgba(76,175,80,0.85)" />
     </TouchableOpacity>
   ), [player, onReactivate]);
 
@@ -73,7 +73,7 @@ const PlayerCardCompleted: React.FC<PlayerCardCompletedProps> = ({
       onPress={() => onDelete(player)}
       activeOpacity={0.8}
     >
-      <Ionicons name="trash" size={24} color="#FFFFFF" />
+      <Ionicons name="trash" size={22} color="rgba(192,70,87,0.85)" />
     </TouchableOpacity>
   ), [player, onDelete]);
 
@@ -106,7 +106,9 @@ const PlayerCardCompleted: React.FC<PlayerCardCompletedProps> = ({
               <View style={styles.completedRow}>
                 {/* Column 1: Name */}
                 <View style={styles.completedNameColumn}>
-                  <Text style={styles.completedName}>{player.name}</Text>
+                  <View>
+                    <Text style={styles.completedName}>{player.name}</Text>
+                  </View>
                 </View>
 
                 {/* Column 2: In/Out (stacked vertically, centered) */}
@@ -128,7 +130,9 @@ const PlayerCardCompleted: React.FC<PlayerCardCompletedProps> = ({
             </View>
           ) : (
             <View style={styles.completedContent}>
-              <Text style={styles.completedName}>{player.name}</Text>
+              <View>
+                <Text style={styles.completedName}>{player.name}</Text>
+              </View>
               <Text style={styles.completedInOut}>No transaction data</Text>
             </View>
           )}
@@ -140,11 +144,11 @@ const PlayerCardCompleted: React.FC<PlayerCardCompletedProps> = ({
 
 const styles = StyleSheet.create({
   playerCard: {
-    backgroundColor: '#121212',
-    height: 70,
-    borderRadius: 6,
+    backgroundColor: '#161616',
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#1A1A1A',
+    borderColor: '#242424',
+    borderTopColor: 'rgba(176,114,187,0.15)',
   },
   completedContent: {
     flex: 1,
@@ -196,20 +200,22 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   reactivateAction: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#141A14',
     justifyContent: 'center',
     alignItems: 'center',
     width: 80,
-    height: 70,
-    borderRadius: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(76,175,80,0.25)',
   },
   deleteAction: {
-    backgroundColor: '#C04657',
+    backgroundColor: '#1A1414',
     justifyContent: 'center',
     alignItems: 'center',
     width: 80,
-    height: 70,
-    borderRadius: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(192,70,87,0.25)',
   },
 });
 

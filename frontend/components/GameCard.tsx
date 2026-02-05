@@ -1,5 +1,5 @@
 import React, { useRef, useCallback } from 'react';
-import { Animated, StyleSheet, TouchableOpacity } from 'react-native';
+import { Animated, StyleSheet, TouchableOpacity, View as RNView } from 'react-native';
 import { Text, View } from '@/components/Themed';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
@@ -69,6 +69,8 @@ const GameCard: React.FC<GameCardProps> = ({ game, onPress, onDelete, isComplete
       }
     });
 
+  const totalPot = GameService.generateGameSummary(game).totalPot;
+
   return (
     <Swipeable
       renderRightActions={() => (
@@ -77,7 +79,7 @@ const GameCard: React.FC<GameCardProps> = ({ game, onPress, onDelete, isComplete
           onPress={() => onDelete({ id: game.id, name: game.name })}
           activeOpacity={0.8}
         >
-          <Ionicons name="trash" size={24} color="#FFFFFF" />
+          <Ionicons name="trash" size={22} color="rgba(192,70,87,0.85)" />
         </TouchableOpacity>
       )}
       overshootLeft={false}
@@ -97,16 +99,28 @@ const GameCard: React.FC<GameCardProps> = ({ game, onPress, onDelete, isComplete
             !reduceMotion && { transform: [{ scale: scaleAnim }] }
           ]}
         >
-          <View style={styles.gameCardHeader}>
+          <RNView style={styles.gameCardHeader}>
             <Text style={styles.gameCardTitle}>{game.name}</Text>
-            <Text style={styles.gameCardDate}>{formatDate(game.date)}</Text>
-          </View>
-          <Text style={styles.gameCardInfo}>
-            {isCompleted
-              ? `${game.players.length} players • $${GameService.generateGameSummary(game).totalPot.toFixed(2)} pot`
-              : `${game.players.length} players • ${game.transactions.length} transactions`
-            }
-          </Text>
+            {isCompleted && <Ionicons name="checkmark-circle" size={18} color="rgba(176,114,187,0.5)" />}
+          </RNView>
+
+          {/* Data row */}
+          <RNView style={styles.dataRow}>
+            <RNView style={styles.dataItem}>
+              <Text style={styles.dataLabel}>Players</Text>
+              <Text style={styles.dataValue}>{game.players.length}</Text>
+            </RNView>
+            <RNView style={styles.dataDivider} />
+            <RNView style={styles.dataItem}>
+              <Text style={styles.dataLabel}>Pot</Text>
+              <Text style={styles.dataValue}>${totalPot.toFixed(0)}</Text>
+            </RNView>
+            <RNView style={styles.dataDivider} />
+            <RNView style={styles.dataItem}>
+              <Text style={styles.dataLabel}>Date</Text>
+              <Text style={styles.dataValue}>{formatDate(game.date)}</Text>
+            </RNView>
+          </RNView>
         </Animated.View>
       </GestureDetector>
     </Swipeable>
@@ -115,43 +129,67 @@ const GameCard: React.FC<GameCardProps> = ({ game, onPress, onDelete, isComplete
 
 const styles = StyleSheet.create({
   gameCard: {
-    padding: 20,
+    paddingVertical: 16,
+    paddingHorizontal: 18,
     borderRadius: 8,
-    marginBottom: 12,
-    backgroundColor: '#1A1A1A',
+    marginBottom: 10,
+    backgroundColor: '#161616',
+    borderWidth: 1,
+    borderColor: '#242424',
+    borderTopColor: 'rgba(176,114,187,0.2)',
   },
   completedCard: {
-    backgroundColor: '#121212',
+    backgroundColor: '#111111',
+    borderTopColor: 'rgba(176,114,187,0.1)',
   },
   gameCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 8,
-    backgroundColor: 'transparent',
+    marginBottom: 12,
   },
   gameCardTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
+    fontSize: 17,
+    fontWeight: '600',
     color: '#FFFFFF',
+    letterSpacing: 0.3,
   },
-  gameCardDate: {
-    fontSize: 13,
-    opacity: 0.5,
-    color: '#FFFFFF',
+  dataRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 0,
   },
-  gameCardInfo: {
+  dataItem: {
+    flex: 1,
+    alignItems: 'flex-start',
+  },
+  dataLabel: {
+    fontSize: 9,
+    color: 'rgba(176,114,187,0.65)',
+    textTransform: 'uppercase',
+    letterSpacing: 1.5,
+    marginBottom: 3,
+  },
+  dataValue: {
     fontSize: 13,
-    opacity: 0.8,
-    color: '#B072BB',
+    color: 'rgba(255,255,255,0.9)',
+    fontFamily: 'SpaceMono',
+  },
+  dataDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: '#2A2A2A',
+    marginHorizontal: 12,
   },
   deleteAction: {
-    backgroundColor: '#C04657',
+    backgroundColor: '#1A1414',
     justifyContent: 'center',
     alignItems: 'center',
     width: 80,
     borderRadius: 6,
-    marginBottom: 12,
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(192,70,87,0.25)',
   },
 });
 

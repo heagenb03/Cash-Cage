@@ -14,6 +14,7 @@ interface PlayerCardActiveProps {
   onCashOut: (player: Player) => void;
   onComplete: (player: Player) => void;
   onDelete: (player: Player) => void;
+  onRename: (player: Player) => void;
   reduceMotion: boolean;
 }
 
@@ -24,6 +25,7 @@ const PlayerCardActive: React.FC<PlayerCardActiveProps> = ({
   onCashOut,
   onComplete,
   onDelete,
+  onRename,
   reduceMotion
 }) => {
   const scaleAnim = useRef(new Animated.Value(1)).current;
@@ -65,7 +67,7 @@ const PlayerCardActive: React.FC<PlayerCardActiveProps> = ({
       onPress={() => onComplete(player)}
       activeOpacity={0.8}
     >
-      <Ionicons name="checkmark-circle" size={24} color="#FFFFFF" />
+      <Ionicons name="checkmark-circle" size={22} color="rgba(76,175,80,0.85)" />
     </TouchableOpacity>
   ), [player, onComplete]);
 
@@ -75,7 +77,7 @@ const PlayerCardActive: React.FC<PlayerCardActiveProps> = ({
       onPress={() => onDelete(player)}
       activeOpacity={0.8}
     >
-      <Ionicons name="trash" size={24} color="#FFFFFF" />
+      <Ionicons name="trash" size={22} color="rgba(192,70,87,0.85)" />
     </TouchableOpacity>
   ), [player, onDelete]);
 
@@ -94,35 +96,38 @@ const PlayerCardActive: React.FC<PlayerCardActiveProps> = ({
           accessible={true}
           accessibilityRole="button"
           accessibilityLabel={`${player.name}, Buy-in: $${balance?.totalBuyins ?? 0}, Cash out: $${balance?.totalCashouts ?? 0}`}
-          accessibilityHint="Double tap to view player details. Swipe for actions."
+          accessibilityHint="Tap In or Out values to edit. Swipe for actions."
           style={[
             styles.playerCard,
             !reduceMotion && { transform: [{ scale: scaleAnim }] }
           ]}
         >
-          <View style={styles.playerInfo}>
-            <Text style={styles.playerName}>{player.name}</Text>
-            {balance && (
-              <View style={styles.playerStats}>
-                <Text style={styles.statText}>
-                  In: ${balance.totalBuyins.toFixed(0)} • Out: ${balance.totalCashouts.toFixed(0)}
-                </Text>
-              </View>
-            )}
+          {/* Name row */}
+          <View style={styles.cardHeader}>
+            <RNTouchableOpacity onPress={() => onRename(player)} style={styles.nameRow}>
+              <Text style={styles.playerName}>{player.name}</Text>
+              <Text style={styles.nameEditIcon}>✎</Text>
+            </RNTouchableOpacity>
           </View>
-          <View style={styles.playerActions}>
-            <RNTouchableOpacity
-              style={styles.actionButton}
-              onPress={() => onBuyIn(player)}
-            >
-              <Text style={styles.actionButtonText}>Buy-in</Text>
+
+          {/* Data row — tappable In / Out values */}
+          <View style={styles.dataRow}>
+            <RNTouchableOpacity style={styles.dataItem} onPress={() => onBuyIn(player)}>
+              <Text style={styles.dataLabel}>In</Text>
+              <Text style={styles.dataValue}>${(balance?.totalBuyins ?? 0).toFixed(0)}</Text>
             </RNTouchableOpacity>
-            <RNTouchableOpacity
-              style={styles.actionButton}
-              onPress={() => onCashOut(player)}
-            >
-              <Text style={styles.actionButtonText}>Cash Out</Text>
+            <View style={styles.dataDivider} />
+            <RNTouchableOpacity style={styles.dataItem} onPress={() => onCashOut(player)}>
+              <Text style={styles.dataLabel}>Out</Text>
+              <Text style={styles.dataValue}>${(balance?.totalCashouts ?? 0).toFixed(0)}</Text>
             </RNTouchableOpacity>
+            <View style={styles.dataDivider} />
+            <View style={styles.dataItem}>
+              <Text style={styles.dataLabel}>Net</Text>
+              <Text style={[styles.dataValue, { color: balance ? (balance.netBalance >= 0 ? '#4CAF50' : '#C04657') : 'rgba(255,255,255,0.9)' }]}>
+                {balance ? (balance.netBalance >= 0 ? '+' : '') + '$' + balance.netBalance.toFixed(0) : '$0'}
+              </Text>
+            </View>
           </View>
         </Animated.View>
       </GestureDetector>
@@ -132,67 +137,80 @@ const PlayerCardActive: React.FC<PlayerCardActiveProps> = ({
 
 const styles = StyleSheet.create({
   playerCard: {
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: '#161616',
+    borderWidth: 1,
+    borderColor: '#242424',
+    borderTopColor: 'rgba(176,114,187,0.2)',
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    padding: 14,
-    borderRadius: 6,
-    backgroundColor: '#1A1A1A',
-  },
-  playerInfo: {
-    flex: 1,
-    marginRight: 12,
+    gap: 4,
     backgroundColor: 'transparent',
   },
   playerName: {
     fontSize: 17,
     fontWeight: '600',
     color: '#FFFFFF',
-    marginBottom: 4,
+    letterSpacing: 0.3,
   },
-  playerStats: {
-    flexDirection: 'row',
-    backgroundColor: 'transparent',
-  },
-  statText: {
-    fontSize: 13,
-    opacity: 0.6,
+  nameEditIcon: {
+    fontSize: 14,
     color: '#FFFFFF',
+    opacity: 0.4,
   },
-  playerActions: {
+  dataRow: {
     flexDirection: 'row',
-    gap: 8,
-    backgroundColor: 'transparent',
+    alignItems: 'center',
   },
-  actionButton: {
-    paddingHorizontal: 18,
-    paddingVertical: 8,
-    borderRadius: 4,
-    backgroundColor: '#2A2A2A',
-    borderWidth: 1,
-    borderColor: '#B072BB',
+  dataItem: {
+    flex: 1,
+    alignItems: 'flex-start',
   },
-  actionButtonText: {
-    color: '#B072BB',
-    fontWeight: 'bold',
+  dataLabel: {
+    fontSize: 9,
+    color: 'rgba(176,114,187,0.65)',
+    textTransform: 'uppercase',
+    letterSpacing: 1.5,
+    marginBottom: 3,
+  },
+  dataValue: {
     fontSize: 13,
-    letterSpacing: 0.5,
+    color: 'rgba(255,255,255,0.9)',
+    fontFamily: 'SpaceMono',
+  },
+  dataDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: '#2A2A2A',
+    marginHorizontal: 12,
   },
   completeAction: {
-    backgroundColor: '#4CAF50',
+    backgroundColor: '#141A14',
     justifyContent: 'center',
     alignItems: 'center',
     width: 80,
-    height: '100%',
-    borderRadius: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(76,175,80,0.25)',
   },
   deleteAction: {
-    backgroundColor: '#C04657',
+    backgroundColor: '#1A1414',
     justifyContent: 'center',
     alignItems: 'center',
     width: 80,
-    height: '100%',
-    borderRadius: 6,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(192,70,87,0.25)',
   },
 });
 
