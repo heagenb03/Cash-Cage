@@ -1,16 +1,37 @@
-import { StyleSheet, ScrollView, TouchableOpacity, Alert, Modal, AccessibilityInfo } from 'react-native';
+import { StyleSheet, ScrollView, TouchableOpacity, Alert, Modal, AccessibilityInfo, Animated } from 'react-native';
 import { Text, View } from '@/components/Themed';
 import { useGame } from '@/contexts/GameContext';
 import { useRouter } from 'expo-router';
-import { GameService } from '@/services/gameService';
 import { Ionicons } from '@expo/vector-icons';
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import GameCard from '@/components/GameCard';
 import Button from '@/components/Button';
 import ModalButton from '@/components/ModalButton';
 
+function HudSectionHeader({ label }: { label: string }) {
+  return (
+    <View style={styles.hudHeader}>
+      <View style={styles.hudLine} />
+      <Text style={styles.hudLabel}>{label}</Text>
+      <View style={styles.hudLine} />
+    </View>
+  );
+}
+
+function EmptyState({ label }: { label: string }) {
+  return (
+    <View style={styles.emptyState}>
+      <View style={styles.emptyIconRing}>
+        <Ionicons name={label === 'Active' ? 'play-circle-outline' : 'checkmark-circle-outline'} size={28} color="rgba(176,114,187,0.35)" />
+      </View>
+      <Text style={styles.emptyStateText}>No {label.toLowerCase()} games</Text>
+      <Text style={styles.emptyStateSubtext}>— awaiting input —</Text>
+    </View>
+  );
+}
+
 export default function HomeScreen() {
-  const { games, activeGame, setActiveGame, deleteGame, createGame } = useGame();
+  const { games, setActiveGame, deleteGame, createGame } = useGame();
   const router = useRouter();
 
   const [gameToDelete, setGameToDelete] = useState<{ id: string; name: string } | null>(null);
@@ -19,6 +40,10 @@ export default function HomeScreen() {
 
   const activeGames = games.filter(g => g.status === 'active');
   const completedGames = games.filter(g => g.status === 'completed');
+
+  // Staggered entry animations for cards
+  const activeAnims = useRef<Animated.Value[]>([]).current;
+  const historyAnims = useRef<Animated.Value[]>([]).current;
 
   useEffect(() => {
     AccessibilityInfo.isReduceMotionEnabled().then(enabled => {
@@ -34,7 +59,37 @@ export default function HomeScreen() {
       subscription.remove();
     };
   }, []);
-  
+
+  useEffect(() => {
+    if (reduceMotionEnabled) return;
+
+    // Prep and animate active cards
+    activeAnims.length = 0;
+    activeGames.forEach((_, i) => {
+      const anim = new Animated.Value(0);
+      activeAnims.push(anim);
+      Animated.timing(anim, {
+        toValue: 1,
+        duration: 280,
+        delay: i * 60,
+        useNativeDriver: true,
+      }).start();
+    });
+
+    // Prep and animate history cards
+    historyAnims.length = 0;
+    completedGames.forEach((_, i) => {
+      const anim = new Animated.Value(0);
+      historyAnims.push(anim);
+      Animated.timing(anim, {
+        toValue: 1,
+        duration: 280,
+        delay: activeGames.length * 60 + i * 60,
+        useNativeDriver: true,
+      }).start();
+    });
+  }, [activeGames.length, completedGames.length, reduceMotionEnabled]);
+
   const handleGamePress = async (gameId: string) => {
     await setActiveGame(gameId);
     const game = games.find(g => g.id === gameId);
@@ -66,7 +121,6 @@ export default function HomeScreen() {
   const handleCreateNewGame = async () => {
     try {
       await createGame('Untitled Game');
-      // Game is automatically set as active in createGame
       router.push('/game/active' as any);
     } catch (error) {
       Alert.alert('Error', 'Failed to create game');
@@ -74,44 +128,49 @@ export default function HomeScreen() {
     }
   };
 
+  const renderCards = (gameList: typeof activeGames, anims: Animated.Value[], isCompleted: boolean) =>
+    gameList.map((game, i) => {
+      const anim = anims[i];
+      const animStyle = anim && !reduceMotionEnabled
+        ? {
+            opacity: anim,
+            transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) }],
+          }
+        : {};
+
+      return (
+        <Animated.View key={game.id} style={animStyle}>
+          <GameCard
+            game={game}
+            onPress={handleGamePress}
+            onDelete={confirmDeleteGame}
+            isCompleted={isCompleted}
+            reduceMotion={reduceMotionEnabled}
+          />
+        </Animated.View>
+      );
+    });
+
   return (
     <View style={styles.container}>
       <ScrollView style={styles.scrollView}>
         {/* Active Games Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Active</Text>
+          <HudSectionHeader label="Active" />
           {activeGames.length === 0 ? (
-            <Text style={styles.emptyText}>No active games</Text>
+            <EmptyState label="Active" />
           ) : (
-            activeGames.map(game => (
-              <GameCard
-                key={game.id}
-                game={game}
-                onPress={handleGamePress}
-                onDelete={confirmDeleteGame}
-                isCompleted={false}
-                reduceMotion={reduceMotionEnabled}
-              />
-            ))
+            renderCards(activeGames, activeAnims, false)
           )}
         </View>
-        
+
         {/* Completed Games Section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>History</Text>
+          <HudSectionHeader label="History" />
           {completedGames.length === 0 ? (
-            <Text style={styles.emptyText}>No completed games</Text>
+            <EmptyState label="History" />
           ) : (
-            completedGames.map(game => (
-              <GameCard
-                key={game.id}
-                game={game}
-                onPress={handleGamePress}
-                onDelete={confirmDeleteGame}
-                isCompleted={true}
-                reduceMotion={reduceMotionEnabled}
-              />
-            ))
+            renderCards(completedGames, historyAnims, true)
           )}
         </View>
       </ScrollView>
@@ -120,7 +179,7 @@ export default function HomeScreen() {
       <View style={styles.actions}>
         <Button
           onPress={handleCreateNewGame}
-          title="New Game"
+          title="+ New Game"
           variant="primary"
           fullWidth
           accessibilityHint="Creates a new poker game session"
@@ -174,27 +233,64 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   section: {
-    marginBottom: 32,
+    marginBottom: 28,
   },
-  sectionTitle: {
-    fontSize: 14,
+
+  // HUD section header
+  hudHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+    gap: 10,
+  },
+  hudLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#2A2A2A',
+  },
+  hudLabel: {
+    fontSize: 11,
     fontWeight: 'bold',
-    marginBottom: 16,
     color: '#B072BB',
     textTransform: 'uppercase',
+    letterSpacing: 3,
+  },
+  // Empty state
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 28,
+  },
+  emptyIconRing: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: 'rgba(176,114,187,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  emptyStateText: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.35)',
+    letterSpacing: 0.5,
+  },
+  emptyStateSubtext: {
+    fontSize: 11,
+    color: 'rgba(176,114,187,0.3)',
     letterSpacing: 2,
+    marginTop: 4,
+    fontFamily: 'SpaceMono',
   },
-  emptyText: {
-    fontSize: 15,
-    opacity: 0.4,
-    textAlign: 'center',
-    marginTop: 20,
-    color: '#FFFFFF',
-  },
+
+  // Actions bar
   actions: {
-    paddingVertical: 20,
-    gap: 12,
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#1E1E1E',
   },
+
+  // Modal
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0, 0, 0, 0.8)',
@@ -204,6 +300,8 @@ const styles = StyleSheet.create({
   modalContent: {
     backgroundColor: '#1A1A1A',
     borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#2A2A2A',
     padding: 24,
     width: '85%',
     maxWidth: 400,
