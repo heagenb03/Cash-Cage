@@ -60,13 +60,14 @@ export function GameProvider({ children }: { children: ReactNode }) {
   };
   
   const updateGame = async (updatedGame: Game) => {
-    const updatedGames = games.map(g => g.id === updatedGame.id ? updatedGame : g);
+    const freshGame = { ...updatedGame };
+    const updatedGames = games.map(g => g.id === updatedGame.id ? freshGame : g);
     setGames(updatedGames);
-    
+
     if (activeGame?.id === updatedGame.id) {
-      setActiveGameState(updatedGame);
+      setActiveGameState(freshGame);
     }
-    
+
     await StorageService.saveGames(updatedGames);
   };
   
