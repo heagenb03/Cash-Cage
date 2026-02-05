@@ -6,9 +6,8 @@ export default function AccountScreen() {
     <View style={styles.container}>
       <ScrollView style={styles.scrollView}>
         <View style={styles.header}>
-          <Text style={styles.title}>Account</Text>
           <Text style={styles.subtitle}>
-            View account
+            Coming soon!
           </Text>
         </View>
       </ScrollView>
@@ -36,28 +35,9 @@ const styles = StyleSheet.create({
     letterSpacing: 1,
   },
   subtitle: {
-    fontSize: 16,
-    opacity: 0.6,
-    color: '#FFFFFF',
-  },
-  comingSoon: {
-    backgroundColor: '#1A1A1A',
-    padding: 28,
-    borderRadius: 8,
-    borderLeftWidth: 4,
-    borderLeftColor: '#B072BB',
-    alignItems: 'center',
-  },
-  comingSoonTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    marginBottom: 16,
+    fontSize: 18,
+    opacity: 1.0,
+    textAlign: 'center',
     color: '#B072BB',
-  },
-  comingSoonText: {
-    fontSize: 16,
-    opacity: 0.6,
-    lineHeight: 28,
-    color: '#FFFFFF',
   },
 });
