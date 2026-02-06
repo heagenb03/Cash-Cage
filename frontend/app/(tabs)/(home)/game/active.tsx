@@ -102,6 +102,12 @@ export default function ActiveGameScreen() {
     setShowAddTransaction(true);
   }, [balances]);
 
+  const openRenameModal = useCallback((player: Player) => {
+    setSelectedPlayer(player);
+    setRenamedPlayerName(player.name);
+    setShowRenameModal(true);
+  }, []);
+
   if (!activeGame) {
     return (
       <View style={styles.container}>
@@ -303,12 +309,6 @@ export default function ActiveGameScreen() {
       console.error('Error reactivating player:', error);
     }
   };
-
-  const openRenameModal = useCallback((player: Player) => {
-    setSelectedPlayer(player);
-    setRenamedPlayerName(player.name);
-    setShowRenameModal(true);
-  }, []);
 
   const handleRenamePlayer = async () => {
     if (!selectedPlayer) return;
