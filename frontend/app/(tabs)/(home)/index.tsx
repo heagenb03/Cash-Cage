@@ -1,9 +1,9 @@
-import { StyleSheet, ScrollView, TouchableOpacity, Alert, Modal, AccessibilityInfo, Animated } from 'react-native';
+import { StyleSheet, ScrollView, TouchableOpacity, Alert, Modal, AccessibilityInfo } from 'react-native';
 import { Text, View } from '@/components/Themed';
 import { useGame } from '@/contexts/GameContext';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import GameCard from '@/components/GameCard';
 import Button from '@/components/Button';
 import ModalButton from '@/components/ModalButton';
@@ -40,10 +40,6 @@ export default function HomeScreen() {
   const activeGames = games.filter(g => g.status === 'active');
   const completedGames = games.filter(g => g.status === 'completed');
 
-  // Staggered entry animations for cards
-  const activeAnims = useRef<Animated.Value[]>([]).current;
-  const historyAnims = useRef<Animated.Value[]>([]).current;
-
   useEffect(() => {
     AccessibilityInfo.isReduceMotionEnabled().then(enabled => {
       setReduceMotionEnabled(enabled ?? false);
@@ -58,36 +54,6 @@ export default function HomeScreen() {
       subscription.remove();
     };
   }, []);
-
-  useEffect(() => {
-    if (reduceMotionEnabled) return;
-
-    // Prep and animate active cards
-    activeAnims.length = 0;
-    activeGames.forEach((_, i) => {
-      const anim = new Animated.Value(0);
-      activeAnims.push(anim);
-      Animated.timing(anim, {
-        toValue: 1,
-        duration: 280,
-        delay: i * 60,
-        useNativeDriver: true,
-      }).start();
-    });
-
-    // Prep and animate history cards
-    historyAnims.length = 0;
-    completedGames.forEach((_, i) => {
-      const anim = new Animated.Value(0);
-      historyAnims.push(anim);
-      Animated.timing(anim, {
-        toValue: 1,
-        duration: 280,
-        delay: activeGames.length * 60 + i * 60,
-        useNativeDriver: true,
-      }).start();
-    });
-  }, [activeGames.length, completedGames.length, reduceMotionEnabled]);
 
   const handleGamePress = async (gameId: string) => {
     await setActiveGame(gameId);
@@ -127,28 +93,22 @@ export default function HomeScreen() {
     }
   };
 
-  const renderCards = (gameList: typeof activeGames, anims: Animated.Value[], isCompleted: boolean) =>
-    gameList.map((game, i) => {
-      const anim = anims[i];
-      const animStyle = anim && !reduceMotionEnabled
-        ? {
-            opacity: anim,
-            transform: [{ translateY: anim.interpolate({ inputRange: [0, 1], outputRange: [18, 0] }) }],
-          }
-        : {};
-
-      return (
-        <Animated.View key={game.id} style={animStyle}>
-          <GameCard
-            game={game}
-            onPress={handleGamePress}
-            onDelete={confirmDeleteGame}
-            isCompleted={isCompleted}
-            reduceMotion={reduceMotionEnabled}
-          />
-        </Animated.View>
-      );
-    });
+  const renderCards = (
+    gameList: typeof activeGames,
+    isCompleted: boolean,
+    startIndex: number = 0
+  ) =>
+    gameList.map((game, i) => (
+      <GameCard
+        key={game.id}
+        game={game}
+        onPress={handleGamePress}
+        onDelete={confirmDeleteGame}
+        isCompleted={isCompleted}
+        reduceMotion={reduceMotionEnabled}
+        entryIndex={startIndex + i}
+      />
+    ));
 
   return (
     <View style={styles.container}>
@@ -159,7 +119,7 @@ export default function HomeScreen() {
           {activeGames.length === 0 ? (
             <EmptyState label="Active" />
           ) : (
-            renderCards(activeGames, activeAnims, false)
+            renderCards(activeGames, false, 0)
           )}
         </View>
 
@@ -169,7 +129,7 @@ export default function HomeScreen() {
           {completedGames.length === 0 ? (
             <EmptyState label="History" />
           ) : (
-            renderCards(completedGames, historyAnims, true)
+            renderCards(completedGames, true, activeGames.length)
           )}
         </View>
       </ScrollView>
