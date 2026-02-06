@@ -25,7 +25,6 @@ function EmptyState({ label }: { label: string }) {
         <Ionicons name={label === 'Active' ? 'play-circle-outline' : 'checkmark-circle-outline'} size={28} color="rgba(176,114,187,0.35)" />
       </View>
       <Text style={styles.emptyStateText}>No {label.toLowerCase()} games</Text>
-      <Text style={styles.emptyStateSubtext}>— awaiting input —</Text>
     </View>
   );
 }

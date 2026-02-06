@@ -1,4 +1,3 @@
-// Core type definitions for the poker tracking app
 
 export interface Player {
   id: string;
@@ -27,7 +26,7 @@ export interface Game {
 
   // Settlement cache
   cachedSettlements?: SettlementResult;
-  transactionHash?: string; // For cache invalidation
+  transactionHash?: string;
 }
 
 export interface PlayerBalance {

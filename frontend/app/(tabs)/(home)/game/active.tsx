@@ -12,6 +12,35 @@ import PlayerCardCompleted from '@/components/PlayerCardCompleted';
 import Button from '@/components/Button';
 import ModalButton from '@/components/ModalButton';
 
+function HudSectionHeader({ label, onAction, actionIcon }: { label: string; onAction?: () => void; actionIcon?: string }) {
+  return (
+    <View style={styles.hudHeader}>
+      <View style={styles.hudLines}>
+        <View style={styles.hudLine} />
+      </View>
+      <Text style={styles.hudLabel}>{label}</Text>
+      {onAction && actionIcon && (
+        <View style={styles.hudIconSlot}>
+          <TouchableOpacity onPress={onAction} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Ionicons name={actionIcon as any} size={22} color="rgba(176,114,187,0.7)" />
+          </TouchableOpacity>
+        </View>
+      )}
+    </View>
+  );
+}
+
+function EmptyState({ label, icon }: { label: string; icon: string }) {
+  return (
+    <View style={styles.emptyState}>
+      <View style={styles.emptyIconRing}>
+        <Ionicons name={icon as any} size={28} color="rgba(176,114,187,0.35)" />
+      </View>
+      <Text style={styles.emptyStateText}>{label}</Text>
+    </View>
+  );
+}
+
 export default function ActiveGameScreen() {
   const { activeGame, updateGame, setActiveGame, createGame } = useGame();
   const router = useRouter();
@@ -28,6 +57,8 @@ export default function ActiveGameScreen() {
   const [playerToDelete, setPlayerToDelete] = useState<Player | null>(null);
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const [reduceMotionEnabled, setReduceMotionEnabled] = useState(false);
+  const [showRenameModal, setShowRenameModal] = useState(false);
+  const [renamedPlayerName, setRenamedPlayerName] = useState('');
 
   useEffect(() => {
     AccessibilityInfo.isReduceMotionEnabled().then(enabled => {
@@ -93,26 +124,26 @@ export default function ActiveGameScreen() {
       Alert.alert('Error', 'Please enter a player name');
       return;
     }
-    
+
     const buyInAmount = parseFloat(newPlayerBuyIn);
     if (newPlayerBuyIn.trim() && (isNaN(buyInAmount) || buyInAmount <= 0)) {
       Alert.alert('Error', 'Please enter a valid buy-in amount or leave it empty');
       return;
     }
-    
+
     const player = GameService.addPlayer(activeGame, newPlayerName.trim());
-    
+
     // Add initial buy-in if amount was provided
     if (!isNaN(buyInAmount) && buyInAmount > 0) {
       GameService.addTransaction(activeGame, player.id, 'buyin', buyInAmount);
     }
-    
+
     await updateGame(activeGame);
     setNewPlayerName('');
     setNewPlayerBuyIn('');
     setShowAddPlayer(false);
   };
-  
+
   const handleAddTransaction = async () => {
     if (!selectedPlayer) return;
 
@@ -143,11 +174,11 @@ export default function ActiveGameScreen() {
     setShowAddTransaction(false);
     setSelectedPlayer(null);
   };
-  
+
   const handleCompleteGame = () => {
     const balances = GameService.calculateBalances(activeGame);
     const validation = GameService.validateGame(balances);
-    
+
     if (!validation.isValid) {
       Alert.alert(
         'Cannot Complete Game',
@@ -156,7 +187,7 @@ export default function ActiveGameScreen() {
       );
       return;
     }
-    
+
     if (validation.warnings.length > 0) {
       Alert.alert(
         'Warning',
@@ -181,7 +212,7 @@ export default function ActiveGameScreen() {
       );
       return;
     }
-    
+
     Alert.alert(
       'Complete Game',
       'Are you sure you want to complete this game? You can view settlements afterward.',
@@ -273,6 +304,28 @@ export default function ActiveGameScreen() {
     }
   };
 
+  const openRenameModal = useCallback((player: Player) => {
+    setSelectedPlayer(player);
+    setRenamedPlayerName(player.name);
+    setShowRenameModal(true);
+  }, []);
+
+  const handleRenamePlayer = async () => {
+    if (!selectedPlayer) return;
+    const trimmedName = renamedPlayerName.trim();
+    if (!trimmedName) {
+      Alert.alert('Error', 'Player name cannot be empty');
+      return;
+    }
+    if (trimmedName !== selectedPlayer.name) {
+      GameService.renamePlayer(activeGame!, selectedPlayer.id, trimmedName);
+      await updateGame(activeGame!);
+    }
+    setShowRenameModal(false);
+    setSelectedPlayer(null);
+    setRenamedPlayerName('');
+  };
+
   return (
     <View style={styles.container}>
       <ScrollView style={styles.scrollView}>
@@ -307,23 +360,22 @@ export default function ActiveGameScreen() {
             })}
           </Text>
         </View>
-        
+
         {/* Active Players List */}
         <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Active Players</Text>
-            <TouchableOpacity onPress={() => setShowAddPlayer(true)}>
-              <Text style={styles.addButton}>+</Text>
-            </TouchableOpacity>
-          </View>
+          <HudSectionHeader
+            label="Players"
+            onAction={() => setShowAddPlayer(true)}
+            actionIcon="add-circle-outline"
+          />
 
           {activePlayers.length === 0 ? (
-            <Text style={styles.emptyText}>Add players to start</Text>
+            <EmptyState label="No players yet" icon="person-outline" />
           ) : (
             activePlayers.map(player => {
               const balance = getPlayerBalance(player.id);
               return (
-                <View key={player.id} style={{ marginBottom: 8 }}>
+                <View key={player.id} style={{ marginBottom: 8, backgroundColor: 'transparent' }}>
                   <PlayerCardActive
                     player={player}
                     balance={balance}
@@ -331,6 +383,7 @@ export default function ActiveGameScreen() {
                     onCashOut={(player) => openTransactionModal(player, 'cashout')}
                     onComplete={handleCompletePlayer}
                     onDelete={confirmDeletePlayer}
+                    onRename={openRenameModal}
                     reduceMotion={reduceMotionEnabled}
                   />
                 </View>
@@ -342,14 +395,12 @@ export default function ActiveGameScreen() {
         {/* Completed Players List */}
         {completedPlayers.length > 0 && (
           <View style={styles.section}>
-            <View style={styles.sectionHeader}>
-              <Text style={styles.sectionTitle}>Completed Players</Text>
-            </View>
+            <HudSectionHeader label="Completed" />
 
             {completedPlayers.map(player => {
               const balance = getPlayerBalance(player.id);
               return (
-                <View key={player.id} style={{ marginBottom: 8 }}>
+                <View key={player.id} style={{ marginBottom: 8, backgroundColor: 'transparent' }}>
                   <PlayerCardCompleted
                     player={player}
                     balance={balance}
@@ -400,7 +451,7 @@ export default function ActiveGameScreen() {
               style={styles.input}
               value={newPlayerBuyIn}
               onChangeText={setNewPlayerBuyIn}
-              placeholder="Initial Buy-in"
+              placeholder="Buy-In"
               placeholderTextColor="#666"
               keyboardType="decimal-pad"
               returnKeyType="done"
@@ -425,7 +476,7 @@ export default function ActiveGameScreen() {
           </View>
         </View>
       </Modal>
-      
+
       {/* Add Transaction Modal */}
       <Modal
         visible={showAddTransaction}
@@ -461,6 +512,50 @@ export default function ActiveGameScreen() {
                 variant="confirm"
                 title="Confirm"
                 onPress={handleAddTransaction}
+              />
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Rename Player Modal */}
+      <Modal
+        visible={showRenameModal}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => {
+          setShowRenameModal(false);
+          setSelectedPlayer(null);
+          setRenamedPlayerName('');
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Rename Player</Text>
+            <TextInput
+              style={styles.input}
+              value={renamedPlayerName}
+              onChangeText={setRenamedPlayerName}
+              placeholder="New name"
+              placeholderTextColor="#666"
+              autoFocus
+              onSubmitEditing={handleRenamePlayer}
+              returnKeyType="done"
+            />
+            <View style={styles.modalButtons}>
+              <ModalButton
+                variant="cancel"
+                title="Cancel"
+                onPress={() => {
+                  setShowRenameModal(false);
+                  setSelectedPlayer(null);
+                  setRenamedPlayerName('');
+                }}
+              />
+              <ModalButton
+                variant="confirm"
+                title="Save"
+                onPress={handleRenamePlayer}
               />
             </View>
           </View>
@@ -514,10 +609,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   header: {
-    marginBottom: 32,
-    paddingBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#2A2A2A',
+    marginBottom: 24,
   },
   titleContainer: {
     flexDirection: 'row',
@@ -557,25 +649,77 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   section: {
-    marginBottom: 24,
+    marginBottom: 28,
+    backgroundColor: 'transparent',
   },
-  sectionHeader: {
+
+  // HUD section header
+  hudHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    justifyContent: 'center',
+    marginBottom: 14,
+    backgroundColor: 'transparent',
   },
-  sectionTitle: {
-    fontSize: 14,
+  hudLines: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
+  },
+  hudLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#2A2A2A',
+  },
+  hudLabel: {
+    fontSize: 11,
     fontWeight: 'bold',
     color: '#B072BB',
     textTransform: 'uppercase',
-    letterSpacing: 2,
+    letterSpacing: 3,
+    paddingHorizontal: 10,
+    backgroundColor: '#0A0A0A',
+    zIndex: 1,
   },
-  addButton: {
-    fontSize: 28,
-    color: '#B072BB',
-    fontWeight: '300',
+  hudIconSlot: {
+    position: 'absolute',
+    right: 0,
+    width: 32,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+    zIndex: 2,
+    backgroundColor: '#0A0A0A',
+  },
+
+  // Empty state
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 28,
+  },
+  emptyIconRing: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: 'rgba(176,114,187,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  emptyStateText: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.35)',
+    letterSpacing: 0.5,
+  },
+  emptyStateSubtext: {
+    fontSize: 11,
+    color: 'rgba(176,114,187,0.3)',
+    letterSpacing: 2,
+    marginTop: 4,
+    fontFamily: 'SpaceMono',
   },
   emptyText: {
     fontSize: 15,
@@ -585,8 +729,9 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
   },
   actions: {
-    paddingVertical: 20,
-    gap: 12,
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#1E1E1E',
   },
   button: {
     backgroundColor: '#B072BB',
@@ -605,33 +750,35 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.9)',
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
   },
   modalContent: {
     width: '85%',
+    maxWidth: 400,
     backgroundColor: '#1A1A1A',
-    borderRadius: 8,
-    padding: 28,
+    borderRadius: 12,
+    padding: 24,
     alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#5A5A5A',
+    borderWidth: 1,
+    borderColor: '#2A2A2A',
   },
   modalTitle: {
-    fontSize: 20,
+    fontSize: 22,
     fontWeight: 'bold',
-    marginBottom: 24,
-    color: '#B072BB',
+    marginBottom: 20,
+    color: '#FFFFFF',
+    textAlign: 'center',
   },
   input: {
     width: '100%',
     backgroundColor: '#0A0A0A',
     borderRadius: 6,
-    padding: 18,
+    padding: 16,
     fontSize: 18,
     color: '#fff',
-    borderWidth: 2,
+    borderWidth: 1,
     borderColor: '#2A2A2A',
-    marginBottom: 24,
+    marginBottom: 20,
   },
   modalButtons: {
     flexDirection: 'row',

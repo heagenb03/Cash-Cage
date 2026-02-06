@@ -1,5 +1,5 @@
 import React, { useRef, useCallback } from 'react';
-import { Animated, StyleSheet } from 'react-native';
+import { Animated, StyleSheet, TouchableOpacity as RNTouchableOpacity } from 'react-native';
 import { Text, View } from '@/components/Themed';
 import { Gesture, GestureDetector, TouchableOpacity } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
@@ -101,39 +101,39 @@ const PlayerCardCompleted: React.FC<PlayerCardCompletedProps> = ({
             !reduceMotion && { transform: [{ scale: scaleAnim }] }
           ]}
         >
+          {/* Name row */}
+          <View style={styles.cardHeader}>
+            <View style={styles.nameRow}>
+              <Text style={styles.playerName}>{player.name}</Text>
+            </View>
+          </View>
+
+          {/* Data row — IN | OUT | NET */}
           {balance ? (
-            <View style={styles.completedContent}>
-              <View style={styles.completedRow}>
-                {/* Column 1: Name */}
-                <View style={styles.completedNameColumn}>
-                  <View>
-                    <Text style={styles.completedName}>{player.name}</Text>
-                  </View>
-                </View>
-
-                {/* Column 2: In/Out (stacked vertically, centered) */}
-                <View style={styles.completedInOutColumn}>
-                  <Text style={styles.completedInOut}>In ${balance.totalBuyins.toFixed(0)}</Text>
-                  <Text style={styles.completedInOut}>Out ${balance.totalCashouts.toFixed(0)}</Text>
-                </View>
-
-                {/* Column 3: Net Balance (right-aligned) */}
-                <View style={styles.completedNetColumn}>
-                  <Text style={[
-                    styles.netBalanceHero,
-                    { color: getNetBalanceColor(balance.netBalance) }
-                  ]}>
-                    {formatNetBalanceDisplay(balance.netBalance)}
-                  </Text>
-                </View>
+            <View style={styles.dataRow}>
+              <View style={styles.dataItem}>
+                <Text style={styles.dataLabel}>In</Text>
+                <Text style={styles.dataValue}>${balance.totalBuyins.toFixed(0)}</Text>
+              </View>
+              <View style={styles.dataDivider} />
+              <View style={styles.dataItem}>
+                <Text style={styles.dataLabel}>Out</Text>
+                <Text style={styles.dataValue}>${balance.totalCashouts.toFixed(0)}</Text>
+              </View>
+              <View style={styles.dataDivider} />
+              <View style={styles.dataItem}>
+                <Text style={styles.dataLabel}>Net</Text>
+                <Text style={[
+                  styles.dataValue,
+                  { color: getNetBalanceColor(balance.netBalance) }
+                ]}>
+                  {formatNetBalanceDisplay(balance.netBalance)}
+                </Text>
               </View>
             </View>
           ) : (
-            <View style={styles.completedContent}>
-              <View>
-                <Text style={styles.completedName}>{player.name}</Text>
-              </View>
-              <Text style={styles.completedInOut}>No transaction data</Text>
+            <View style={styles.dataRow}>
+              <Text style={styles.noDataText}>No transaction data</Text>
             </View>
           )}
         </Animated.View>
@@ -144,60 +144,70 @@ const PlayerCardCompleted: React.FC<PlayerCardCompletedProps> = ({
 
 const styles = StyleSheet.create({
   playerCard: {
-    backgroundColor: '#161616',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     borderRadius: 8,
+    backgroundColor: '#161616',
     borderWidth: 1,
     borderColor: '#242424',
     borderTopColor: 'rgba(176,114,187,0.15)',
   },
-  completedContent: {
-    flex: 1,
-    justifyContent: 'center',
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
     backgroundColor: 'transparent',
-    paddingHorizontal: 14,
-    paddingVertical: 6,
   },
-  completedRow: {
+  nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 4,
     backgroundColor: 'transparent',
-    gap: 8,
   },
-  completedNameColumn: {
-    flex: 1.5,
-    backgroundColor: 'transparent',
-    justifyContent: 'center',
+  playerName: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
   },
-  completedInOutColumn: {
-    flex: 1.5,
-    backgroundColor: 'transparent',
+  nameEditIcon: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    opacity: 0.4,
+  },
+  dataRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 2,
-  },
-  completedNetColumn: {
-    flex: 1.5,
-    backgroundColor: 'transparent',
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-  },
-  completedName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    opacity: 0.7,
-  },
-  completedInOut: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    opacity: 0.7,
     backgroundColor: 'transparent',
   },
-  netBalanceHero: {
-    fontSize: 22,
-    fontWeight: 'bold',
+  dataItem: {
+    flex: 1,
+    alignItems: 'flex-start',
+    backgroundColor: 'transparent',
+  },
+  dataLabel: {
+    fontSize: 9,
+    color: 'rgba(176,114,187,0.65)',
+    textTransform: 'uppercase',
+    letterSpacing: 1.5,
+    marginBottom: 3,
+  },
+  dataValue: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.9)',
+    fontFamily: 'SpaceMono',
+  },
+  dataDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: '#2A2A2A',
+    marginHorizontal: 12,
+  },
+  noDataText: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.5)',
+    fontStyle: 'italic',
   },
   reactivateAction: {
     backgroundColor: '#141A14',
@@ -207,6 +217,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: 'rgba(76,175,80,0.25)',
+    height: '100%',
   },
   deleteAction: {
     backgroundColor: '#1A1414',
@@ -216,6 +227,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: 'rgba(192,70,87,0.25)',
+    height: '100%',
   },
 });
 

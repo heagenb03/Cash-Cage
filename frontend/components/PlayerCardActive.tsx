@@ -121,13 +121,6 @@ const PlayerCardActive: React.FC<PlayerCardActiveProps> = ({
               <Text style={styles.dataLabel}>Out</Text>
               <Text style={styles.dataValue}>${(balance?.totalCashouts ?? 0).toFixed(0)}</Text>
             </RNTouchableOpacity>
-            <View style={styles.dataDivider} />
-            <View style={styles.dataItem}>
-              <Text style={styles.dataLabel}>Net</Text>
-              <Text style={[styles.dataValue, { color: balance ? (balance.netBalance >= 0 ? '#4CAF50' : '#C04657') : 'rgba(255,255,255,0.9)' }]}>
-                {balance ? (balance.netBalance >= 0 ? '+' : '') + '$' + balance.netBalance.toFixed(0) : '$0'}
-              </Text>
-            </View>
           </View>
         </Animated.View>
       </GestureDetector>
@@ -150,6 +143,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 10,
+    backgroundColor: 'transparent',
   },
   nameRow: {
     flexDirection: 'row',
@@ -171,10 +165,12 @@ const styles = StyleSheet.create({
   dataRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    backgroundColor: 'transparent',
   },
   dataItem: {
     flex: 1,
     alignItems: 'flex-start',
+    backgroundColor: 'transparent',
   },
   dataLabel: {
     fontSize: 9,
@@ -202,6 +198,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: 'rgba(76,175,80,0.25)',
+    height: '100%',
   },
   deleteAction: {
     backgroundColor: '#1A1414',
@@ -211,6 +208,7 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: 'rgba(192,70,87,0.25)',
+    height: '100%',
   },
 });
 

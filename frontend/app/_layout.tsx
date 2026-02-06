@@ -71,18 +71,6 @@ function RootLayoutNav() {
         <ThemeProvider value={CustomDarkTheme}>
           <Stack>
             <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-            <Stack.Screen
-              name="game/active"
-              options={{
-                title: 'Active Game'
-              }}
-            />
-            <Stack.Screen
-              name="game/summary"
-              options={{
-                title: 'Game Summary'
-              }}
-            />
           </Stack>
         </ThemeProvider>
       </GameProvider>

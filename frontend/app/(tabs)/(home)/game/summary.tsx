@@ -179,13 +179,13 @@ export default function GameSummaryScreen() {
           message += `• ${recipient}: ${details}\n`;
         });
       }
-      
+
       await Share.share({ message });
     } catch (error) {
       console.error('Error sharing:', error);
     }
   };
-  
+
   return (
     <View style={styles.container}>
       <ScrollView style={styles.scrollView}>
@@ -200,7 +200,7 @@ export default function GameSummaryScreen() {
             <Text style={styles.totalPotAmount}>${summary.totalPot.toFixed(2)}</Text>
           </View>
         </View>
-        
+
         {/* Debug - Server/Client Status Card */}
         {/*
         <View style={styles.statusCard}>
@@ -261,7 +261,7 @@ export default function GameSummaryScreen() {
                 <View style={styles.paymentsContainer}>
                   {groupedSettlement.payments.map((payment, paymentIndex) => (
                     <Text key={paymentIndex} style={styles.paymentDetail}>
-                      ${payment.amount.toFixed(2)} from {payment.from}
+                      - ${payment.amount.toFixed(2)} from {payment.from}
                     </Text>
                   ))}
                 </View>
@@ -269,7 +269,7 @@ export default function GameSummaryScreen() {
             ))
           )}
         </View>
-        
+
         {/* Player Balances */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Final Balances</Text>
@@ -301,7 +301,7 @@ export default function GameSummaryScreen() {
           ))}
         </View>
       </ScrollView>
-      
+
       {/* Actions */}
       <View style={styles.actions}>
         <Button
@@ -311,7 +311,7 @@ export default function GameSummaryScreen() {
           fullWidth
           accessibilityHint="Shares the game summary via available apps"
         />
-        <Button 
+        <Button
           onPress={() => router.push('/')}
           title="Done"
           variant="primary"
@@ -458,8 +458,6 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 6,
     marginBottom: 8,
-    borderLeftWidth: 3,
-    borderLeftColor: '#B072BB',
   },
   settlementHeader: {
     flexDirection: 'row',

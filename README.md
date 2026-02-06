@@ -48,13 +48,7 @@ High-performance C++ service for optimal settlement calculations.
 
 ```bash
 cd frontend
-npm install
-npm start
-
-# Platform-specific
-npm run android
-npm run ios
-npm run web
+npx expo start
 ```
 
 **Environment Configuration:**
