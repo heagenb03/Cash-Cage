@@ -2,6 +2,7 @@ import React from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { Tabs, usePathname, useRouter } from 'expo-router';
 import { Text, View, TouchableOpacity } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
@@ -16,77 +17,80 @@ function TabBarIcon(props: {
 function DynamicDealrHeader() {
   const pathname = usePathname();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
 
   const isGameScreen = pathname?.includes('/game/');
 
   return (
     <View style={{
-      flexDirection: 'row',
-      height: 48,
-      width: '100%',
-      alignItems: 'center',
+      backgroundColor: '#0A0A0A',
+      paddingTop: insets.top,
     }}>
-      {/* Left column: Back button (76px fixed width) */}
       <View style={{
-        width: 76,
-        alignItems: 'flex-start',
-        justifyContent: 'center',
-        paddingLeft: 16,
-      }}>
-        {isGameScreen && (
-          <TouchableOpacity
-            onPress={() => router.push('/')}
-            style={{
-              width: 44,
-              height: 44,
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}
-            activeOpacity={0.6}
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-          >
-            <FontAwesome name="arrow-left" size={22} color="#B072BB" />
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {/* Center column: DEALR logo (flex) */}
-      <View style={{
-        flex: 1,
+        flexDirection: 'row',
+        height: 48,
+        width: '100%',
         alignItems: 'center',
-        justifyContent: 'center',
       }}>
-        <Text
-          style={{
-            fontSize: 22,
-            fontWeight: 'bold',
-            letterSpacing: 6,
-            color: '#FFFFFF',
-            textShadowColor: '#B072BB',
-            textShadowOffset: { width: 0, height: 0 },
-            textShadowRadius: 12,
-          }}
-        >
-          DEALR
-        </Text>
-        <View
-          style={{
-            marginTop: 4,
-            width: 40,
-            height: 2,
-            borderRadius: 1,
-            backgroundColor: '#B072BB',
-            shadowColor: '#B072BB',
-            shadowOffset: { width: 0, height: 0 },
-            shadowRadius: 6,
-            shadowOpacity: 0.7,
-            elevation: 4,
-          }}
-        />
-      </View>
+        {/* Left column: Back button (76px fixed width) */}
+        <View style={{
+          width: 76,
+          alignItems: 'flex-start',
+          justifyContent: 'center',
+          paddingLeft: 16,
+        }}>
+          {isGameScreen && (
+            <TouchableOpacity
+              onPress={() => router.push('/')}
+              style={{
+                width: 44,
+                height: 44,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+              activeOpacity={0.6}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <FontAwesome name="arrow-left" size={22} color="#B072BB" />
+            </TouchableOpacity>
+          )}
+        </View>
 
-      {/* Right column: Empty spacer (76px fixed width) */}
-      <View style={{ width: 76 }} />
+        {/* Center column: DEALR logo (flex) */}
+        <View style={{
+          flex: 1,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}>
+          <Text
+            style={{
+              fontSize: 22,
+              fontWeight: 'bold',
+              letterSpacing: 3,
+              color: '#FFFFFF',
+            }}
+          >
+            DEALR
+          </Text>
+          <View
+            style={{
+              marginTop: 4,
+              width: 40,
+              height: 2,
+              borderRadius: 1,
+              backgroundColor: '#B072BB',
+              shadowColor: '#B072BB',
+              shadowOffset: { width: 0, height: 0 },
+              shadowRadius: 6,
+              shadowOpacity: 0.7,
+              elevation: 4,
+            }}
+          />
+        </View>
+
+        {/* Right column: Empty spacer (76px fixed width) */}
+        <View style={{ width: 76 }} />
+      </View>
     </View>
   );
 }
@@ -106,7 +110,7 @@ export default function TabLayout() {
         headerStyle: {
           backgroundColor: '#0A0A0A',
         },
-        headerTitle: () => <DynamicDealrHeader />,
+        header: () => <DynamicDealrHeader />,
       }}>
       <Tabs.Screen
         name="(home)"
