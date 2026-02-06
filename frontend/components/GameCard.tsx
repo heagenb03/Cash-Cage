@@ -1,9 +1,9 @@
-import React, { useRef, useCallback } from 'react';
+import React, { useRef, useCallback, useEffect } from 'react';
 import { Animated, StyleSheet, TouchableOpacity, View as RNView } from 'react-native';
 import { Text, View } from '@/components/Themed';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
-import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
+import Swipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { Ionicons } from '@expo/vector-icons';
 import { Game } from '@/types/game';
 import { GameService } from '@/services/gameService';
@@ -14,10 +14,13 @@ interface GameCardProps {
   onDelete: (game: { id: string; name: string }) => void;
   isCompleted?: boolean;
   reduceMotion: boolean;
+  entryIndex?: number;
 }
 
-const GameCard: React.FC<GameCardProps> = ({ game, onPress, onDelete, isCompleted = false, reduceMotion }) => {
+const GameCard: React.FC<GameCardProps> = ({ game, onPress, onDelete, isCompleted = false, reduceMotion, entryIndex }) => {
+  const swipeableRef = useRef<SwipeableMethods>(null);
   const scaleAnim = useRef(new Animated.Value(1)).current;
+  const entryAnim = useRef(new Animated.Value(0)).current;
 
   const formatDate = (date: Date) => {
     return new Date(date).toLocaleDateString('en-US', {
@@ -26,6 +29,17 @@ const GameCard: React.FC<GameCardProps> = ({ game, onPress, onDelete, isComplete
       year: 'numeric'
     });
   };
+
+  useEffect(() => {
+    if (!reduceMotion && entryIndex !== undefined) {
+      Animated.timing(entryAnim, {
+        toValue: 1,
+        duration: 280,
+        delay: entryIndex * 60,
+        useNativeDriver: true,
+      }).start();
+    }
+  }, []);
 
   const animateScaleDown = useCallback(() => {
     if (!reduceMotion) {
@@ -73,10 +87,16 @@ const GameCard: React.FC<GameCardProps> = ({ game, onPress, onDelete, isComplete
 
   return (
     <Swipeable
+      ref={swipeableRef}
       renderRightActions={() => (
         <TouchableOpacity
           style={styles.deleteAction}
-          onPress={() => onDelete({ id: game.id, name: game.name })}
+          onPress={() => {
+            swipeableRef.current?.close();
+            setTimeout(() => {
+              onDelete({ id: game.id, name: game.name });
+            }, 100);
+          }}
           activeOpacity={0.8}
         >
           <Ionicons name="trash" size={22} color="rgba(192,70,87,0.85)" />
@@ -96,7 +116,18 @@ const GameCard: React.FC<GameCardProps> = ({ game, onPress, onDelete, isComplete
           style={[
             styles.gameCard,
             isCompleted && styles.completedCard,
-            !reduceMotion && { transform: [{ scale: scaleAnim }] }
+            !reduceMotion && {
+              opacity: entryIndex !== undefined ? entryAnim : 1,
+              transform: [
+                { scale: scaleAnim },
+                ...(entryIndex !== undefined ? [{
+                  translateY: entryAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [18, 0]
+                  })
+                }] : [])
+              ]
+            }
           ]}
         >
           <RNView style={styles.gameCardHeader}>
@@ -201,6 +232,7 @@ export default React.memo(GameCard, (prevProps, nextProps) => {
     prevProps.game.players.length === nextProps.game.players.length &&
     prevProps.game.transactions.length === nextProps.game.transactions.length &&
     prevProps.reduceMotion === nextProps.reduceMotion &&
-    prevProps.isCompleted === nextProps.isCompleted
+    prevProps.isCompleted === nextProps.isCompleted &&
+    prevProps.entryIndex === nextProps.entryIndex
   );
 });
