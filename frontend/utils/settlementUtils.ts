@@ -32,3 +32,15 @@ export function groupSettlementsByRecipient(
     a.recipient.localeCompare(b.recipient)
   );
 }
+
+/**
+ * Sorts payments within a grouped settlement by amount (largest first)
+ */
+export function sortPaymentsByAmount(
+  groupedSettlement: GroupedSettlement
+): GroupedSettlement {
+  return {
+    ...groupedSettlement,
+    payments: [...groupedSettlement.payments].sort((a, b) => b.amount - a.amount)
+  };
+}
