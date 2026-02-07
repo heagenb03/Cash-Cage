@@ -1,17 +1,259 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { StyleSheet, ScrollView, TouchableOpacity, Share, ActivityIndicator } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { StyleSheet, ScrollView, TouchableOpacity, Share, ActivityIndicator, Animated, AccessibilityInfo } from 'react-native';
 import { Text, View } from '@/components/Themed';
 import { useGame } from '@/contexts/GameContext';
 import { useRouter } from 'expo-router';
 import { GameService } from '@/services/gameService';
 import { getSettlements } from '@/services/settlementService';
 import { PlayerBalance, SettlementResult } from '@/types/game';
-import { groupSettlementsByRecipient } from '@/utils/settlementUtils';
+import { groupSettlementsByRecipient, sortPaymentsByAmount } from '@/utils/settlementUtils';
+import { getNetBalanceColor, formatNetBalanceDisplay } from '@/utils/formatUtils';
 import Button from '@/components/Button';
+import { Ionicons } from '@expo/vector-icons';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { runOnJS } from 'react-native-reanimated';
+
+// HUD Section Header Component
+function HudSectionHeader({ label }: { label: string }) {
+  return (
+    <View style={styles.hudHeader}>
+      <View style={styles.hudLine} />
+      <Text style={styles.hudLabel}>{label}</Text>
+      <View style={styles.hudLine} />
+    </View>
+  );
+}
+
+// Read-Only Player Balance Card Component
+interface BalanceCardProps {
+  balance: PlayerBalance;
+  reduceMotion: boolean;
+}
+
+function BalanceCard({ balance, reduceMotion }: BalanceCardProps) {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+
+  const animateScaleDown = useCallback(() => {
+    if (!reduceMotion) {
+      Animated.spring(scaleAnim, {
+        toValue: 0.975,
+        tension: 300,
+        friction: 20,
+        useNativeDriver: true
+      }).start();
+    }
+  }, [reduceMotion, scaleAnim]);
+
+  const animateScaleUp = useCallback(() => {
+    if (!reduceMotion) {
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 200,
+        friction: 15,
+        useNativeDriver: true
+      }).start();
+    }
+  }, [reduceMotion, scaleAnim]);
+
+  const tapGesture = Gesture.Tap()
+    .maxDuration(200)
+    .maxDistance(10)
+    .onBegin(() => runOnJS(animateScaleDown)())
+    .onFinalize(() => runOnJS(animateScaleUp)());
+
+  return (
+    <GestureDetector gesture={tapGesture}>
+      <Animated.View
+        accessible={true}
+        accessibilityRole="button"
+        accessibilityLabel={`${balance.playerName}, Net: ${formatNetBalanceDisplay(balance.netBalance)}`}
+        style={[
+          styles.playerCard,
+          !reduceMotion && { transform: [{ scale: scaleAnim }] }
+        ]}
+      >
+        {/* Name row */}
+        <View style={styles.cardHeader}>
+          <View style={styles.nameRow}>
+            <Text style={styles.playerName}>{balance.playerName}</Text>
+          </View>
+        </View>
+
+        {/* Data row — IN | OUT | NET */}
+        <View style={styles.dataRow}>
+          <View style={styles.dataItem}>
+            <Text style={styles.dataLabel}>In</Text>
+            <Text style={styles.dataValue}>${balance.totalBuyins.toFixed(0)}</Text>
+          </View>
+          <View style={styles.dataDivider} />
+          <View style={styles.dataItem}>
+            <Text style={styles.dataLabel}>Out</Text>
+            <Text style={styles.dataValue}>${balance.totalCashouts.toFixed(0)}</Text>
+          </View>
+          <View style={styles.dataDivider} />
+          <View style={styles.dataItem}>
+            <Text style={styles.dataLabel}>Net</Text>
+            <Text style={[
+              styles.dataValue,
+              { color: getNetBalanceColor(balance.netBalance) }
+            ]}>
+              {formatNetBalanceDisplay(balance.netBalance)}
+            </Text>
+          </View>
+        </View>
+      </Animated.View>
+    </GestureDetector>
+  );
+}
+
+// Empty State Component
+function EmptyState({ label, icon }: { label: string; icon: string }) {
+  return (
+    <View style={styles.emptyState}>
+      <View style={styles.emptyIconRing}>
+        <Ionicons name={icon as any} size={28} color="rgba(176,114,187,0.35)" />
+      </View>
+      <Text style={styles.emptyStateText}>{label}</Text>
+    </View>
+  );
+}
+
+// Settlement Card Component
+interface SettlementCardProps {
+  groupedSettlement: { recipient: string; totalAmount: number; payments: Array<{ from: string; amount: number }> };
+  reduceMotion: boolean;
+}
+
+function SettlementCard({ groupedSettlement, reduceMotion }: SettlementCardProps) {
+  const [isExpanded, setIsExpanded] = useState(false);
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const opacityAnim = useRef(new Animated.Value(0)).current;
+
+  // Sort payments by amount (largest first)
+  const sortedPayments = sortPaymentsByAmount(groupedSettlement).payments;
+
+  const handleToggle = useCallback(() => {
+    const newExpandedState = !isExpanded;
+    setIsExpanded(newExpandedState);
+
+    if (!reduceMotion) {
+      Animated.timing(opacityAnim, {
+        toValue: newExpandedState ? 1 : 0,
+        duration: 200,
+        useNativeDriver: true,
+      }).start();
+    } else {
+      opacityAnim.setValue(newExpandedState ? 1 : 0);
+    }
+  }, [isExpanded, reduceMotion, opacityAnim]);
+
+  const animateScaleDown = useCallback(() => {
+    if (!reduceMotion) {
+      Animated.spring(scaleAnim, {
+        toValue: 0.975,
+        tension: 300,
+        friction: 20,
+        useNativeDriver: true
+      }).start();
+    }
+  }, [reduceMotion, scaleAnim]);
+
+  const animateScaleUp = useCallback(() => {
+    if (!reduceMotion) {
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 200,
+        friction: 15,
+        useNativeDriver: true
+      }).start();
+    }
+  }, [reduceMotion, scaleAnim]);
+
+  const tapGesture = Gesture.Tap()
+    .maxDuration(200)
+    .maxDistance(10)
+    .onBegin(() => runOnJS(animateScaleDown)())
+    .onFinalize((_, success) => {
+      runOnJS(animateScaleUp)();
+      if (success) {
+        runOnJS(handleToggle)();
+      }
+    });
+
+  return (
+    <GestureDetector gesture={tapGesture}>
+      <Animated.View
+        accessible={true}
+        accessibilityRole="button"
+        accessibilityLabel={`${groupedSettlement.recipient} receives $${groupedSettlement.totalAmount.toFixed(2)}. ${isExpanded ? 'Collapse' : 'Expand'} payment details.`}
+        accessibilityHint={isExpanded ? 'Double tap to collapse payment details' : 'Double tap to expand payment details'}
+        accessibilityState={{ expanded: isExpanded }}
+        style={[
+          styles.settlementCard,
+          !reduceMotion && { transform: [{ scale: scaleAnim }] }
+        ]}
+      >
+        <View style={styles.settlementHeader}>
+          <Text style={styles.recipientName}>{groupedSettlement.recipient}</Text>
+          <Ionicons
+            name={isExpanded ? "chevron-up" : "chevron-down"}
+            size={20}
+            color="rgba(176,114,187,0.6)"
+          />
+        </View>
+        <View style={styles.totalSection}>
+          <Text style={styles.totalLabel}>RECEIVES</Text>
+          <Text style={styles.totalAmount}>
+            ${groupedSettlement.totalAmount.toFixed(2)}
+          </Text>
+        </View>
+
+        {/* Conditionally render payment details */}
+        {isExpanded && (
+          <Animated.View
+            style={[
+              styles.paymentDetailsSection,
+              !reduceMotion && { opacity: opacityAnim }
+            ]}
+          >
+            <View style={styles.paymentDivider} />
+            <Text style={styles.paymentSectionLabel}>
+              FROM ({groupedSettlement.payments.length} {groupedSettlement.payments.length === 1 ? 'PLAYER' : 'PLAYERS'})
+            </Text>
+            <View style={styles.paymentGrid}>
+              {sortedPayments.map((payment, index) => (
+                <React.Fragment key={index}>
+                  {index > 0 && index % 3 !== 0 && <View style={styles.paymentGridDivider} />}
+                  <View style={styles.paymentGridCell}>
+                    <Text style={styles.paymentNameLabel} numberOfLines={2} ellipsizeMode="tail">
+                      {payment.from}
+                    </Text>
+                    <View style={styles.paymentAmountRow}>
+                      <Ionicons
+                        name="arrow-down"
+                        size={11}
+                        color="rgba(176,114,187,0.4)"
+                        style={{ marginRight: 4, marginTop: 1 }}
+                      />
+                      <Text style={styles.paymentAmountValue}>
+                        ${payment.amount.toFixed(2)}
+                      </Text>
+                    </View>
+                  </View>
+                </React.Fragment>
+              ))}
+            </View>
+          </Animated.View>
+        )}
+      </Animated.View>
+    </GestureDetector>
+  );
+}
 
 export default function GameSummaryScreen() {
   const { activeGame, updateGame } = useGame();
   const router = useRouter();
+  const [reduceMotion, setReduceMotion] = useState(false);
 
   const summary = useMemo(
     () => (activeGame ? GameService.generateGameSummary(activeGame) : null),
@@ -32,6 +274,18 @@ export default function GameSummaryScreen() {
   useEffect(() => {
     balancesRef.current = summary?.balances ?? [];
   }, [summary]);
+
+  // Accessibility: Reduce motion
+  useEffect(() => {
+    const checkReduceMotion = async () => {
+      const isEnabled = await AccessibilityInfo.isReduceMotionEnabled();
+      setReduceMotion(isEnabled);
+    };
+    checkReduceMotion();
+
+    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
+    return () => subscription.remove();
+  }, []);
 
   useEffect(() => {
     if (!summary) {
@@ -158,7 +412,9 @@ export default function GameSummaryScreen() {
   if (!activeGame || !summary) {
     return (
       <View style={styles.container}>
-        <Text style={styles.emptyText}>No active game.</Text>
+        <View style={{ flex: 1, justifyContent: 'center' }}>
+          <EmptyState label="No active game" icon="game-controller-outline" />
+        </View>
       </View>
     );
   }
@@ -191,13 +447,33 @@ export default function GameSummaryScreen() {
       <ScrollView style={styles.scrollView}>
         {/* Game Header */}
         <View style={styles.header}>
-          <Text style={styles.title}>{activeGame.name}</Text>
-          <Text style={styles.subtitle}>
-            {new Date(activeGame.date).toLocaleDateString()}
-          </Text>
-          <View style={styles.totalPotCard}>
-            <Text style={styles.totalPotLabel}>Total Pot</Text>
-            <Text style={styles.totalPotAmount}>${summary.totalPot.toFixed(2)}</Text>
+          <View style={styles.headerTitleRow}>
+            <View style={styles.titleColumn}>
+              <Text style={styles.gameTitle}>{activeGame.name}</Text>
+              <Text style={styles.gameDate}>
+                {new Date(activeGame.date).toLocaleDateString()}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={styles.shareIconButton}
+              onPress={handleShare}
+              activeOpacity={0.6}
+              accessibilityLabel="Share game summary"
+              accessibilityHint="Opens share dialog to send summary via apps"
+              accessibilityRole="button"
+            >
+              <Ionicons name="share-outline" size={20} color="#B072BB" />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Total Pot Hero Metric */}
+        <View style={styles.heroPotSection}>
+          <HudSectionHeader label="TOTAL POT" />
+          <View style={styles.heroPotDisplay}>
+            <Text style={styles.heroPotAmount}>
+              ${summary.totalPot.toFixed(2)}
+            </Text>
           </View>
         </View>
 
@@ -242,75 +518,34 @@ export default function GameSummaryScreen() {
         */}
         {/* Settlements */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Settlements</Text>
-          <Text style={styles.sectionSubtitle}>
-            {groupedSettlements.length} recipient{groupedSettlements.length !== 1 ? 's' : ''}
-          </Text>
+          <HudSectionHeader label="SETTLEMENTS" />
 
           {groupedSettlements.length === 0 ? (
-            <Text style={styles.emptyText}>All balanced</Text>
+            <EmptyState label="All balanced" icon="checkmark-circle-outline" />
           ) : (
             groupedSettlements.map((groupedSettlement, index) => (
-              <View key={index} style={styles.settlementCard}>
-                <View style={styles.settlementHeader}>
-                  <Text style={styles.recipientName}>{groupedSettlement.recipient}</Text>
-                  <Text style={styles.recipientTotal}>
-                    ${groupedSettlement.totalAmount.toFixed(2)}
-                  </Text>
-                </View>
-                <View style={styles.paymentsContainer}>
-                  {groupedSettlement.payments.map((payment, paymentIndex) => (
-                    <Text key={paymentIndex} style={styles.paymentDetail}>
-                      - ${payment.amount.toFixed(2)} from {payment.from}
-                    </Text>
-                  ))}
-                </View>
-              </View>
+              <SettlementCard
+                key={index}
+                groupedSettlement={groupedSettlement}
+                reduceMotion={reduceMotion}
+              />
             ))
           )}
         </View>
 
         {/* Player Balances */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Final Balances</Text>
-          {summary.balances.map(balance => (
-            <View key={balance.playerId} style={styles.balanceCard}>
-              <View style={styles.balanceRow}>
-                {/* Column 1: Name */}
-                <View style={styles.balanceNameColumn}>
-                  <Text style={styles.balanceName}>{balance.playerName}</Text>
-                </View>
-
-                {/* Column 2: In/Out (stacked) */}
-                <View style={styles.balanceInOutColumn}>
-                  <Text style={styles.balanceInOut}>In ${balance.totalBuyins.toFixed(0)}</Text>
-                  <Text style={styles.balanceInOut}>Out ${balance.totalCashouts.toFixed(0)}</Text>
-                </View>
-
-                {/* Column 3: Net Balance */}
-                <View style={styles.balanceNetColumn}>
-                  <Text style={[
-                    styles.balanceNetHero,
-                    { color: balance.netBalance >= 0 ? '#4CAF50' : '#C04657' }
-                  ]}>
-                    {balance.netBalance >= 0 ? '+' : ''}{balance.netBalance.toFixed(0)}
-                  </Text>
-                </View>
-              </View>
-            </View>
-          ))}
+          <HudSectionHeader label="FINAL BALANCES" />
+          <View style={styles.balancesContainer}>
+            {summary.balances.map(balance => (
+              <BalanceCard key={balance.playerId} balance={balance} reduceMotion={reduceMotion} />
+            ))}
+          </View>
         </View>
       </ScrollView>
 
       {/* Actions */}
       <View style={styles.actions}>
-        <Button
-          onPress={handleShare}
-          title="Share Summary"
-          variant="secondary"
-          fullWidth
-          accessibilityHint="Shares the game summary via available apps"
-        />
         <Button
           onPress={() => router.push('/')}
           title="Done"
@@ -333,44 +568,89 @@ const styles = StyleSheet.create({
     padding: 20,
   },
   header: {
-    marginBottom: 32,
-    alignItems: 'center',
+    marginBottom: 24,
+    backgroundColor: 'transparent',
   },
-  title: {
+  headerTitleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    backgroundColor: 'transparent',
+  },
+  titleColumn: {
+    flex: 1,
+    backgroundColor: 'transparent',
+  },
+  shareIconButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 0,
+  },
+  gameTitle: {
     fontSize: 32,
     fontWeight: 'bold',
-    marginBottom: 4,
-    textAlign: 'center',
     color: '#B072BB',
     letterSpacing: 1,
   },
-  subtitle: {
+  gameDate: {
     fontSize: 14,
     opacity: 0.5,
-    marginBottom: 24,
     color: '#FFFFFF',
   },
-  totalPotCard: {
-    backgroundColor: '#1A1A1A',
-    padding: 28,
-    borderRadius: 8,
+  heroPotSection: {
+    marginBottom: 32,
+  },
+  heroPotDisplay: {
+    paddingVertical: 20,
     alignItems: 'center',
-    width: '100%',
-    borderWidth: 2,
-    borderColor: '#B072BB',
+    backgroundColor: 'transparent',
   },
-  totalPotLabel: {
-    fontSize: 12,
-    color: '#B072BB',
-    opacity: 0.8,
-    marginBottom: 8,
-    textTransform: 'uppercase',
-    letterSpacing: 2,
-  },
-  totalPotAmount: {
-    fontSize: 42,
+  heroPotAmount: {
+    fontSize: 52,
     fontWeight: 'bold',
     color: '#B072BB',
+  },
+  hudHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+    gap: 10,
+    backgroundColor: 'transparent',
+  },
+  hudLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#2A2A2A',
+  },
+  hudLabel: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    color: '#B072BB',
+    textTransform: 'uppercase',
+    letterSpacing: 3,
+  },
+  emptyState: {
+    alignItems: 'center',
+    paddingVertical: 28,
+    backgroundColor: 'transparent',
+  },
+  emptyIconRing: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    borderWidth: 1,
+    borderColor: 'rgba(176,114,187,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+    backgroundColor: 'transparent',
+  },
+  emptyStateText: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.35)',
+    letterSpacing: 0.5,
   },
   section: {
     marginBottom: 32,
@@ -432,113 +712,164 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 13,
   },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    marginBottom: 8,
-    color: '#B072BB',
-    textTransform: 'uppercase',
-    letterSpacing: 2,
-  },
-  sectionSubtitle: {
-    fontSize: 12,
-    opacity: 0.5,
-    marginBottom: 16,
-    color: '#FFFFFF',
-  },
-  emptyText: {
-    fontSize: 15,
-    opacity: 0.4,
-    textAlign: 'center',
-    marginTop: 20,
-    color: '#FFFFFF',
-  },
   settlementCard: {
-    backgroundColor: '#1A1A1A',
-    padding: 16,
-    borderRadius: 6,
+    backgroundColor: '#161616',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 8,
     marginBottom: 8,
+    borderWidth: 1,
+    borderColor: '#242424',
+    borderTopColor: 'rgba(176,114,187,0.15)',
   },
   settlementHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
     backgroundColor: 'transparent',
   },
   recipientName: {
     fontSize: 17,
-    fontWeight: 'bold',
+    fontWeight: '600',
     color: '#FFFFFF',
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
   },
-  recipientTotal: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#B072BB',
-  },
-  paymentsContainer: {
-    gap: 6,
+  totalSection: {
     backgroundColor: 'transparent',
   },
-  paymentDetail: {
-    fontSize: 14,
-    color: '#FFFFFF',
-    opacity: 0.6,
-    paddingLeft: 0,
+  totalLabel: {
+    fontSize: 9,
+    color: 'rgba(176,114,187,0.65)',
+    textTransform: 'uppercase',
+    letterSpacing: 1.5,
+    marginBottom: 3,
   },
-  balanceCard: {
-    backgroundColor: '#1A1A1A',
-    height: 70,
-    borderRadius: 6,
+  totalAmount: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.9)',
+    fontFamily: 'SpaceMono',
+  },
+  paymentDetailsSection: {
+    backgroundColor: 'transparent',
+    marginTop: 12,
+  },
+  paymentDivider: {
+    height: 1,
+    backgroundColor: '#2A2A2A',
     marginBottom: 8,
-    borderWidth: 1,
-    borderColor: '#1A1A1A',
-    paddingHorizontal: 14,
-    paddingVertical: 6,
   },
-  balanceRow: {
-    flex: 1,
+  paymentSectionLabel: {
+    fontSize: 9,
+    color: 'rgba(176,114,187,0.65)',
+    textTransform: 'uppercase',
+    letterSpacing: 1.5,
+    marginBottom: 8,
+  },
+  paymentRow: {
+    backgroundColor: 'transparent',
+    marginBottom: 6,
+  },
+  paymentText: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.9)',
+    fontFamily: 'SpaceMono',
+  },
+  paymentGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    backgroundColor: 'transparent',
+    rowGap: 14,
+  },
+  paymentGridCell: {
+    width: '33.333%',
+    paddingHorizontal: 4,
+    backgroundColor: 'transparent',
+  },
+  paymentGridDivider: {
+    width: 1,
+    height: 32,
+    backgroundColor: '#2A2A2A',
+    marginHorizontal: 8,
+    alignSelf: 'center',
+  },
+  paymentNameLabel: {
+    fontSize: 9,
+    color: 'rgba(176,114,187,0.65)',
+    textTransform: 'uppercase',
+    letterSpacing: 1.5,
+    marginBottom: 4,
+  },
+  paymentAmountRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: 'transparent',
+  },
+  paymentAmountValue: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.9)',
+    fontFamily: 'SpaceMono',
+  },
+  balancesContainer: {
+    gap: 8,
+    backgroundColor: 'transparent',
+  },
+  // Player Card styles (read-only version)
+  playerCard: {
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: '#161616',
+    borderWidth: 1,
+    borderColor: '#242424',
+    borderTopColor: 'rgba(176,114,187,0.15)',
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+    backgroundColor: 'transparent',
+  },
+  nameRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 4,
     backgroundColor: 'transparent',
-    gap: 8,
   },
-  balanceNameColumn: {
-    flex: 1.5,
-    backgroundColor: 'transparent',
-    justifyContent: 'center',
+  playerName: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: '#FFFFFF',
+    letterSpacing: 0.3,
   },
-  balanceInOutColumn: {
-    flex: 1.5,
-    backgroundColor: 'transparent',
+  dataRow: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 2,
-  },
-  balanceNetColumn: {
-    flex: 1.5,
-    backgroundColor: 'transparent',
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-  },
-  balanceName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    opacity: 0.7,
-  },
-  balanceInOut: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    opacity: 0.7,
     backgroundColor: 'transparent',
   },
-  balanceNetHero: {
-    fontSize: 22,
-    fontWeight: 'bold',
+  dataItem: {
+    flex: 1,
+    alignItems: 'flex-start',
+    backgroundColor: 'transparent',
+  },
+  dataLabel: {
+    fontSize: 9,
+    color: 'rgba(176,114,187,0.65)',
+    textTransform: 'uppercase',
+    letterSpacing: 1.5,
+    marginBottom: 3,
+  },
+  dataValue: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.9)',
+    fontFamily: 'SpaceMono',
+  },
+  dataDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: '#2A2A2A',
+    marginHorizontal: 12,
   },
   actions: {
     paddingVertical: 20,
