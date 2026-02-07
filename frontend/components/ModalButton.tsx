@@ -7,7 +7,7 @@ import { AccessibilityInfo } from 'react-native';
 interface ModalButtonProps {
   onPress: () => void;
   title: string;
-  variant: 'cancel' | 'confirm' | 'destructive';
+  variant: 'cancel' | 'confirm' | 'destructive' | 'success';
   fullWidth?: boolean;
   disabled?: boolean;
   accessibilityLabel?: string;
@@ -96,6 +96,8 @@ const ModalButton: React.FC<ModalButtonProps> = ({
         return styles.confirmButton;
       case 'destructive':
         return styles.destructiveButton;
+      case 'success':
+        return styles.successButton;
       default:
         return styles.cancelButton;
     }
@@ -109,6 +111,8 @@ const ModalButton: React.FC<ModalButtonProps> = ({
         return styles.confirmButtonText;
       case 'destructive':
         return styles.destructiveButtonText;
+      case 'success':
+        return styles.successButtonText;
       default:
         return styles.cancelButtonText;
     }
@@ -168,9 +172,15 @@ const styles = StyleSheet.create({
     backgroundColor: '#C04657',
     borderWidth: 0,
   },
+  successButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderColor: '#00D66F',
+  },
   buttonText: {
     fontSize: 16,
     fontWeight: '600',
+    textAlign: 'center',
   },
   cancelButtonText: {
     color: '#FFFFFF',
@@ -180,6 +190,9 @@ const styles = StyleSheet.create({
   },
   destructiveButtonText: {
     color: '#FFFFFF',
+  },
+  successButtonText: {
+    color: '#00D66F',
   },
 });
 
