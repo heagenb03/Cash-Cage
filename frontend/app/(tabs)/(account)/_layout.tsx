@@ -9,6 +9,7 @@ export default function AccountLayout() {
     >
       <Stack.Screen name="index" />
       <Stack.Screen name="settings" />
+      <Stack.Screen name="about" />
     </Stack>
   );
 }

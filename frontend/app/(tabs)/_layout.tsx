@@ -70,6 +70,7 @@ function DynamicDealrHeader() {
 
   const isGameScreen = pathname?.includes('/game/');
   const isSettingsScreen = pathname?.includes('/settings');
+  const isAboutScreen = pathname?.includes('/about');
 
   return (
     <View style={{
@@ -89,9 +90,15 @@ function DynamicDealrHeader() {
           justifyContent: 'center',
           paddingLeft: 16,
         }}>
-          {(isGameScreen || isSettingsScreen) && (
+          {(isGameScreen || isSettingsScreen || isAboutScreen) && (
             <TouchableOpacity
-              onPress={() => router.push('/')}
+              onPress={() => {
+                if (isAboutScreen) {
+                  router.back();
+                } else {
+                  router.push('/');
+                }
+              }}
               style={{
                 width: 44,
                 height: 44,
