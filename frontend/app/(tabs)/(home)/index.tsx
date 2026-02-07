@@ -160,7 +160,8 @@ export default function HomeScreen() {
             <Text style={styles.modalTitle}>Delete Game?</Text>
             <Text style={styles.deleteWarningText}>
               Are you sure you want to delete "{gameToDelete?.name}"? This will remove all players,
-              transactions, and settlements. This action cannot be undone.
+              transactions, and settlements. 
+              {'\n\n'}This action cannot be undone.
             </Text>
             <View style={styles.modalButtons}>
               <ModalButton

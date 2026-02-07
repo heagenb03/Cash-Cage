@@ -242,7 +242,7 @@ export default function ActiveGameScreen() {
     }
 
     const buyInAmount = parseFloat(newPlayerBuyIn);
-    if (newPlayerBuyIn.trim() && (isNaN(buyInAmount) || buyInAmount <= 0)) {
+    if (newPlayerBuyIn.trim() && (isNaN(buyInAmount) || buyInAmount < 0)) {
       Alert.alert('Error', 'Please enter a valid buy-in amount or leave it empty');
       return;
     }
@@ -661,7 +661,8 @@ export default function ActiveGameScreen() {
             <Ionicons name="warning" size={48} color="#C04657" style={styles.warningIcon} />
             <Text style={styles.modalTitle}>Delete Player?</Text>
             <Text style={styles.deleteWarningText}>
-              This will remove {playerToDelete?.name} and all their transactions from this game. This action cannot be undone.
+              This will remove {playerToDelete?.name} and all their transactions from this game. 
+              {'\n\n'}This action cannot be undone.
             </Text>
             <View style={styles.modalButtons}>
               <ModalButton
@@ -731,9 +732,6 @@ export default function ActiveGameScreen() {
                       {index < validationResult.warnings.length - 1 && <View style={{ height: 12, backgroundColor: 'transparent' }} />}
                     </View>
                   ))}
-                  <Text style={styles.completionModalSubtext}>
-                    Do you want to complete the game anyway?
-                  </Text>
                 </>
               )}
 

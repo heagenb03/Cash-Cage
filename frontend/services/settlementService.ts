@@ -219,7 +219,7 @@ export async function getSettlements(
 export function validateSettlements(balances: PlayerBalance[]): Validation {
   const tolerance = 2.50;
   const validation : Validation = {
-    isValid: true,
+    isValid: false,
     errors: [],
     warnings: [],
     totalBuyins: 0,
@@ -232,7 +232,8 @@ export function validateSettlements(balances: PlayerBalance[]): Validation {
     validation.errors.push('No player balances available for validation.');
     return validation;
   } else if (playersWithNoActivity.length > 0) {
-    validation.errors.push(`Players with no activity: ${playersWithNoActivity.map(p => p.playerName).join(', ')}.`);
+    validation.errors.push(`Players with no activity: ${playersWithNoActivity.map(p => p.playerName).join(', ')}.
+    \n Consider removing them from the game.`);
     return validation;
   }
 
@@ -242,7 +243,9 @@ export function validateSettlements(balances: PlayerBalance[]): Validation {
 
   if (validation.netDifference > tolerance) {
     validation.warnings.push(
-      `Total buyins of $${validation.totalBuyins.toFixed(2)} does not equal the cashouts of $${validation.totalCashouts.toFixed(2)}, a $${validation.netDifference.toFixed(2)} difference.`
+      `Total buy-ins of $${validation.totalBuyins.toFixed(2)} with total cash outs of $${validation.totalCashouts.toFixed(2)}. A $${validation.netDifference.toFixed(2)} difference.
+      Double check transactions and chip-counts.
+      \n If you proceed, settlement algorithm may have poor results.`
     );
   }
 
