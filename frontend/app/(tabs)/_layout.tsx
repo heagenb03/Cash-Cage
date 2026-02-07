@@ -1,8 +1,11 @@
-import React from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
+import { Ionicons } from '@expo/vector-icons';
 import { Tabs, usePathname, useRouter } from 'expo-router';
-import { Text, View, TouchableOpacity } from 'react-native';
+import { Text, View, TouchableOpacity, Animated, AccessibilityInfo } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { GestureDetector, Gesture } from 'react-native-gesture-handler';
+import { runOnJS } from 'react-native-reanimated';
 
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
@@ -19,7 +22,54 @@ function DynamicDealrHeader() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
 
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const [reduceMotion, setReduceMotion] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    let subscription: any;
+
+    AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
+      if (isMounted) {
+        setReduceMotion(enabled);
+      }
+    });
+
+    subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', (enabled) => {
+      setReduceMotion(enabled);
+    });
+
+    return () => {
+      isMounted = false;
+      subscription?.remove();
+    };
+  }, []);
+
+  const animateScaleDown = useCallback((scaleValue: number = 0.9) => {
+    if (!reduceMotion) {
+      Animated.spring(scaleAnim, {
+        toValue: scaleValue,
+        tension: 300,
+        friction: 20,
+        useNativeDriver: true
+      }).start();
+    }
+  }, [reduceMotion, scaleAnim]);
+
+  const animateScaleUp = useCallback((velocity: number = 0) => {
+    if (!reduceMotion) {
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 200,
+        friction: 15,
+        velocity,
+        useNativeDriver: true
+      }).start();
+    }
+  }, [reduceMotion, scaleAnim]);
+
   const isGameScreen = pathname?.includes('/game/');
+  const isSettingsScreen = pathname?.includes('/settings');
 
   return (
     <View style={{
@@ -39,7 +89,7 @@ function DynamicDealrHeader() {
           justifyContent: 'center',
           paddingLeft: 16,
         }}>
-          {isGameScreen && (
+          {(isGameScreen || isSettingsScreen) && (
             <TouchableOpacity
               onPress={() => router.push('/')}
               style={{
@@ -89,7 +139,12 @@ function DynamicDealrHeader() {
         </View>
 
         {/* Right column: Empty spacer (76px fixed width) */}
-        <View style={{ width: 76 }} />
+        <View style={{
+          width: 76,
+          alignItems: 'flex-end',
+          justifyContent: 'center',
+          paddingRight: 16,
+        }} />
       </View>
     </View>
   );
@@ -120,7 +175,7 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="two"
+        name="(account)"
         options={{
           tabBarLabel: 'Account',
           tabBarIcon: ({ color }) => <TabBarIcon name="user" color={color} />,
