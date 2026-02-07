@@ -1,4 +1,5 @@
 import { StyleSheet, ScrollView, TouchableOpacity, Alert, Modal, AccessibilityInfo } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Text, View } from '@/components/Themed';
 import { useGame } from '@/contexts/GameContext';
 import { useRouter } from 'expo-router';
@@ -152,6 +153,7 @@ export default function HomeScreen() {
         transparent={true}
         onRequestClose={() => setShowDeleteConfirmation(false)}
       >
+        <GestureHandlerRootView style={{flex: 1}}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Ionicons name="warning" size={48} color="#C04657" style={styles.warningIcon} />
@@ -177,6 +179,7 @@ export default function HomeScreen() {
             </View>
           </View>
         </View>
+        </GestureHandlerRootView>
       </Modal>
     </View>
   );

@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Modal, AccessibilityInfo } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { Text, View } from '@/components/Themed';
 import { useGame } from '@/contexts/GameContext';
@@ -435,6 +436,7 @@ export default function ActiveGameScreen() {
         transparent={true}
         onRequestClose={() => setShowAddPlayer(false)}
       >
+        <GestureHandlerRootView style={{flex: 1}}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Add Player</Text>
@@ -475,6 +477,7 @@ export default function ActiveGameScreen() {
             </View>
           </View>
         </View>
+        </GestureHandlerRootView>
       </Modal>
 
       {/* Add Transaction Modal */}
@@ -484,6 +487,7 @@ export default function ActiveGameScreen() {
         transparent={true}
         onRequestClose={() => setShowAddTransaction(false)}
       >
+        <GestureHandlerRootView style={{flex: 1}}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>
@@ -516,6 +520,7 @@ export default function ActiveGameScreen() {
             </View>
           </View>
         </View>
+        </GestureHandlerRootView>
       </Modal>
 
       {/* Rename Player Modal */}
@@ -529,6 +534,7 @@ export default function ActiveGameScreen() {
           setRenamedPlayerName('');
         }}
       >
+        <GestureHandlerRootView style={{flex: 1}}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Rename Player</Text>
@@ -560,6 +566,7 @@ export default function ActiveGameScreen() {
             </View>
           </View>
         </View>
+        </GestureHandlerRootView>
       </Modal>
 
       {/* Delete Player Confirmation Modal */}
@@ -569,6 +576,7 @@ export default function ActiveGameScreen() {
         transparent={true}
         onRequestClose={() => setShowDeleteConfirmation(false)}
       >
+        <GestureHandlerRootView style={{flex: 1}}>
         <View style={styles.modalOverlay}>
           <View style={styles.modalContent}>
             <Ionicons name="warning" size={48} color="#C04657" style={styles.warningIcon} />
@@ -593,6 +601,7 @@ export default function ActiveGameScreen() {
             </View>
           </View>
         </View>
+        </GestureHandlerRootView>
       </Modal>
 
     </View>
