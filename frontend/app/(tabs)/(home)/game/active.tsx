@@ -6,7 +6,7 @@ import { Text, View } from '@/components/Themed';
 import { useGame } from '@/contexts/GameContext';
 import { useRouter } from 'expo-router';
 import { GameService } from '@/services/gameService';
-import { Player, PlayerBalance } from '@/types/game';
+import { Player, PlayerBalance, Validation } from '@/types/game';
 import { getNetBalanceColor, formatNetBalanceDisplay } from '@/utils/formatUtils';
 import PlayerCardActive from '@/components/PlayerCardActive';
 import PlayerCardCompleted from '@/components/PlayerCardCompleted';
@@ -46,6 +46,28 @@ export default function ActiveGameScreen() {
   const { activeGame, updateGame, setActiveGame, createGame } = useGame();
   const router = useRouter();
 
+  // Helper function to highlight critical values in error/warning messages
+  const highlightCriticalValues = (message: string): React.ReactNode => {
+    // Pattern matches: $XX.XX, player names (if any), numeric values
+    const parts = message.split(/(\$[\d,]+\.?\d*|\d+\.\d+)/);
+
+    return (
+      <Text style={styles.completionModalErrorText}>
+        {parts.map((part, index) => {
+          // Check if part matches currency or decimal number pattern
+          if (/^\$[\d,]+\.?\d*$/.test(part) || /^\d+\.\d+$/.test(part)) {
+            return (
+              <Text key={index} style={styles.criticalValue}>
+                {part}
+              </Text>
+            );
+          }
+          return part;
+        })}
+      </Text>
+    );
+  };
+
   const [showAddPlayer, setShowAddPlayer] = useState(false);
   const [showAddTransaction, setShowAddTransaction] = useState(false);
   const [newPlayerName, setNewPlayerName] = useState('');
@@ -60,6 +82,11 @@ export default function ActiveGameScreen() {
   const [reduceMotionEnabled, setReduceMotionEnabled] = useState(false);
   const [showRenameModal, setShowRenameModal] = useState(false);
   const [renamedPlayerName, setRenamedPlayerName] = useState('');
+
+  // Game completion modal state
+  const [showCompletionModal, setShowCompletionModal] = useState(false);
+  const [completionModalMode, setCompletionModalMode] = useState<'error' | 'warning' | 'confirm'>('confirm');
+  const [validationResult, setValidationResult] = useState<Validation | null>(null);
 
   useEffect(() => {
     AccessibilityInfo.isReduceMotionEnabled().then(enabled => {
@@ -186,60 +213,30 @@ export default function ActiveGameScreen() {
     const balances = GameService.calculateBalances(activeGame);
     const validation = GameService.validateGame(balances);
 
+    setValidationResult(validation);
+
+    // Determine modal mode based on validation
     if (!validation.isValid) {
-      Alert.alert(
-        'Cannot Complete Game',
-        `Please fix the following issues:\n\n${validation.errors.join('\n\n')}`,
-        [{ text: 'OK' }]
-      );
-      return;
+      setCompletionModalMode('error');
+    } else if (validation.warnings.length > 0) {
+      setCompletionModalMode('warning');
+    } else {
+      setCompletionModalMode('confirm');
     }
 
-    if (validation.warnings.length > 0) {
-      Alert.alert(
-        'Warning',
-        `The following issues were detected:\n\n${validation.warnings.join('\n\n')}\n\nDo you want to complete the game anyway?`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Complete Anyway',
-            style: 'destructive',
-            onPress: async () => {
-              try {
-                GameService.completeGame(activeGame);
-                await updateGame(activeGame);
-                router.push('/game/summary' as any);
-              } catch (error) {
-                Alert.alert('Error', 'Failed to complete game. Please try again.');
-                console.error('Error completing game:', error);
-              }
-            }
-          }
-        ]
-      );
-      return;
-    }
+    setShowCompletionModal(true);
+  };
 
-    Alert.alert(
-      'Complete Game',
-      'Are you sure you want to complete this game? You can view settlements afterward.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Complete',
-          onPress: async () => {
-            try {
-              GameService.completeGame(activeGame);
-              await updateGame(activeGame);
-              router.push('/game/summary' as any);
-            } catch (error) {
-              Alert.alert('Error', 'Failed to complete game. Please try again.');
-              console.error('Error completing game:', error);
-            }
-          }
-        }
-      ]
-    );
+  const handleConfirmCompletion = async () => {
+    try {
+      GameService.completeGame(activeGame);
+      await updateGame(activeGame);
+      setShowCompletionModal(false);
+      router.push('/game/summary' as any);
+    } catch (error) {
+      Alert.alert('Error', 'Failed to complete game. Please try again.');
+      console.error('Error completing game:', error);
+    }
   };
 
   const handleTitlePress = () => {
@@ -604,6 +601,93 @@ export default function ActiveGameScreen() {
         </GestureHandlerRootView>
       </Modal>
 
+      {/* Game Completion Modal */}
+      <Modal
+        visible={showCompletionModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowCompletionModal(false)}
+      >
+        <GestureHandlerRootView style={{flex: 1}}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              {/* Dynamic Icon */}
+              {completionModalMode === 'error' && (
+                <Ionicons name="alert-circle" size={48} color="#C04657" style={styles.completionModalIcon} />
+              )}
+              {completionModalMode === 'warning' && (
+                <Ionicons name="warning" size={48} color="#C04657" style={styles.completionModalIcon} />
+              )}
+              {completionModalMode === 'confirm' && (
+                <Ionicons name="checkmark-circle" size={48} color="#00D66F" style={styles.completionModalIcon} />
+              )}
+
+              {/* Dynamic Title */}
+              <Text style={styles.modalTitle}>
+                {completionModalMode === 'error' ? 'Cannot Complete Game' :
+                completionModalMode === 'warning' ? 'Warning' :
+                'Complete Game'}
+              </Text>
+
+              {/* Dynamic Content */}
+              {completionModalMode === 'error' && validationResult && (
+                <>
+                  {validationResult.errors.map((error, index) => (
+                    <View key={index} style={{ backgroundColor: 'transparent' }}>
+                      {highlightCriticalValues(error)}
+                      {index < validationResult.errors.length - 1 && <View style={{ height: 22, backgroundColor: 'transparent' }} />}
+                    </View>
+                  ))}
+                </>
+              )}
+
+              {completionModalMode === 'warning' && validationResult && (
+                <>
+                  {validationResult.warnings.map((warning, index) => (
+                    <View key={index} style={{ backgroundColor: 'transparent' }}>
+                      {highlightCriticalValues(warning)}
+                      {index < validationResult.warnings.length - 1 && <View style={{ height: 12, backgroundColor: 'transparent' }} />}
+                    </View>
+                  ))}
+                  <Text style={styles.completionModalSubtext}>
+                    Do you want to complete the game anyway?
+                  </Text>
+                </>
+              )}
+
+              {completionModalMode === 'confirm' && (
+                <Text style={styles.completionModalConfirmText}>
+                  Are you sure you want to complete this game? You can view settlements afterward.
+                </Text>
+              )}
+
+              {/* Dynamic Buttons */}
+              {completionModalMode === 'error' ? (
+                <ModalButton
+                  variant="cancel"
+                  title="OK"
+                  onPress={() => setShowCompletionModal(false)}
+                  fullWidth
+                />
+              ) : (
+                <View style={styles.modalButtons}>
+                  <ModalButton
+                    variant="cancel"
+                    title="Cancel"
+                    onPress={() => setShowCompletionModal(false)}
+                  />
+                  <ModalButton
+                    variant={completionModalMode === 'warning' ? 'destructive' : 'success'}
+                    title={completionModalMode === 'warning' ? 'Complete Anyway' : 'Complete'}
+                    onPress={handleConfirmCompletion}
+                  />
+                </View>
+              )}
+            </View>
+          </View>
+        </GestureHandlerRootView>
+      </Modal>
+
     </View>
   );
 }
@@ -860,5 +944,42 @@ const styles = StyleSheet.create({
     lineHeight: 22,
     marginBottom: 24,
     opacity: 0.8,
+  },
+  completionModalIcon: {
+    marginBottom: 16,
+  },
+  completionModalErrorText: {
+    fontSize: 15,
+    color: 'rgba(255, 255, 255, 0.6)',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  completionModalWarningText: {
+    fontSize: 15,
+    color: 'rgba(255, 255, 255, 0.6)',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 12,
+  },
+  criticalValue: {
+    color: '#C04657',
+    fontWeight: 'bold',
+  },
+  completionModalConfirmText: {
+    fontSize: 15,
+    color: '#FFFFFF',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 24,
+    opacity: 0.8,
+  },
+  completionModalSubtext: {
+    fontSize: 14,
+    color: '#FFFFFF',
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 24,
+    opacity: 0.6,
   },
 });
