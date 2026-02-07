@@ -1,6 +1,7 @@
-import React, { useState, useCallback, useEffect } from 'react';
-import { StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Modal, AccessibilityInfo } from 'react-native';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
+import { StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Modal, AccessibilityInfo, Animated } from 'react-native';
+import { GestureHandlerRootView, Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { runOnJS } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { Text, View } from '@/components/Themed';
 import { useGame } from '@/contexts/GameContext';
@@ -14,6 +15,74 @@ import Button from '@/components/Button';
 import ModalButton from '@/components/ModalButton';
 
 function HudSectionHeader({ label, onAction, actionIcon }: { label: string; onAction?: () => void; actionIcon?: string }) {
+  const scaleAnim = useRef(new Animated.Value(1)).current;
+  const [reduceMotion, setReduceMotion] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    let subscription: any;
+
+    AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
+      if (isMounted) {
+        setReduceMotion(enabled);
+      }
+    });
+
+    subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', (enabled) => {
+      setReduceMotion(enabled);
+    });
+
+    return () => {
+      isMounted = false;
+      subscription?.remove();
+    };
+  }, []);
+
+  const animateScaleDown = useCallback((scaleValue: number = 0.945) => {
+    if (!reduceMotion) {
+      Animated.spring(scaleAnim, {
+        toValue: scaleValue,
+        tension: 300,
+        friction: 20,
+        useNativeDriver: true
+      }).start();
+    }
+  }, [reduceMotion, scaleAnim]);
+
+  const animateScaleUp = useCallback((velocity: number = 0) => {
+    if (!reduceMotion) {
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        tension: 200,
+        friction: 15,
+        velocity,
+        useNativeDriver: true
+      }).start();
+    }
+  }, [reduceMotion, scaleAnim]);
+
+  const handleTapSuccess = useCallback(() => {
+    if (onAction) {
+      onAction();
+    }
+  }, [onAction]);
+
+  const tapGesture = Gesture.Tap()
+    .maxDuration(200)
+    .maxDistance(10)
+    .enabled(!!onAction)
+    .onBegin(() => {
+      runOnJS(animateScaleDown)(0.9);
+    })
+    .onFinalize((_, success) => {
+      if (success) {
+        runOnJS(handleTapSuccess)();
+        runOnJS(animateScaleUp)(-0.5);
+      } else {
+        runOnJS(animateScaleUp)(0);
+      }
+    });
+
   return (
     <View style={styles.hudHeader}>
       <View style={styles.hudLines}>
@@ -21,11 +90,24 @@ function HudSectionHeader({ label, onAction, actionIcon }: { label: string; onAc
       </View>
       <Text style={styles.hudLabel}>{label}</Text>
       {onAction && actionIcon && (
-        <View style={styles.hudIconSlot}>
-          <TouchableOpacity onPress={onAction} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <Ionicons name={actionIcon as any} size={22} color="rgba(176,114,187,0.7)" />
-          </TouchableOpacity>
-        </View>
+        <GestureDetector gesture={tapGesture}>
+          <Animated.View
+            style={[
+              styles.hudIconSlot,
+              !reduceMotion && { transform: [{ scale: scaleAnim }] }
+            ]}
+            accessible={true}
+            accessibilityRole="button"
+            accessibilityLabel="Add player"
+            accessibilityHint="Opens the add player dialog"
+          >
+            <Ionicons
+              name={actionIcon as any}
+              size={22}
+              color="rgba(176,114,187,0.7)"
+            />
+          </Animated.View>
+        </GestureDetector>
       )}
     </View>
   );
