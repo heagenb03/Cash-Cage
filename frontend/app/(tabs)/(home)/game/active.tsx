@@ -9,6 +9,7 @@ import { useRouter } from 'expo-router';
 import { GameService } from '@/services/gameService';
 import { Player, PlayerBalance, Validation } from '@/types/game';
 import { getNetBalanceColor, formatNetBalanceDisplay } from '@/utils/formatUtils';
+import { isValidNumericInput } from '@/utils/validationUtils';
 import PlayerCardActive from '@/components/PlayerCardActive';
 import PlayerCardCompleted from '@/components/PlayerCardCompleted';
 import Button from '@/components/Button';
@@ -251,6 +252,12 @@ export default function ActiveGameScreen() {
       return;
     }
 
+    // Validate format before parsing (if buy-in provided)
+    if (newPlayerBuyIn.trim() && !isValidNumericInput(newPlayerBuyIn)) {
+      Alert.alert('Error', 'Please enter a valid numeric amount (digits and decimal point only) or leave it empty');
+      return;
+    }
+
     const buyInAmount = parseFloat(newPlayerBuyIn);
     if (newPlayerBuyIn.trim() && (isNaN(buyInAmount) || buyInAmount < 0)) {
       Alert.alert('Error', 'Please enter a valid buy-in amount or leave it empty');
@@ -272,6 +279,12 @@ export default function ActiveGameScreen() {
 
   const handleAddTransaction = async () => {
     if (!selectedPlayer) return;
+
+    // Validate format before parsing
+    if (!isValidNumericInput(transactionAmount)) {
+      Alert.alert('Error', 'Please enter a valid numeric amount (digits and decimal point only)');
+      return;
+    }
 
     const amount = parseFloat(transactionAmount);
     if (isNaN(amount) || amount < 0) {
@@ -301,10 +314,7 @@ export default function ActiveGameScreen() {
         Alert.alert('Error', 'Player must have a buy-in before cashing out');
         return;
       }
-      if (amount > currentBuyin) {
-        Alert.alert('Error', `Cash out cannot exceed buy-in of $${currentBuyin.toFixed(2)}`);
-        return;
-      }
+      // No upper limit constraint - players can cash out more than their buy-in when they win
     }
 
     if (amount === currentTotal) {
