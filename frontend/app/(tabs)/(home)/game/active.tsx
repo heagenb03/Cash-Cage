@@ -202,6 +202,16 @@ export default function ActiveGameScreen() {
 
   const openTransactionModal = useCallback((player: Player, type: 'buyin' | 'cashout') => {
     const balance = getPlayerBalance(player.id);
+
+    // Block cashout if player has no buy-in
+    if (type === 'cashout') {
+      const currentBuyin = balance?.totalBuyins ?? 0;
+      if (currentBuyin <= 0) {
+        Alert.alert('Error', 'Player must have a buy-in before cashing out');
+        return;
+      }
+    }
+
     const currentTotal = type === 'buyin'
       ? balance?.totalBuyins ?? 0
       : balance?.totalCashouts ?? 0;
@@ -276,6 +286,26 @@ export default function ActiveGameScreen() {
     const currentTotal = transactionType === 'buyin'
       ? playerBalance?.totalBuyins ?? 0
       : playerBalance?.totalCashouts ?? 0;
+
+    if (transactionType === 'buyin') {
+      const currentCashout = playerBalance?.totalCashouts ?? 0;
+      if (currentCashout > 0 && amount < currentCashout) {
+        Alert.alert('Error', `Buy-in cannot be less than cash out of $${currentCashout.toFixed(2)}`);
+        return;
+      }
+    }
+
+    if (transactionType === 'cashout') {
+      const currentBuyin = playerBalance?.totalBuyins ?? 0;
+      if (currentBuyin <= 0) {
+        Alert.alert('Error', 'Player must have a buy-in before cashing out');
+        return;
+      }
+      if (amount > currentBuyin) {
+        Alert.alert('Error', `Cash out cannot exceed buy-in of $${currentBuyin.toFixed(2)}`);
+        return;
+      }
+    }
 
     if (amount === currentTotal) {
       setTransactionAmount('');
