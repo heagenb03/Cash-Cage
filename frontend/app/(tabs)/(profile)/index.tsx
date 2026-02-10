@@ -15,7 +15,7 @@ export default function AccountScreen() {
             label="Account"
             centered={true}
             showSettingsIcon={true}
-            onSettingsPress={() => router.push('/(tabs)/(account)/settings' as any)}
+            onSettingsPress={() => router.push('/(tabs)/(profile)/settings' as any)}
           />
 
           <View style={styles.placeholderCard}>

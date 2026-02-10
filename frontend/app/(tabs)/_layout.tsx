@@ -10,6 +10,10 @@ import { runOnJS } from 'react-native-reanimated';
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 
+export const unstable_settings = {
+  initialRouteName: '(home)',
+};
+
 function TabBarIcon(props: {
   name: React.ComponentProps<typeof FontAwesome>['name'];
   color: string;
@@ -183,7 +187,7 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="(account)"
+        name="(profile)"
         options={{
           tabBarLabel: 'Account',
           tabBarIcon: ({ color }) => <TabBarIcon name="user" color={color} />,

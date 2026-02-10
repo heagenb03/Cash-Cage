@@ -19,7 +19,7 @@ export default function SettingsScreen() {
   };
 
   const handleAboutPress = () => {
-    router.push('/(tabs)/(account)/about' as any);
+    router.push('/(tabs)/(profile)/about' as any);
   };
 
   return (
