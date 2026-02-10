@@ -97,10 +97,10 @@ function DynamicDealrHeader() {
           {(isGameScreen || isSettingsScreen || isAboutScreen) && (
             <TouchableOpacity
               onPress={() => {
-                if (isAboutScreen) {
-                  router.back();
-                } else {
+                if (isGameScreen) {
                   router.push('/');
+                } else {
+                  router.back();
                 }
               }}
               style={{
