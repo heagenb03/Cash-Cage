@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Modal, AccessibilityInfo, Animated } from 'react-native';
+import { StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Modal, AccessibilityInfo, Animated, ActivityIndicator } from 'react-native';
 import { GestureHandlerRootView, Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
@@ -7,6 +7,7 @@ import { Text, View } from '@/components/Themed';
 import { useGame } from '@/contexts/GameContext';
 import { useRouter } from 'expo-router';
 import { GameService } from '@/services/gameService';
+import { getSettlements } from '@/services/settlementService';
 import { Player, PlayerBalance, Validation } from '@/types/game';
 import { getNetBalanceColor, formatNetBalanceDisplay } from '@/utils/formatUtils';
 import { isValidNumericInput } from '@/utils/validationUtils';
@@ -170,6 +171,7 @@ export default function ActiveGameScreen() {
   const [showCompletionModal, setShowCompletionModal] = useState(false);
   const [completionModalMode, setCompletionModalMode] = useState<'error' | 'warning' | 'confirm'>('confirm');
   const [validationResult, setValidationResult] = useState<Validation | null>(null);
+  const [showSolvingModal, setShowSolvingModal] = useState(false);
 
   useEffect(() => {
     AccessibilityInfo.isReduceMotionEnabled().then(enabled => {
@@ -354,8 +356,18 @@ export default function ActiveGameScreen() {
       GameService.completeGame(activeGame);
       await updateGame(activeGame);
       setShowCompletionModal(false);
+      setShowSolvingModal(true);
+
+      const balances = GameService.calculateBalances(activeGame);
+      const result = await getSettlements(balances);
+
+      GameService.cacheSettlements(activeGame, result);
+      await updateGame(activeGame);
+
+      setShowSolvingModal(false);
       router.push('/game/summary' as any);
     } catch (error) {
+      setShowSolvingModal(false);
       Alert.alert('Error', 'Failed to complete game. Please try again.');
       console.error('Error completing game:', error);
     }
@@ -777,7 +789,7 @@ export default function ActiveGameScreen() {
 
               {completionModalMode === 'confirm' && (
                 <Text style={styles.completionModalConfirmText}>
-                  Are you sure you want to complete this game? You can view settlements afterward.
+                  Are you sure you want to complete this game? This action cannot be undone.
                 </Text>
               )}
 
@@ -803,6 +815,30 @@ export default function ActiveGameScreen() {
                   />
                 </View>
               )}
+            </View>
+          </View>
+        </GestureHandlerRootView>
+      </Modal>
+
+      {/* Solving Modal */}
+      <Modal visible={showSolvingModal} animationType="fade" transparent onRequestClose={() => {}}>
+        <GestureHandlerRootView style={{flex: 1}}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              {/* Spinner */}
+              <ActivityIndicator size="large" color="#B072BB" style={{ marginBottom: 20 }} />
+
+              {/* Title */}
+              <Text style={styles.solvingTitle}>CALCULATING SETTLEMENTS</Text>
+
+              {/* Status Bar */}
+              <View style={styles.solvingStatusBar}>
+                <View style={styles.solvingStatusDot} />
+                <Text style={styles.solvingStatusText}>OPTIMIZING PAYMENT GRAPH</Text>
+              </View>
+
+              {/* Technical Subtext */}
+              <Text style={styles.solvingSubtext}>Running MILP solver for minimal transfer solution</Text>
             </View>
           </View>
         </GestureHandlerRootView>
@@ -1101,5 +1137,47 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginBottom: 24,
     opacity: 0.6,
+  },
+  solvingTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#B072BB',
+    textTransform: 'uppercase',
+    letterSpacing: 2.5,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  solvingStatusBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    marginBottom: 10,
+    backgroundColor: 'transparent',
+  },
+  solvingStatusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#00D66F',
+    shadowColor: '#00D66F',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  solvingStatusText: {
+    fontSize: 9,
+    fontWeight: 'bold',
+    color: 'rgba(176,114,187,0.7)',
+    textTransform: 'uppercase',
+    letterSpacing: 1.5,
+  },
+  solvingSubtext: {
+    fontSize: 11,
+    fontFamily: 'SpaceMono',
+    color: 'rgba(255,255,255,0.4)',
+    textAlign: 'center' as const,
+    letterSpacing: 0.5,
   },
 });
