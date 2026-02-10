@@ -29,7 +29,7 @@ export default function AboutScreen() {
 
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Started</Text>
-              <Text style={styles.infoValue}>October 2025</Text>
+              <Text style={styles.infoValue}>February 2026</Text>
             </View>
 
             <View style={styles.divider} />
@@ -59,35 +59,18 @@ export default function AboutScreen() {
 
           <View style={styles.contentCard}>
             <Text style={styles.bodyText}>
-              Dealr is a poker buyin and cashout tracking application designed to simplify
-              game management for casual poker nights and serious tournaments alike.
+              Dealr is a poker buy-in and cash-out tracking app designed to simplify managing home cash games. 
+              Built for the dealers who are in charge of hosting and settling the games, Dealr is designed to be simple but 
+              powerful.
             </Text>
             <Text style={styles.bodyText}>
-              Track player transactions, calculate optimal settlements, and maintain
-              complete transparency with minimal effort.
+              During the game, you can quickly add buy-ins and cash-outs for each player.
+              Once the game is over, you can settle the game, and Dealr will calculate who owes who with X amount. 
             </Text>
             <Text style={styles.bodyText}>
-              Built with a focus on speed, accuracy, and a clean user experience that
-              stays out of your way.
-            </Text>
-          </View>
-        </View>
-
-        {/* History Section */}
-        <View style={styles.section}>
-          <HudSectionHeader label="History" centered={true} />
-
-          <View style={styles.contentCard}>
-            <Text style={styles.bodyText}>
-              The idea for Dealr was born out of the frustration of managing cash games with pen, paper, and mental math. 
-              After a particularly chaotic poker night in early 2025, Heagen decided there had to be a better way.
-            </Text>
-            <Text style={styles.bodyText}>
-              Development began in mid-2025 with a focus on creating a tool that was both powerful and intuitive. 
-              Early versions were tested with local poker groups, leading to continuous improvements based on real user feedback.
-            </Text>
-            <Text style={styles.bodyText}>
-              Dealr officially launched in October 2025 and has been steadily growing its user base among poker enthusiasts who value precision and ease of use.
+              This is a student-built app by Heagen Bell, a computer science student at the University of Kansas and the dealer for home games,
+              who wanted a better way to manage cash games. Please reach out with any questions, feedback, or if you want to get involved 
+              as the project is open-source. 
             </Text>
           </View>
         </View>
