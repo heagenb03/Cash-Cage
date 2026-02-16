@@ -8,6 +8,8 @@ import { useState, useCallback, useEffect } from 'react';
 import GameCard from '@/components/GameCard';
 import Button from '@/components/Button';
 import ModalButton from '@/components/ModalButton';
+import PaywallModal from '@/components/PaywallModal';
+import { useAuth } from '@/contexts/AuthContext';
 
 function HudSectionHeader({ label }: { label: string }) {
   return (
@@ -30,16 +32,24 @@ function EmptyState({ label }: { label: string }) {
   );
 }
 
+const FREE_HISTORY_LIMIT = 10;
+
 export default function HomeScreen() {
   const { games, setActiveGame, deleteGame, createGame } = useGame();
+  const { isPro } = useAuth();
   const router = useRouter();
 
   const [gameToDelete, setGameToDelete] = useState<{ id: string; name: string } | null>(null);
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const [reduceMotionEnabled, setReduceMotionEnabled] = useState(false);
+  const [showPaywall, setShowPaywall] = useState(false);
 
   const activeGames = games.filter(g => g.status === 'active');
   const completedGames = games.filter(g => g.status === 'completed');
+
+  // Free users see only their most recent 10 completed games
+  const visibleCompletedGames = isPro ? completedGames : completedGames.slice(0, FREE_HISTORY_LIMIT);
+  const hiddenGameCount = isPro ? 0 : Math.max(0, completedGames.length - FREE_HISTORY_LIMIT);
 
   useEffect(() => {
     AccessibilityInfo.isReduceMotionEnabled().then(enabled => {
@@ -127,10 +137,25 @@ export default function HomeScreen() {
         {/* Completed Games Section */}
         <View style={styles.section}>
           <HudSectionHeader label="History" />
-          {completedGames.length === 0 ? (
+          {visibleCompletedGames.length === 0 ? (
             <EmptyState label="History" />
           ) : (
-            renderCards(completedGames, true, activeGames.length)
+            renderCards(visibleCompletedGames, true, activeGames.length)
+          )}
+
+          {/* Upgrade card — shown to free users when history is capped */}
+          {hiddenGameCount > 0 && (
+            <TouchableOpacity
+              style={styles.upgradeHistoryCard}
+              onPress={() => setShowPaywall(true)}
+              activeOpacity={0.8}
+            >
+              <Ionicons name="star" size={16} color="#B072BB" style={styles.upgradeHistoryIcon} />
+              <Text style={styles.upgradeHistoryText}>
+                {hiddenGameCount} older {hiddenGameCount === 1 ? 'game' : 'games'} hidden — upgrade to Pro to see your full history
+              </Text>
+              <Ionicons name="chevron-forward" size={16} color="#B072BB" />
+            </TouchableOpacity>
           )}
         </View>
       </ScrollView>
@@ -145,6 +170,13 @@ export default function HomeScreen() {
           accessibilityHint="Creates a new poker game session"
         />
       </View>
+
+      {/* Paywall Modal */}
+      <PaywallModal
+        visible={showPaywall}
+        onClose={() => setShowPaywall(false)}
+        triggerMessage="Upgrade to Pro to see your full game history."
+      />
 
       {/* Delete Confirmation Modal */}
       <Modal
@@ -293,5 +325,27 @@ const styles = StyleSheet.create({
     gap: 12,
     width: '100%',
     backgroundColor: 'transparent',
+  },
+
+  // Upgrade history card (shown below capped history for free users)
+  upgradeHistoryCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#1A1A1A',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(176,114,187,0.3)',
+    padding: 14,
+    marginTop: 8,
+    gap: 10,
+  },
+  upgradeHistoryIcon: {
+    flexShrink: 0,
+  },
+  upgradeHistoryText: {
+    flex: 1,
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.7)',
+    lineHeight: 18,
   },
 });
