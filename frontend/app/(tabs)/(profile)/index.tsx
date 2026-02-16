@@ -186,7 +186,7 @@ export default function AccountScreen() {
             <View style={styles.upgradeCard}>
               <View style={styles.upgradeHeader}>
                 <Ionicons name="star" size={20} color="#B072BB" style={styles.upgradeIcon} />
-                <Text style={styles.upgradeTitle}>DEALR PRO</Text>
+                <Text style={styles.upgradeTitle}>CASHCAGE PRO</Text>
               </View>
               <Text style={styles.upgradeFeatures}>
                 Unlimited game history · Unlimited players · All devices
@@ -196,7 +196,7 @@ export default function AccountScreen() {
                 variant="primary"
                 fullWidth={true}
                 onPress={() => setShowPaywall(true)}
-                accessibilityLabel="Upgrade to Dealr Pro"
+                accessibilityLabel="Upgrade to CashCage Pro"
                 accessibilityHint="Opens the subscription paywall"
               />
             </View>

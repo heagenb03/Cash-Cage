@@ -21,8 +21,8 @@ export const PRO_ENTITLEMENT_ID = 'pro';
 
 // Product identifiers (must match App Store Connect / Google Play Console)
 export const PRODUCT_IDS = {
-  monthly: 'dealr_pro_monthly',
-  annual: 'dealr_pro_annual',
+  monthly: 'cashcage_pro_monthly',
+  annual: 'cashcage_pro_annual',
 } as const;
 
 // ---------------------------------------------------------------------------

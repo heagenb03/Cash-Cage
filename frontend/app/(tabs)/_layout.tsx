@@ -21,7 +21,7 @@ function TabBarIcon(props: {
   return <FontAwesome size={28} style={{ marginBottom: -3 }} {...props} />;
 }
 
-function DynamicDealrHeader() {
+function DynamicCashCageHeader() {
   const pathname = usePathname();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -117,7 +117,7 @@ function DynamicDealrHeader() {
           )}
         </View>
 
-        {/* Center column: DEALR logo (flex) */}
+        {/* Center column: CASHCAGE logo (flex) */}
         <View style={{
           flex: 1,
           alignItems: 'center',
@@ -131,7 +131,7 @@ function DynamicDealrHeader() {
               color: '#FFFFFF',
             }}
           >
-            DEALR
+            CASHCAGE
           </Text>
           <View
             style={{
@@ -177,7 +177,7 @@ export default function TabLayout() {
         headerStyle: {
           backgroundColor: '#0A0A0A',
         },
-        header: () => <DynamicDealrHeader />,
+        header: () => <DynamicCashCageHeader />,
       }}>
       <Tabs.Screen
         name="(home)"

@@ -7,7 +7,7 @@
 #include <random>
 #include "../models/types.hpp"
 
-namespace dealr {
+namespace cashcage {
 
 inline std::string generateUUID() {
     static std::random_device rd;

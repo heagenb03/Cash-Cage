@@ -5,7 +5,6 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
-  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -163,7 +162,7 @@ export default function PaywallModal({ visible, onClose, triggerMessage }: Paywa
               {/* Header */}
               <View style={styles.headerRow}>
                 <Ionicons name="star" size={24} color="#B072BB" style={styles.starIcon} />
-                <Text style={styles.title}>DEALR PRO</Text>
+                <Text style={styles.title}>CASHCAGE PRO</Text>
               </View>
 
               {triggerMessage && (
@@ -249,16 +248,6 @@ export default function PaywallModal({ visible, onClose, triggerMessage }: Paywa
                 )}
               </TouchableOpacity>
 
-              {/* Legal */}
-              <View style={styles.legalRow}>
-                <TouchableOpacity onPress={() => Linking.openURL('https://dealr.app/terms').catch(() => {})}>
-                  <Text style={styles.legalLink}>Terms of Service</Text>
-                </TouchableOpacity>
-                <Text style={styles.legalSep}> · </Text>
-                <TouchableOpacity onPress={() => Linking.openURL('https://dealr.app/privacy').catch(() => {})}>
-                  <Text style={styles.legalLink}>Privacy Policy</Text>
-                </TouchableOpacity>
-              </View>
             </ScrollView>
           </View>
         </View>

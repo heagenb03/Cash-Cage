@@ -284,8 +284,8 @@ export default function SettingsScreen() {
   }, [reauthPassword, email, handleDeleteAccount]);
 
   const handleHelpPress = useCallback(() => {
-    const supportEmail = 'support@dealr.app';
-    const subject = 'Dealr Support Request';
+    const supportEmail = 'support@cashcage.app';
+    const subject = 'CashCage Support Request';
     const mailto = `mailto:${supportEmail}?subject=${encodeURIComponent(subject)}`;
     Linking.openURL(mailto).catch((err) => {
       console.error('Failed to open email client:', err);

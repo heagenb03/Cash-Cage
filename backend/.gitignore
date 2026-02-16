@@ -7,7 +7,7 @@ cmake-build-*/
 *.exe
 *.out
 *.app
-dealr-backend
+cashcage-backend
 
 # CMake files
 CMakeCache.txt

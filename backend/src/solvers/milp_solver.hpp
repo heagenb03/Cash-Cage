@@ -5,7 +5,7 @@
 #include <string>
 #include "../models/types.hpp"
 
-namespace dealr {
+namespace cashcage {
 
 struct MILPResult {
     std::vector<Settlement> settlements;

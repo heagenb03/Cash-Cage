@@ -41,7 +41,7 @@ COPY . .
 RUN mkdir -p build && cd build \
     && cmake -DCMAKE_BUILD_TYPE=Release \
         -DCMAKE_PREFIX_PATH="/opt/or-tools;/opt/aws-lambda-runtime" .. \
-    && make dealr-lambda -j$(nproc)
+    && make cashcage-lambda -j$(nproc)
 
 # Runtime stage
 FROM ubuntu:22.04
@@ -54,7 +54,7 @@ RUN apt-get update && apt-get install -y \
     libcurl4 \
     && rm -rf /var/lib/apt/lists/*
 
-COPY --from=builder /app/build/dealr-lambda /var/task/bootstrap
+COPY --from=builder /app/build/cashcage-lambda /var/task/bootstrap
 COPY --from=builder /opt/or-tools/lib /usr/local/lib/ortools/
 COPY --from=builder /opt/aws-lambda-runtime/lib /usr/local/lib/aws-lambda/
 

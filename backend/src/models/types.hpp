@@ -4,7 +4,7 @@
 #include <vector>
 #include <optional>
 
-namespace dealr {
+namespace cashcage {
 
 struct PlayerBalance {
     std::string playerId;

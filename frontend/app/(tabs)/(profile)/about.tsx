@@ -5,7 +5,7 @@ import HudSectionHeader from '@/components/HudSectionHeader';
 
 export default function AboutScreen() {
   const handleEmailPress = () => {
-    const email = 'dealrpokerapp@gmail.com';
+    const email = 'cashcageapp@gmail.com';
     const mailto = `mailto:${email}`;
     Linking.openURL(mailto).catch(err => {
       console.error('Failed to open email client:', err);
@@ -37,7 +37,7 @@ export default function AboutScreen() {
             <View style={styles.infoRow}>
               <Text style={styles.infoLabel}>Contact</Text>
               <Text style={styles.infoValueLink} onPress={handleEmailPress}>
-                dealrpokerapp@gmail.com
+                cashcageapp@gmail.com
               </Text>
             </View>
 
@@ -59,13 +59,13 @@ export default function AboutScreen() {
 
           <View style={styles.contentCard}>
             <Text style={styles.bodyText}>
-              Dealr is a poker buy-in and cash-out tracking app designed to simplify managing home cash games. 
-              Built for the dealers who are in charge of hosting and settling the games, Dealr is designed to be simple but 
+              CashCage is a poker buy-in and cash-out tracking app designed to simplify managing home cash games. 
+              Built for the dealers who are in charge of hosting and settling the games, CashCage is designed to be simple but 
               powerful.
             </Text>
             <Text style={styles.bodyText}>
               During the game, you can quickly add buy-ins and cash-outs for each player.
-              Once the game is over, you can settle the game, and Dealr will calculate who owes who with X amount. 
+              Once the game is over, you can settle the game, and CashCage will calculate who owes who with X amount. 
             </Text>
             <Text style={styles.bodyText}>
               This is a student-built app by Heagen Bell, a computer science student at the University of Kansas and the dealer for home games,
@@ -77,7 +77,7 @@ export default function AboutScreen() {
 
         {/* App Info Footer */}
         <View style={styles.footer}>
-          <Text style={styles.footerText}>Dealr v1.0.0</Text>
+          <Text style={styles.footerText}>CashCage v1.0.0</Text>
         </View>
       </ScrollView>
     </View>

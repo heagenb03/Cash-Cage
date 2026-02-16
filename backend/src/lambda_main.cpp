@@ -10,8 +10,8 @@ std::string base64_decode(const std::string& encoded) {
     return encoded;
 }
 
-dealr::HttpRequest parseLambdaEvent(const std::string& payload) {
-    dealr::HttpRequest request;
+cashcage::HttpRequest parseLambdaEvent(const std::string& payload) {
+    cashcage::HttpRequest request;
 
     try {
         auto event = nlohmann::json::parse(payload);
@@ -64,7 +64,7 @@ dealr::HttpRequest parseLambdaEvent(const std::string& payload) {
     return request;
 }
 
-invocation_response createLambdaResponse(const dealr::HttpResponse& response) {
+invocation_response createLambdaResponse(const cashcage::HttpResponse& response) {
     nlohmann::json lambdaResponse;
 
     lambdaResponse["statusCode"] = response.statusCode;
@@ -89,12 +89,12 @@ invocation_response handler(invocation_request const& request) {
     try {
         std::cout << "[Lambda] Received event" << std::endl;
 
-        dealr::HttpRequest httpRequest = parseLambdaEvent(request.payload);
+        cashcage::HttpRequest httpRequest = parseLambdaEvent(request.payload);
 
         std::cout << "[Lambda] Method: " << httpRequest.method
                   << ", Path: " << httpRequest.path << std::endl;
 
-        dealr::HttpResponse httpResponse = dealr::handleRequest(httpRequest);
+        cashcage::HttpResponse httpResponse = cashcage::handleRequest(httpRequest);
 
         std::cout << "[Lambda] Response status: " << httpResponse.statusCode << std::endl;
 
@@ -124,7 +124,7 @@ invocation_response handler(invocation_request const& request) {
 }
 
 int main() {
-    std::cout << "[Lambda] Dealr Settlement Service starting..." << std::endl;
+    std::cout << "[Lambda] CashCage Settlement Service starting..." << std::endl;
     std::cout << "[Lambda] Waiting for invocations..." << std::endl;
 
     run_handler(handler);

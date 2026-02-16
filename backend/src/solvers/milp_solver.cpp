@@ -6,7 +6,7 @@
 #include <sstream>
 #include <iomanip>
 
-namespace dealr {
+namespace cashcage {
 
 // Helper function to adjust balances for small imbalances
 struct BalanceAdjustmentResult {

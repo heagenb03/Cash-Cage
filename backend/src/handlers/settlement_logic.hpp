@@ -7,7 +7,7 @@
 #include "../solvers/milp_solver.hpp"
 #include "../utils/json_helpers.hpp"
 
-namespace dealr {
+namespace cashcage {
 
 // Framework-agnostic HTTP structures
 struct HttpRequest {
@@ -47,7 +47,7 @@ inline HttpResponse handleOptionsRequest(const HttpRequest&) {
 inline HttpResponse handleHealthCheck(const HttpRequest&) {
     nlohmann::json response = {
         {"status", "ok"},
-        {"service", "dealr-backend"},
+        {"service", "cashcage-backend"},
         {"timestamp", currentISOTimestamp()}
     };
 
@@ -58,7 +58,7 @@ inline HttpResponse handleHealthCheck(const HttpRequest&) {
 
 inline HttpResponse handleRootEndpoint(const HttpRequest&) {
     nlohmann::json response = {
-        {"service", "Dealr Settlement Service"},
+        {"service", "CashCage Settlement Service"},
         {"version", "1.0.0"},
         {"endpoints", {
             {{"path", "/settlements/optimal"}, {"method", "POST"}},

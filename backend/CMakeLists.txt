@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(dealr-backend VERSION 1.0.0)
+project(cashcage-backend VERSION 1.0.0)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -43,25 +43,25 @@ set(CROW_SOURCES
     src/main.cpp
 )
 
-add_executable(dealr-backend ${CROW_SOURCES})
+add_executable(cashcage-backend ${CROW_SOURCES})
 
-target_include_directories(dealr-backend PRIVATE
+target_include_directories(cashcage-backend PRIVATE
     ${CMAKE_SOURCE_DIR}/src
 )
 
-target_link_libraries(dealr-backend PRIVATE
+target_link_libraries(cashcage-backend PRIVATE
     Crow::Crow
     nlohmann_json::nlohmann_json
     ortools::ortools
 )
 
 if(MSVC)
-    target_compile_options(dealr-backend PRIVATE /W4)
+    target_compile_options(cashcage-backend PRIVATE /W4)
 else()
-    target_compile_options(dealr-backend PRIVATE -Wall -Wextra -pedantic)
+    target_compile_options(cashcage-backend PRIVATE -Wall -Wextra -pedantic)
 endif()
 
-install(TARGETS dealr-backend DESTINATION bin)
+install(TARGETS cashcage-backend DESTINATION bin)
 
 # AWS Lambda
 set(LAMBDA_SOURCES
@@ -69,22 +69,22 @@ set(LAMBDA_SOURCES
     src/lambda_main.cpp
 )
 
-add_executable(dealr-lambda ${LAMBDA_SOURCES})
+add_executable(cashcage-lambda ${LAMBDA_SOURCES})
 
-target_include_directories(dealr-lambda PRIVATE
+target_include_directories(cashcage-lambda PRIVATE
     ${CMAKE_SOURCE_DIR}/src
 )
 
-target_link_libraries(dealr-lambda PRIVATE
+target_link_libraries(cashcage-lambda PRIVATE
     AWS::aws-lambda-runtime
     nlohmann_json::nlohmann_json
     ortools::ortools
 )
 
 if(MSVC)
-    target_compile_options(dealr-lambda PRIVATE /W4)
+    target_compile_options(cashcage-lambda PRIVATE /W4)
 else()
-    target_compile_options(dealr-lambda PRIVATE -Wall -Wextra -pedantic)
+    target_compile_options(cashcage-lambda PRIVATE -Wall -Wextra -pedantic)
 endif()
 
-install(TARGETS dealr-lambda DESTINATION bin)
+install(TARGETS cashcage-lambda DESTINATION bin)

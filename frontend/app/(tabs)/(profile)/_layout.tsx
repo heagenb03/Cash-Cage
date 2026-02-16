@@ -4,7 +4,7 @@ export default function AccountLayout() {
   return (
     <Stack
       screenOptions={{
-        headerShown: false,  // Use parent tab's DynamicDealrHeader
+        headerShown: false,  // Use parent tab's DynamicCashCageHeader
       }}
     >
       <Stack.Screen name="index" />

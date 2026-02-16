@@ -1,8 +1,8 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Game } from '@/types/game';
 
-const GAMES_KEY = '@dealr:games';
-const ACTIVE_GAME_ID_KEY = '@dealr:activeGameId';
+const GAMES_KEY = '@cashcage:games';
+const ACTIVE_GAME_ID_KEY = '@cashcage:activeGameId';
 
 export class StorageService {
   static async saveGames(games: Game[]): Promise<void> {

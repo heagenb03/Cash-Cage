@@ -6,7 +6,7 @@
 #include "../solvers/milp_solver.hpp"
 #include "../utils/json_helpers.hpp"
 
-namespace dealr {
+namespace cashcage {
 
 // Helper function to add CORS headers to responses
 inline void addCorsHeaders(crow::response& res) {
@@ -113,7 +113,7 @@ inline void setupRoutes(crow::SimpleApp& app) {
         ([](const crow::request&) {
             nlohmann::json response = {
                 {"status", "ok"},
-                {"service", "dealr-backend"},
+                {"service", "cashcage-backend"},
                 {"timestamp", currentISOTimestamp()}
             };
             auto res = crow::response(200, response.dump());
@@ -125,7 +125,7 @@ inline void setupRoutes(crow::SimpleApp& app) {
     CROW_ROUTE(app, "/")
         ([](const crow::request&) {
             nlohmann::json response = {
-                {"service", "Dealr Settlement Service"},
+                {"service", "CashCage Settlement Service"},
                 {"version", "1.0.0"},
                 {"endpoints", {
                     {{"path", "/settlements/optimal"}, {"method", "POST"}},
