@@ -1,0 +1,41 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /users/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+
+      // SECURITY: delete is intentionally blocked on the client.
+      // Account deletion is performed exclusively by the deleteUserData Cloud Function
+      // (Admin SDK), which bypasses rules. Blocking here prevents the delete-then-recreate
+      // tier elevation attack.
+      allow delete: if false;
+
+      // SECURITY: create enforces tier: "free" and blocks tierUpdatedAt at document birth.
+      // Without this, any authenticated user could call setDoc with tier: "pro" on first sign-up.
+      allow create: if request.auth != null
+                    && request.auth.uid == uid
+                    && request.resource.data.tier == "free"
+                    && !('tierUpdatedAt' in request.resource.data.keys());
+
+      // Clients cannot directly modify tier or tierUpdatedAt (Cloud Function is the only writer).
+      allow update: if request.auth != null
+                    && request.auth.uid == uid
+                    && !('tier' in request.resource.data.diff(resource.data).affectedKeys())
+                    && !('tierUpdatedAt' in request.resource.data.diff(resource.data).affectedKeys());
+
+      match /games/{gameId} {
+        allow read, delete: if request.auth != null && request.auth.uid == uid;
+        // SECURITY: Enforce structural constraints and data size limits.
+        // Prevents storage abuse and malformed data that could crash other devices.
+        allow create, update: if request.auth != null
+          && request.auth.uid == uid
+          && request.resource.data.keys().hasAll(['id', 'name', 'status'])
+          && request.resource.data.name is string
+          && request.resource.data.name.size() <= 100
+          && request.resource.data.status in ['active', 'completed']
+          && request.resource.data.players is list
+          && request.resource.data.players.size() <= 20;
+      }
+    }
+  }
+}
