@@ -15,6 +15,8 @@ import PlayerCardActive from '@/components/PlayerCardActive';
 import PlayerCardCompleted from '@/components/PlayerCardCompleted';
 import Button from '@/components/Button';
 import ModalButton from '@/components/ModalButton';
+import PaywallModal from '@/components/PaywallModal';
+import { useAuth } from '@/contexts/AuthContext';
 
 function HudSectionHeader({ label, onAction, actionIcon }: { label: string; onAction?: () => void; actionIcon?: string }) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
@@ -128,6 +130,7 @@ function EmptyState({ label, icon }: { label: string; icon: string }) {
 
 export default function ActiveGameScreen() {
   const { activeGame, updateGame, setActiveGame, createGame } = useGame();
+  const { isPro } = useAuth();
   const router = useRouter();
 
   // Helper function to highlight critical values in error/warning messages
@@ -166,6 +169,7 @@ export default function ActiveGameScreen() {
   const [reduceMotionEnabled, setReduceMotionEnabled] = useState(false);
   const [showRenameModal, setShowRenameModal] = useState(false);
   const [renamedPlayerName, setRenamedPlayerName] = useState('');
+  const [showPaywall, setShowPaywall] = useState(false);
 
   // Game completion modal state
   const [showCompletionModal, setShowCompletionModal] = useState(false);
@@ -497,7 +501,13 @@ export default function ActiveGameScreen() {
         <View style={styles.section}>
           <HudSectionHeader
             label="Players"
-            onAction={() => setShowAddPlayer(true)}
+            onAction={() => {
+              if (!isPro && activeGame.players.length >= 12) {
+                setShowPaywall(true);
+              } else {
+                setShowAddPlayer(true);
+              }
+            }}
             actionIcon="add-circle-outline"
           />
 
@@ -556,7 +566,7 @@ export default function ActiveGameScreen() {
             variant="primary"
             fullWidth
             accessibilityHint="Finalize game and calculate settlements"
-          />
+           />
         </View>
       )}
 
@@ -819,6 +829,13 @@ export default function ActiveGameScreen() {
           </View>
         </GestureHandlerRootView>
       </Modal>
+
+      {/* Paywall Modal — shown when free user tries to add an 11th player */}
+      <PaywallModal
+        visible={showPaywall}
+        onClose={() => setShowPaywall(false)}
+        triggerMessage="Upgrade to Pro for unlimited players per game."
+      />
 
       {/* Solving Modal */}
       <Modal visible={showSolvingModal} animationType="fade" transparent onRequestClose={() => {}}>
