@@ -1,49 +1,467 @@
-import { StyleSheet, ScrollView, TouchableOpacity, Linking } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import {
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+  Linking,
+  Modal,
+  TextInput,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Text, View } from '@/components/Themed';
 import HudSectionHeader from '@/components/HudSectionHeader';
+import ModalButton from '@/components/ModalButton';
+import PaywallModal from '@/components/PaywallModal';
+import {
+  updateDisplayName,
+  updateUserEmail,
+  updateUserPassword,
+  reauthenticateUser,
+  callDeleteUserData,
+} from '@/services/firebaseService';
+import { getCustomerManagementURL } from '@/services/revenueCatService';
+import { useAuth } from '@/contexts/AuthContext';
+
+// ---------------------------------------------------------------------------
+// Error message helper
+// ---------------------------------------------------------------------------
+
+function friendlyFirebaseError(err: any): string {
+  const code: string = err?.code ?? '';
+  switch (code) {
+    case 'auth/requires-recent-login':
+      return 'Please sign out and sign back in, then try again.';
+    case 'auth/wrong-password':
+    case 'auth/invalid-credential':
+      return 'Password is incorrect.';
+    case 'auth/email-already-in-use':
+      return 'That email address is already in use.';
+    case 'auth/invalid-email':
+      return 'Please enter a valid email address.';
+    case 'auth/weak-password':
+      return 'Password must be at least 8 characters.';
+    case 'auth/network-request-failed':
+      return 'Network error. Check your connection and try again.';
+    case 'auth/too-many-requests':
+      return 'Too many attempts. Please wait a moment and try again.';
+    case 'auth/user-not-found':
+    case 'auth/user-disabled':
+      return 'Account not found or disabled. Please contact support.';
+    default:
+      return 'Something went wrong. Please try again.';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Modal state types
+// ---------------------------------------------------------------------------
+
+type ActiveModal =
+  | 'none'
+  | 'editName'
+  | 'editEmail'
+  | 'changePassword'
+  | 'signOutConfirm'
+  | 'deleteAccountConfirm'
+  | 'deleteAccountReauth';
+
+// ---------------------------------------------------------------------------
+// Settings Screen
+// ---------------------------------------------------------------------------
 
 export default function SettingsScreen() {
   const router = useRouter();
+  const { user, userDoc, isPro, signOut, refreshUserDoc } = useAuth();
 
-  const handleHelpPress = () => {
-    // TODO: Replace with actual support email
-    const email = 'support@dealr.app';
+  // Derive auth provider
+  const isEmailProvider = user?.providerData?.[0]?.providerId === 'password';
+  const providerLabel =
+    user?.providerData?.[0]?.providerId === 'google.com'
+      ? '(Google)'
+      : user?.providerData?.[0]?.providerId === 'apple.com'
+      ? '(Apple)'
+      : null;
+
+  const displayName = userDoc?.displayName || user?.displayName || '';
+  const email = userDoc?.email || user?.email || '';
+
+  // ---------------------------------------------------------------------------
+  // Modal state
+  // ---------------------------------------------------------------------------
+
+  const [showPaywall, setShowPaywall] = useState(false);
+  const [activeModal, setActiveModal] = useState<ActiveModal>('none');
+  const [modalLoading, setModalLoading] = useState(false);
+  const [modalError, setModalError] = useState('');
+
+  // Edit name
+  const [nameInput, setNameInput] = useState('');
+
+  // Edit email
+  const [emailInput, setEmailInput] = useState('');
+
+  // Change password
+  const [currentPassword, setCurrentPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+
+  // Delete account confirm
+  const [deleteConfirmInput, setDeleteConfirmInput] = useState('');
+
+  // Delete account reauth
+  const [reauthPassword, setReauthPassword] = useState('');
+
+  const openModal = useCallback((modal: ActiveModal) => {
+    setModalError('');
+    setModalLoading(false);
+
+    // Pre-fill inputs
+    if (modal === 'editName') setNameInput(displayName);
+    if (modal === 'editEmail') setEmailInput(email);
+    if (modal === 'changePassword') {
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    }
+    if (modal === 'deleteAccountConfirm') setDeleteConfirmInput('');
+    if (modal === 'deleteAccountReauth') setReauthPassword('');
+
+    setActiveModal(modal);
+  }, [displayName, email]);
+
+  const closeModal = useCallback(() => {
+    setActiveModal('none');
+    setModalError('');
+    setModalLoading(false);
+    // Clear all sensitive state so passwords don't linger in memory
+    setCurrentPassword('');
+    setNewPassword('');
+    setConfirmPassword('');
+    setReauthPassword('');
+  }, []);
+
+  // ---------------------------------------------------------------------------
+  // Action handlers
+  // ---------------------------------------------------------------------------
+
+  const handleSaveName = useCallback(async () => {
+    const trimmed = nameInput.trim();
+    if (!trimmed) {
+      setModalError('Display name cannot be empty.');
+      return;
+    }
+    setModalLoading(true);
+    setModalError('');
+    try {
+      await updateDisplayName(trimmed);
+      await refreshUserDoc();
+      closeModal();
+    } catch (err: any) {
+      setModalError(friendlyFirebaseError(err));
+    } finally {
+      setModalLoading(false);
+    }
+  }, [nameInput, refreshUserDoc, closeModal]);
+
+  const handleSaveEmail = useCallback(async () => {
+    const trimmed = emailInput.trim();
+    if (!trimmed) {
+      setModalError('Email cannot be empty.');
+      return;
+    }
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(trimmed)) {
+      setModalError('Please enter a valid email address.');
+      return;
+    }
+    setModalLoading(true);
+    setModalError('');
+    try {
+      // verifyBeforeUpdateEmail sends a verification link — the email in Firebase
+      // Auth and Firestore only changes after the user clicks that link.
+      await updateUserEmail(trimmed);
+      closeModal();
+      // Brief UX: show a success toast or banner here in a future pass.
+      // For now the modal just closes; the user should check their inbox.
+    } catch (err: any) {
+      setModalError(friendlyFirebaseError(err));
+    } finally {
+      setModalLoading(false);
+    }
+  }, [emailInput, closeModal]);
+
+  const handleChangePassword = useCallback(async () => {
+    if (!currentPassword) {
+      setModalError('Please enter your current password.');
+      return;
+    }
+    if (!newPassword) {
+      setModalError('Please enter a new password.');
+      return;
+    }
+    if (newPassword.length < 8) {
+      setModalError('New password must be at least 8 characters.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setModalError('New passwords do not match.');
+      return;
+    }
+    setModalLoading(true);
+    setModalError('');
+    try {
+      await reauthenticateUser(email, currentPassword);
+      await updateUserPassword(newPassword);
+      closeModal();
+    } catch (err: any) {
+      setModalError(friendlyFirebaseError(err));
+    } finally {
+      setModalLoading(false);
+    }
+  }, [currentPassword, newPassword, confirmPassword, email, closeModal]);
+
+  const handleSignOut = useCallback(async () => {
+    setModalLoading(true);
+    try {
+      await signOut();
+      // Navigation is handled by _layout.tsx AuthNavigator
+    } catch (err: any) {
+      setModalError(friendlyFirebaseError(err));
+      setModalLoading(false);
+    }
+  }, [signOut]);
+
+  // handleDeleteAccount must be defined before handleDeleteConfirm and
+  // handleDeleteAccountWithReauth so they can include it in their deps.
+  const handleDeleteAccount = useCallback(async () => {
+    setModalLoading(true);
+    setModalError('');
+    try {
+      // Calls the Cloud Function which recursively deletes Firestore data
+      // and then deletes the Firebase Auth user server-side.
+      // Requires the functions/ Cloud Function to be deployed.
+      await callDeleteUserData();
+      // Navigation is handled by _layout.tsx onAuthStateChanged (user → null)
+    } catch (err: any) {
+      setModalError(friendlyFirebaseError(err));
+      setModalLoading(false);
+    }
+  }, []);
+
+  const handleDeleteConfirm = useCallback(() => {
+    if (deleteConfirmInput !== 'DELETE') return;
+    closeModal();
+
+    if (isEmailProvider) {
+      // Email accounts require re-authentication before deletion
+      openModal('deleteAccountReauth');
+    } else {
+      // Social sign-in: skip re-auth for Phase 1B
+      // NOTE: Re-auth for Google/Apple requires additional implementation (Phase 1C)
+      handleDeleteAccount();
+    }
+  }, [deleteConfirmInput, isEmailProvider, closeModal, openModal, handleDeleteAccount]);
+
+  const handleDeleteAccountWithReauth = useCallback(async () => {
+    if (!reauthPassword) {
+      setModalError('Please enter your password.');
+      return;
+    }
+    setModalLoading(true);
+    setModalError('');
+    try {
+      await reauthenticateUser(email, reauthPassword);
+      await handleDeleteAccount();
+    } catch (err: any) {
+      setModalError(friendlyFirebaseError(err));
+      setModalLoading(false);
+    }
+  }, [reauthPassword, email, handleDeleteAccount]);
+
+  const handleHelpPress = useCallback(() => {
+    const supportEmail = 'support@dealr.app';
     const subject = 'Dealr Support Request';
-    const mailto = `mailto:${email}?subject=${encodeURIComponent(subject)}`;
-
-    Linking.openURL(mailto).catch(err => {
+    const mailto = `mailto:${supportEmail}?subject=${encodeURIComponent(subject)}`;
+    Linking.openURL(mailto).catch((err) => {
       console.error('Failed to open email client:', err);
     });
-  };
+  }, []);
 
-  const handleAboutPress = () => {
+  const handleAboutPress = useCallback(() => {
     router.push('/(tabs)/(profile)/about' as any);
-  };
+  }, [router]);
+
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
 
   return (
     <View style={styles.container}>
-      <ScrollView style={styles.scrollView}>
-        <View style={styles.section}>
-          <HudSectionHeader label="Settings" centered={true} />
+      <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
 
-          <View style={styles.placeholderCard}>
-            <View style={styles.placeholderIconRing}>
-              <Ionicons name="construct-outline" size={64} color="#B072BB" />
-            </View>
-            <Text style={styles.placeholderTitle}>
-              Settings Coming Soon
-            </Text>
-            <Text style={styles.placeholderMessage}>
-              Customize notifications, display preferences, and more in a future update.
-            </Text>
+        {/* Profile section */}
+        <View style={styles.section}>
+          <HudSectionHeader label="Profile" centered={true} />
+          <View style={styles.menuCard}>
+            {/* Display Name */}
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => openModal('editName')}
+              activeOpacity={0.7}
+            >
+              <View style={styles.menuItemLeft}>
+                <Ionicons name="person-outline" size={24} color="#B072BB" />
+                <Text style={styles.menuItemLabel}>Display Name</Text>
+              </View>
+              <View style={styles.menuItemRight}>
+                <Text style={styles.menuItemValue} numberOfLines={1}>
+                  {displayName}
+                </Text>
+                <Ionicons name="chevron-forward" size={20} color="#666" />
+              </View>
+            </TouchableOpacity>
+
+            <View style={styles.menuDivider} />
+
+            {/* Email */}
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={isEmailProvider ? () => openModal('editEmail') : undefined}
+              activeOpacity={isEmailProvider ? 0.7 : 1}
+            >
+              <View style={styles.menuItemLeft}>
+                <Ionicons name="mail-outline" size={24} color="#B072BB" />
+                <Text style={styles.menuItemLabel}>Email</Text>
+              </View>
+              <View style={styles.menuItemRight}>
+                <Text style={styles.menuItemValue} numberOfLines={1}>
+                  {email}
+                  {!isEmailProvider && providerLabel ? ` ${providerLabel}` : ''}
+                </Text>
+                {isEmailProvider && (
+                  <Ionicons name="chevron-forward" size={20} color="#666" />
+                )}
+              </View>
+            </TouchableOpacity>
+
+            {/* Change Password — only shown for email/password accounts */}
+            {isEmailProvider && (
+              <>
+                <View style={styles.menuDivider} />
+                <TouchableOpacity
+                  style={styles.menuItem}
+                  onPress={() => openModal('changePassword')}
+                  activeOpacity={0.7}
+                >
+                  <View style={styles.menuItemLeft}>
+                    <Ionicons name="lock-closed-outline" size={24} color="#B072BB" />
+                    <Text style={styles.menuItemLabel}>Change Password</Text>
+                  </View>
+                  <Ionicons name="chevron-forward" size={20} color="#666" />
+                </TouchableOpacity>
+              </>
+            )}
           </View>
         </View>
 
+        {/* Subscription section */}
+        <View style={styles.section}>
+          <HudSectionHeader label="Subscription" centered={true} />
+          <View style={styles.menuCard}>
+            {/* Current Plan */}
+            <View style={styles.menuItem}>
+              <View style={styles.menuItemLeft}>
+                <Ionicons name="layers-outline" size={24} color="#B072BB" />
+                <Text style={styles.menuItemLabel}>Current Plan</Text>
+              </View>
+              <View style={styles.menuItemRight}>
+                <Text style={[styles.menuItemValue, isPro && styles.menuItemValuePro]}>
+                  {isPro ? 'Pro' : 'Free'}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.menuDivider} />
+
+            {isPro ? (
+              /* Manage Subscription — opens RC management URL */
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={async () => {
+                  const url = await getCustomerManagementURL();
+                  Linking.openURL(url).catch(() => {});
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={styles.menuItemLeft}>
+                  <Ionicons name="card-outline" size={24} color="#B072BB" />
+                  <Text style={styles.menuItemLabel}>Manage Subscription</Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#666" />
+              </TouchableOpacity>
+            ) : (
+              /* Upgrade to Pro — opens RevenueCat paywall */
+              <TouchableOpacity
+                style={styles.menuItem}
+                onPress={() => setShowPaywall(true)}
+                activeOpacity={0.7}
+              >
+                <View style={styles.menuItemLeft}>
+                  <Ionicons name="star-outline" size={24} color="#B072BB" />
+                  <Text style={[styles.menuItemLabel, styles.menuItemLabelPurple]}>
+                    Upgrade to Pro
+                  </Text>
+                </View>
+                <Ionicons name="chevron-forward" size={20} color="#B072BB" />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+
+        {/* Account section */}
+        <View style={styles.section}>
+          <HudSectionHeader label="Account" centered={true} />
+          <View style={styles.menuCard}>
+            {/* Sign Out */}
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => openModal('signOutConfirm')}
+              activeOpacity={0.7}
+            >
+              <View style={styles.menuItemLeft}>
+                <Ionicons name="log-out-outline" size={24} color="#C04657" />
+                <Text style={[styles.menuItemLabel, styles.menuItemLabelDanger]}>Sign Out</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#666" />
+            </TouchableOpacity>
+
+            <View style={styles.menuDivider} />
+
+            {/* Delete Account */}
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => openModal('deleteAccountConfirm')}
+              activeOpacity={0.7}
+            >
+              <View style={styles.menuItemLeft}>
+                <Ionicons name="trash-outline" size={24} color="#C04657" />
+                <Text style={[styles.menuItemLabel, styles.menuItemLabelDanger]}>
+                  Delete Account
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#666" />
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Other section */}
         <View style={styles.section}>
           <HudSectionHeader label="Other" centered={true} />
-
           <View style={styles.menuCard}>
             <TouchableOpacity
               style={styles.menuItem}
@@ -72,10 +490,378 @@ export default function SettingsScreen() {
             </TouchableOpacity>
           </View>
         </View>
+
       </ScrollView>
+
+      {/* ------------------------------------------------------------------- */}
+      {/* Modal: Edit Display Name                                             */}
+      {/* ------------------------------------------------------------------- */}
+      <Modal
+        visible={activeModal === 'editName'}
+        animationType="fade"
+        transparent
+        onRequestClose={closeModal}
+      >
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ flex: 1 }}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                <Ionicons name="person-outline" size={32} color="#B072BB" style={styles.modalIcon} />
+                <Text style={styles.modalTitle}>Display Name</Text>
+                <Text style={styles.modalSubtitle}>Enter your new display name.</Text>
+
+                <TextInput
+                  style={styles.textInput}
+                  value={nameInput}
+                  onChangeText={setNameInput}
+                  placeholder="Display name"
+                  placeholderTextColor="rgba(255,255,255,0.3)"
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                  maxLength={50}
+                  editable={!modalLoading}
+                />
+
+                {modalError ? (
+                  <Text style={styles.modalError}>{modalError}</Text>
+                ) : null}
+
+                <View style={styles.modalButtons}>
+                  <ModalButton
+                    title="Cancel"
+                    variant="cancel"
+                    onPress={closeModal}
+                    disabled={modalLoading}
+                  />
+                  <ModalButton
+                    title={modalLoading ? 'Saving…' : 'Save'}
+                    variant="confirm"
+                    onPress={handleSaveName}
+                    disabled={modalLoading || !nameInput.trim()}
+                  />
+                </View>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </GestureHandlerRootView>
+      </Modal>
+
+      {/* ------------------------------------------------------------------- */}
+      {/* Modal: Edit Email                                                     */}
+      {/* ------------------------------------------------------------------- */}
+      <Modal
+        visible={activeModal === 'editEmail'}
+        animationType="fade"
+        transparent
+        onRequestClose={closeModal}
+      >
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ flex: 1 }}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                <Ionicons name="mail-outline" size={32} color="#B072BB" style={styles.modalIcon} />
+                <Text style={styles.modalTitle}>Email Address</Text>
+                <Text style={styles.modalSubtitle}>
+                  A verification link will be sent to the new address. Your email updates after you verify it.
+                </Text>
+
+                <TextInput
+                  style={styles.textInput}
+                  value={emailInput}
+                  onChangeText={setEmailInput}
+                  placeholder="Email address"
+                  placeholderTextColor="rgba(255,255,255,0.3)"
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!modalLoading}
+                />
+
+                {modalError ? (
+                  <Text style={styles.modalError}>{modalError}</Text>
+                ) : null}
+
+                <View style={styles.modalButtons}>
+                  <ModalButton
+                    title="Cancel"
+                    variant="cancel"
+                    onPress={closeModal}
+                    disabled={modalLoading}
+                  />
+                  <ModalButton
+                    title={modalLoading ? 'Saving…' : 'Save'}
+                    variant="confirm"
+                    onPress={handleSaveEmail}
+                    disabled={modalLoading || !emailInput.trim()}
+                  />
+                </View>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </GestureHandlerRootView>
+      </Modal>
+
+      {/* ------------------------------------------------------------------- */}
+      {/* Modal: Change Password                                               */}
+      {/* ------------------------------------------------------------------- */}
+      <Modal
+        visible={activeModal === 'changePassword'}
+        animationType="fade"
+        transparent
+        onRequestClose={closeModal}
+      >
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ flex: 1 }}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                <Ionicons
+                  name="lock-closed-outline"
+                  size={32}
+                  color="#B072BB"
+                  style={styles.modalIcon}
+                />
+                <Text style={styles.modalTitle}>Change Password</Text>
+
+                <TextInput
+                  style={styles.textInput}
+                  value={currentPassword}
+                  onChangeText={setCurrentPassword}
+                  placeholder="Current password"
+                  placeholderTextColor="rgba(255,255,255,0.3)"
+                  secureTextEntry
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!modalLoading}
+                />
+                <TextInput
+                  style={styles.textInput}
+                  value={newPassword}
+                  onChangeText={setNewPassword}
+                  placeholder="New password"
+                  placeholderTextColor="rgba(255,255,255,0.3)"
+                  secureTextEntry
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!modalLoading}
+                />
+                <TextInput
+                  style={styles.textInput}
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  placeholder="Confirm new password"
+                  placeholderTextColor="rgba(255,255,255,0.3)"
+                  secureTextEntry
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!modalLoading}
+                />
+
+                {modalError ? (
+                  <Text style={styles.modalError}>{modalError}</Text>
+                ) : null}
+
+                <View style={styles.modalButtons}>
+                  <ModalButton
+                    title="Cancel"
+                    variant="cancel"
+                    onPress={closeModal}
+                    disabled={modalLoading}
+                  />
+                  <ModalButton
+                    title={modalLoading ? 'Saving…' : 'Save'}
+                    variant="confirm"
+                    onPress={handleChangePassword}
+                    disabled={modalLoading || !currentPassword || !newPassword || !confirmPassword}
+                  />
+                </View>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </GestureHandlerRootView>
+      </Modal>
+
+      {/* ------------------------------------------------------------------- */}
+      {/* Modal: Sign Out Confirmation                                          */}
+      {/* ------------------------------------------------------------------- */}
+      <Modal
+        visible={activeModal === 'signOutConfirm'}
+        animationType="fade"
+        transparent
+        onRequestClose={closeModal}
+      >
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Ionicons
+                name="log-out-outline"
+                size={32}
+                color="#C04657"
+                style={styles.modalIcon}
+              />
+              <Text style={styles.modalTitle}>Sign Out</Text>
+              <Text style={styles.modalBody}>
+                Sign out of {email}?{'\n'}Your games will remain on this device.
+              </Text>
+
+              {modalError ? (
+                <Text style={styles.modalError}>{modalError}</Text>
+              ) : null}
+
+              {modalLoading ? (
+                <ActivityIndicator color="#B072BB" style={styles.modalSpinner} />
+              ) : (
+                <View style={styles.modalButtons}>
+                  <ModalButton title="Cancel" variant="cancel" onPress={closeModal} />
+                  <ModalButton
+                    title="Sign Out"
+                    variant="destructive"
+                    onPress={handleSignOut}
+                  />
+                </View>
+              )}
+            </View>
+          </View>
+        </GestureHandlerRootView>
+      </Modal>
+
+      {/* ------------------------------------------------------------------- */}
+      {/* Modal: Delete Account — Step 1 (Type DELETE confirmation)            */}
+      {/* ------------------------------------------------------------------- */}
+      <Modal
+        visible={activeModal === 'deleteAccountConfirm'}
+        animationType="fade"
+        transparent
+        onRequestClose={closeModal}
+      >
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ flex: 1 }}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                <Ionicons
+                  name="warning-outline"
+                  size={32}
+                  color="#C04657"
+                  style={styles.modalIcon}
+                />
+                <Text style={styles.modalTitle}>Delete Account</Text>
+                <Text style={styles.modalBody}>
+                  This will permanently delete your account and all associated data. This action cannot be undone.
+                </Text>
+                <Text style={styles.modalSubtitle}>Type DELETE to confirm.</Text>
+
+                <TextInput
+                  style={styles.textInput}
+                  value={deleteConfirmInput}
+                  onChangeText={setDeleteConfirmInput}
+                  placeholder="DELETE"
+                  placeholderTextColor="rgba(255,255,255,0.3)"
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                />
+
+                <View style={styles.modalButtons}>
+                  <ModalButton title="Cancel" variant="cancel" onPress={closeModal} />
+                  <ModalButton
+                    title="Continue"
+                    variant="destructive"
+                    onPress={handleDeleteConfirm}
+                    disabled={deleteConfirmInput !== 'DELETE'}
+                  />
+                </View>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </GestureHandlerRootView>
+      </Modal>
+
+      {/* ------------------------------------------------------------------- */}
+      {/* Modal: Delete Account — Step 2 (Re-authentication for email accounts)*/}
+      {/* ------------------------------------------------------------------- */}
+      <Modal
+        visible={activeModal === 'deleteAccountReauth'}
+        animationType="fade"
+        transparent
+        onRequestClose={closeModal}
+      >
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            style={{ flex: 1 }}
+          >
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                <Ionicons
+                  name="shield-checkmark-outline"
+                  size={32}
+                  color="#C04657"
+                  style={styles.modalIcon}
+                />
+                <Text style={styles.modalTitle}>Confirm Identity</Text>
+                <Text style={styles.modalBody}>
+                  For your security, please enter your password to continue.
+                </Text>
+
+                <TextInput
+                  style={[styles.textInput, styles.textInputDisabled]}
+                  value={email}
+                  editable={false}
+                  selectTextOnFocus={false}
+                />
+                <TextInput
+                  style={styles.textInput}
+                  value={reauthPassword}
+                  onChangeText={setReauthPassword}
+                  placeholder="Password"
+                  placeholderTextColor="rgba(255,255,255,0.3)"
+                  secureTextEntry
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  editable={!modalLoading}
+                />
+
+                {modalError ? (
+                  <Text style={styles.modalError}>{modalError}</Text>
+                ) : null}
+
+                {modalLoading ? (
+                  <ActivityIndicator color="#C04657" style={styles.modalSpinner} />
+                ) : (
+                  <View style={styles.modalButtons}>
+                    <ModalButton title="Cancel" variant="cancel" onPress={closeModal} />
+                    <ModalButton
+                      title="Delete Account"
+                      variant="destructive"
+                      onPress={handleDeleteAccountWithReauth}
+                      disabled={!reauthPassword}
+                    />
+                  </View>
+                )}
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </GestureHandlerRootView>
+      </Modal>
+
+      <PaywallModal visible={showPaywall} onClose={() => setShowPaywall(false)} />
     </View>
   );
 }
+
+// ---------------------------------------------------------------------------
+// Styles
+// ---------------------------------------------------------------------------
 
 const styles = StyleSheet.create({
   container: {
@@ -84,45 +870,17 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
+  },
+  scrollContent: {
     padding: 20,
+    paddingBottom: 40,
   },
   section: {
     marginBottom: 28,
     backgroundColor: 'transparent',
   },
-  placeholderCard: {
-    backgroundColor: '#1A1A1A',
-    borderRadius: 16,
-    padding: 24,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(176,114,187,0.2)',
-  },
-  placeholderIconRing: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    borderWidth: 1,
-    borderColor: 'rgba(176,114,187,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 16,
-    backgroundColor: 'transparent',
-  },
-  placeholderTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  placeholderMessage: {
-    fontSize: 14,
-    color: '#FFFFFF',
-    opacity: 0.6,
-    textAlign: 'center',
-    lineHeight: 22,
-  },
+
+  // Menu card
   menuCard: {
     backgroundColor: '#1A1A1A',
     borderRadius: 16,
@@ -143,15 +901,118 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 16,
     backgroundColor: 'transparent',
+    flex: 1,
+  },
+  menuItemRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    maxWidth: '50%',
+    backgroundColor: 'transparent',
   },
   menuItemLabel: {
     fontSize: 16,
     color: '#FFFFFF',
     fontWeight: '500',
+    backgroundColor: 'transparent',
+  },
+  menuItemLabelDanger: {
+    color: '#C04657',
+  },
+  menuItemLabelPurple: {
+    color: '#B072BB',
+  },
+  menuItemValue: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.4)',
+    backgroundColor: 'transparent',
+    flexShrink: 1,
+  },
+  menuItemValuePro: {
+    color: '#B072BB',
+    fontWeight: '600',
   },
   menuDivider: {
     height: 1,
     backgroundColor: 'rgba(176,114,187,0.1)',
     marginHorizontal: 20,
+  },
+
+  // Modal shared
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    backgroundColor: '#1A1A1A',
+    borderRadius: 20,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    borderWidth: 1,
+    borderColor: 'rgba(176,114,187,0.2)',
+  },
+  modalIcon: {
+    alignSelf: 'center',
+    marginBottom: 12,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#FFFFFF',
+    textAlign: 'center',
+    marginBottom: 8,
+    backgroundColor: 'transparent',
+  },
+  modalSubtitle: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.5)',
+    textAlign: 'center',
+    marginBottom: 16,
+    backgroundColor: 'transparent',
+  },
+  modalBody: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.7)',
+    textAlign: 'center',
+    marginBottom: 16,
+    lineHeight: 20,
+    backgroundColor: 'transparent',
+  },
+  modalError: {
+    fontSize: 13,
+    color: '#C04657',
+    textAlign: 'center',
+    marginBottom: 12,
+    backgroundColor: 'transparent',
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 4,
+    backgroundColor: 'transparent',
+  },
+  modalSpinner: {
+    marginTop: 16,
+  },
+
+  // Text inputs
+  textInput: {
+    backgroundColor: '#0A0A0A',
+    borderWidth: 1,
+    borderColor: 'rgba(176,114,187,0.3)',
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    fontSize: 15,
+    color: '#FFFFFF',
+    marginBottom: 12,
+  },
+  textInputDisabled: {
+    color: 'rgba(255,255,255,0.4)',
+    borderColor: 'rgba(255,255,255,0.1)',
   },
 });
