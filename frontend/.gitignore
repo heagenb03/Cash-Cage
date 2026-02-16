@@ -45,3 +45,6 @@ yarn-error.*
 
 # claude
 CLAUDE.md
+
+#Google service
+*.plist
