@@ -32,14 +32,20 @@ interface PaywallModalProps {
 // Hardcoded display data shown while offerings load or as fallback
 const DISPLAY_MONTHLY = {
   period: 'Monthly',
-  price: '$2.99',
+  price: '$1.99',
   detail: 'per month',
   badge: null,
 };
 const DISPLAY_ANNUAL = {
   period: 'Annual',
-  price: '$14.99',
-  detail: 'per year · ~$1.25/mo',
+  price: '$10.99',
+  detail: 'per year · ~$0.92/mo',
+  badge: null,
+};
+const DISPLAY_LIFETIME = {
+  period: 'Lifetime',
+  price: '$17.99',
+  detail: 'one-time · pay once, keep forever',
   badge: 'Best Value',
 };
 
@@ -56,11 +62,12 @@ const FEATURES = [
 export default function PaywallModal({ visible, onClose, triggerMessage }: PaywallModalProps) {
   const { refreshEntitlements } = useAuth();
 
-  const [selectedPeriod, setSelectedPeriod] = useState<'monthly' | 'annual'>('annual');
-  const [offerings, setOfferings] = useState<{ monthly: PurchasesPackage | null; annual: PurchasesPackage | null }>({
-    monthly: null,
-    annual: null,
-  });
+  const [selectedPeriod, setSelectedPeriod] = useState<'monthly' | 'annual' | 'lifetime'>('annual');
+  const [offerings, setOfferings] = useState<{
+    monthly: PurchasesPackage | null;
+    annual: PurchasesPackage | null;
+    lifetime: PurchasesPackage | null;
+  }>({ monthly: null, annual: null, lifetime: null });
   const [loading, setLoading] = useState(false);
   const [offeringsLoading, setOfferingsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -87,7 +94,11 @@ export default function PaywallModal({ visible, onClose, triggerMessage }: Paywa
             p.packageType === 'ANNUAL' ||
             p.product.identifier.includes('annual')
           ) ?? null;
-          setOfferings({ monthly, annual });
+          const lifetime = pkgs.find(p =>
+            p.packageType === 'LIFETIME' ||
+            p.product.identifier.includes('lifetime')
+          ) ?? null;
+          setOfferings({ monthly, annual, lifetime });
         }
       } catch {
         // Offerings unavailable — fall back to display-only UI
@@ -99,7 +110,10 @@ export default function PaywallModal({ visible, onClose, triggerMessage }: Paywa
     fetchOfferings();
   }, [visible]);
 
-  const selectedPackage = selectedPeriod === 'monthly' ? offerings.monthly : offerings.annual;
+  const selectedPackage =
+    selectedPeriod === 'monthly' ? offerings.monthly :
+    selectedPeriod === 'annual'  ? offerings.annual  :
+    offerings.lifetime;
 
   const handlePurchase = useCallback(async () => {
     if (!selectedPackage) {
@@ -142,10 +156,15 @@ export default function PaywallModal({ visible, onClose, triggerMessage }: Paywa
     }
   }, [refreshEntitlements, onClose]);
 
-  const getDisplayPrice = (period: 'monthly' | 'annual'): string => {
-    const pkg = period === 'monthly' ? offerings.monthly : offerings.annual;
+  const getDisplayPrice = (period: 'monthly' | 'annual' | 'lifetime'): string => {
+    const pkg =
+      period === 'monthly' ? offerings.monthly :
+      period === 'annual'  ? offerings.annual  :
+      offerings.lifetime;
     if (pkg?.product?.priceString) return pkg.product.priceString;
-    return period === 'monthly' ? DISPLAY_MONTHLY.price : DISPLAY_ANNUAL.price;
+    return period === 'monthly' ? DISPLAY_MONTHLY.price :
+           period === 'annual'  ? DISPLAY_ANNUAL.price  :
+           DISPLAY_LIFETIME.price;
   };
 
   return (
@@ -183,36 +202,53 @@ export default function PaywallModal({ visible, onClose, triggerMessage }: Paywa
               {offeringsLoading ? (
                 <ActivityIndicator color="#B072BB" style={styles.offeringsSpinner} />
               ) : (
-                <View style={styles.planRow}>
+                <View style={styles.planStack}>
                   {/* Monthly option */}
                   <TouchableOpacity
                     style={[styles.planCard, selectedPeriod === 'monthly' && styles.planCardSelected]}
                     onPress={() => setSelectedPeriod('monthly')}
                     activeOpacity={0.8}
                   >
-                    <Text style={styles.planPeriod}>{DISPLAY_MONTHLY.period}</Text>
-                    <Text style={[styles.planPrice, selectedPeriod === 'monthly' && styles.planPriceSelected]}>
-                      {getDisplayPrice('monthly')}
-                    </Text>
+                    <View style={styles.planCardInner}>
+                      <Text style={styles.planPeriod}>{DISPLAY_MONTHLY.period}</Text>
+                      <Text style={[styles.planPrice, selectedPeriod === 'monthly' && styles.planPriceSelected]}>
+                        {getDisplayPrice('monthly')}
+                      </Text>
+                    </View>
                     <Text style={styles.planDetail}>{DISPLAY_MONTHLY.detail}</Text>
                   </TouchableOpacity>
 
-                  {/* Annual option (default / best value) */}
+                  {/* Annual option */}
                   <TouchableOpacity
                     style={[styles.planCard, selectedPeriod === 'annual' && styles.planCardSelected]}
                     onPress={() => setSelectedPeriod('annual')}
                     activeOpacity={0.8}
                   >
-                    {DISPLAY_ANNUAL.badge && (
-                      <View style={styles.bestValueBadge}>
-                        <Text style={styles.bestValueText}>{DISPLAY_ANNUAL.badge}</Text>
-                      </View>
-                    )}
-                    <Text style={styles.planPeriod}>{DISPLAY_ANNUAL.period}</Text>
-                    <Text style={[styles.planPrice, selectedPeriod === 'annual' && styles.planPriceSelected]}>
-                      {getDisplayPrice('annual')}
-                    </Text>
+                    <View style={styles.planCardInner}>
+                      <Text style={styles.planPeriod}>{DISPLAY_ANNUAL.period}</Text>
+                      <Text style={[styles.planPrice, selectedPeriod === 'annual' && styles.planPriceSelected]}>
+                        {getDisplayPrice('annual')}
+                      </Text>
+                    </View>
                     <Text style={styles.planDetail}>{DISPLAY_ANNUAL.detail}</Text>
+                  </TouchableOpacity>
+
+                  {/* Lifetime option (Best Value) */}
+                  <TouchableOpacity
+                    style={[styles.planCard, selectedPeriod === 'lifetime' && styles.planCardSelected]}
+                    onPress={() => setSelectedPeriod('lifetime')}
+                    activeOpacity={0.8}
+                  >
+                    <View style={styles.bestValueBadge}>
+                      <Text style={styles.bestValueText}>{DISPLAY_LIFETIME.badge}</Text>
+                    </View>
+                    <View style={styles.planCardInner}>
+                      <Text style={styles.planPeriod}>{DISPLAY_LIFETIME.period}</Text>
+                      <Text style={[styles.planPrice, selectedPeriod === 'lifetime' && styles.planPriceSelected]}>
+                        {getDisplayPrice('lifetime')}
+                      </Text>
+                    </View>
+                    <Text style={styles.planDetail}>{DISPLAY_LIFETIME.detail}</Text>
                   </TouchableOpacity>
                 </View>
               )}
@@ -339,32 +375,36 @@ const styles = StyleSheet.create({
   offeringsSpinner: {
     marginVertical: 24,
   },
-  planRow: {
-    flexDirection: 'row',
-    gap: 12,
+  planStack: {
+    gap: 10,
     marginBottom: 20,
   },
   planCard: {
-    flex: 1,
+    width: '100%',
     backgroundColor: '#1A1A1A',
     borderRadius: 14,
-    padding: 16,
-    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     borderWidth: 1.5,
     borderColor: 'rgba(176,114,187,0.2)',
-    position: 'relative',
+  },
+  planCardInner: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    backgroundColor: 'transparent',
   },
   planCardSelected: {
     borderColor: '#B072BB',
     backgroundColor: 'rgba(176,114,187,0.08)',
   },
   bestValueBadge: {
-    position: 'absolute',
-    top: -11,
+    alignSelf: 'flex-start',
     backgroundColor: '#B072BB',
     paddingHorizontal: 10,
     paddingVertical: 3,
     borderRadius: 8,
+    marginBottom: 8,
   },
   bestValueText: {
     fontSize: 11,
@@ -376,8 +416,6 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: 'rgba(255,255,255,0.5)',
     fontWeight: '600',
-    marginBottom: 6,
-    marginTop: 4,
     textTransform: 'uppercase',
     letterSpacing: 1,
     backgroundColor: 'transparent',
@@ -394,8 +432,7 @@ const styles = StyleSheet.create({
   planDetail: {
     fontSize: 11,
     color: 'rgba(255,255,255,0.35)',
-    marginTop: 4,
-    textAlign: 'center',
+    marginTop: 6,
     backgroundColor: 'transparent',
   },
 

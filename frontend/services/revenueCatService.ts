@@ -23,6 +23,7 @@ export const PRO_ENTITLEMENT_ID = 'pro';
 export const PRODUCT_IDS = {
   monthly: 'cashcage_pro_monthly',
   annual: 'cashcage_pro_annual',
+  lifetime: 'cashcage_pro_lifetime',
 } as const;
 
 // ---------------------------------------------------------------------------
