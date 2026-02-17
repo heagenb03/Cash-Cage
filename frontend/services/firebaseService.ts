@@ -29,9 +29,13 @@ import {
   doc,
   setDoc,
   getDoc,
+  getDocs,
+  deleteDoc,
   updateDoc,
+  collection,
   serverTimestamp,
 } from 'firebase/firestore';
+import { Game } from '@/types/game';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 
 // ---------------------------------------------------------------------------
@@ -240,6 +244,66 @@ export async function deleteCurrentUser(): Promise<void> {
   if (!currentUser) throw new Error('No authenticated user');
 
   await deleteUser(currentUser);
+}
+
+// ---------------------------------------------------------------------------
+// Game Sync — Firestore CRUD for /users/{uid}/games/{gameId}
+// ---------------------------------------------------------------------------
+
+/**
+ * Write a game to Firestore under /users/{uid}/games/{gameId}.
+ * Uses setDoc with merge so partial updates don't overwrite unrelated fields.
+ * Settlement cache is excluded — it's ephemeral and re-fetchable on demand.
+ * Adds syncedAt server timestamp for last-write-wins conflict resolution.
+ */
+export async function saveGameToFirestore(uid: string, game: Game): Promise<void> {
+  const gameRef = doc(db, 'users', uid, 'games', game.id);
+  // Exclude ephemeral cache fields that don't belong in remote storage
+  const { cachedSettlements, transactionHash, syncedAt: _syncedAt, ...gameData } = game;
+  await setDoc(gameRef, { ...gameData, syncedAt: serverTimestamp() }, { merge: true });
+}
+
+/**
+ * Delete a game document from Firestore.
+ */
+export async function deleteGameFromFirestore(uid: string, gameId: string): Promise<void> {
+  const gameRef = doc(db, 'users', uid, 'games', gameId);
+  await deleteDoc(gameRef);
+}
+
+/**
+ * Fetch all games for a user from Firestore.
+ * Converts Firestore Timestamps back to JS Dates.
+ */
+export async function fetchGamesFromFirestore(uid: string): Promise<Game[]> {
+  const gamesRef = collection(db, 'users', uid, 'games');
+  const snapshot = await getDocs(gamesRef);
+  return snapshot.docs.map(docSnap => deserializeFirestoreGame(docSnap.data()));
+}
+
+/** Convert a Firestore document (with Timestamps) back to a typed Game. */
+function deserializeFirestoreGame(data: Record<string, any>): Game {
+  const toDate = (v: any): Date => (v?.toDate ? v.toDate() : new Date(v));
+  const toOptDate = (v: any): Date | undefined => (v ? toDate(v) : undefined);
+
+  return {
+    id: data.id,
+    name: data.name,
+    date: toDate(data.date),
+    status: data.status,
+    players: (data.players ?? []).map((p: any) => ({
+      ...p,
+      createdAt: toDate(p.createdAt),
+      completedAt: toOptDate(p.completedAt),
+    })),
+    transactions: (data.transactions ?? []).map((t: any) => ({
+      ...t,
+      timestamp: toDate(t.timestamp),
+    })),
+    createdAt: toDate(data.createdAt),
+    completedAt: toOptDate(data.completedAt),
+    syncedAt: toOptDate(data.syncedAt),
+  };
 }
 
 // ---------------------------------------------------------------------------

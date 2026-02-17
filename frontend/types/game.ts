@@ -27,6 +27,9 @@ export interface Game {
   // Settlement cache
   cachedSettlements?: SettlementResult;
   transactionHash?: string;
+
+  // Cloud sync — set by Firestore serverTimestamp on each write
+  syncedAt?: Date;
 }
 
 export interface PlayerBalance {
