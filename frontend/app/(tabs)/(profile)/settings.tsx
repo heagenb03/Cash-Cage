@@ -284,7 +284,7 @@ export default function SettingsScreen() {
   }, [reauthPassword, email, handleDeleteAccount]);
 
   const handleHelpPress = useCallback(() => {
-    const supportEmail = 'support@cashcage.app';
+    const supportEmail = 'cashcageapp@gmail.com';
     const subject = 'Cash Cage Support Request';
     const mailto = `mailto:${supportEmail}?subject=${encodeURIComponent(subject)}`;
     Linking.openURL(mailto).catch((err) => {

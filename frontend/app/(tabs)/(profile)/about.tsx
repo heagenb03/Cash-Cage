@@ -3,12 +3,27 @@ import { Ionicons } from '@expo/vector-icons';
 import { Text, View } from '@/components/Themed';
 import HudSectionHeader from '@/components/HudSectionHeader';
 
+const PRIVACY_POLICY_URL = 'https://heagenb03.github.io/cashcage-legal/privacy-policy.html';
+const TERMS_URL = 'https://heagenb03.github.io/cashcage-legal/terms-of-service.html';
+
 export default function AboutScreen() {
   const handleEmailPress = () => {
     const email = 'cashcageapp@gmail.com';
     const mailto = `mailto:${email}`;
     Linking.openURL(mailto).catch(err => {
       console.error('Failed to open email client:', err);
+    });
+  };
+
+  const handlePrivacyPress = () => {
+    Linking.openURL(PRIVACY_POLICY_URL).catch(err => {
+      console.error('Failed to open privacy policy:', err);
+    });
+  };
+
+  const handleTermsPress = () => {
+    Linking.openURL(TERMS_URL).catch(err => {
+      console.error('Failed to open terms of service:', err);
     });
   };
 
@@ -38,6 +53,24 @@ export default function AboutScreen() {
               <Text style={styles.infoLabel}>Contact</Text>
               <Text style={styles.infoValueLink} onPress={handleEmailPress}>
                 cashcageapp@gmail.com
+              </Text>
+            </View>
+
+            <View style={styles.divider} />
+
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Privacy Policy</Text>
+              <Text style={styles.infoValueLink} onPress={handlePrivacyPress}>
+                View
+              </Text>
+            </View>
+
+            <View style={styles.divider} />
+
+            <View style={styles.infoRow}>
+              <Text style={styles.infoLabel}>Terms of Service</Text>
+              <Text style={styles.infoValueLink} onPress={handleTermsPress}>
+                View
               </Text>
             </View>
 
