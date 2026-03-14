@@ -1,10 +1,10 @@
-# CashCage
+# Cash Cage
 
 A poker buyin/cashout tracker that calculates optimal settlements between players.
 
 ## Overview
 
-CashCage helps manage poker game sessions by tracking player buyins and cashouts, then calculating the minimum number of transactions needed to settle all debts. The application uses a client-server architecture with a React Native frontend and a C++ backend service powered by Mixed Integer Linear Programming (MILP).
+Cash Cage helps manage poker game sessions by tracking player buyins and cashouts, then calculating the minimum number of transactions needed to settle all debts. The application uses a client-server architecture with a React Native frontend and a C++ backend service powered by Mixed Integer Linear Programming (MILP).
 
 ## Components
 

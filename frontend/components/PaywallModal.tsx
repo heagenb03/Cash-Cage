@@ -181,7 +181,7 @@ export default function PaywallModal({ visible, onClose, triggerMessage }: Paywa
               {/* Header */}
               <View style={styles.headerRow}>
                 <Ionicons name="star" size={24} color="#B072BB" style={styles.starIcon} />
-                <Text style={styles.title}>CASHCAGE PRO</Text>
+                <Text style={styles.title}>CASH CAGE PRO</Text>
               </View>
 
               {triggerMessage && (

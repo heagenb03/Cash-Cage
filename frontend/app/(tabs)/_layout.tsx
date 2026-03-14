@@ -117,7 +117,7 @@ function DynamicCashCageHeader() {
           )}
         </View>
 
-        {/* Center column: CASHCAGE logo (flex) */}
+        {/* Center column: CASH CAGE logo (flex) */}
         <View style={{
           flex: 1,
           alignItems: 'center',
@@ -131,7 +131,7 @@ function DynamicCashCageHeader() {
               color: '#FFFFFF',
             }}
           >
-            CASHCAGE
+            CASH CAGE
           </Text>
           <View
             style={{

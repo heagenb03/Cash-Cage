@@ -125,7 +125,7 @@ inline void setupRoutes(crow::SimpleApp& app) {
     CROW_ROUTE(app, "/")
         ([](const crow::request&) {
             nlohmann::json response = {
-                {"service", "CashCage Settlement Service"},
+                {"service", "Cash Cage Settlement Service"},
                 {"version", "1.0.0"},
                 {"endpoints", {
                     {{"path", "/settlements/optimal"}, {"method", "POST"}},

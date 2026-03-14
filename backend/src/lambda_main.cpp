@@ -124,7 +124,7 @@ invocation_response handler(invocation_request const& request) {
 }
 
 int main() {
-    std::cout << "[Lambda] CashCage Settlement Service starting..." << std::endl;
+    std::cout << "[Lambda] Cash Cage Settlement Service starting..." << std::endl;
     std::cout << "[Lambda] Waiting for invocations..." << std::endl;
 
     run_handler(handler);

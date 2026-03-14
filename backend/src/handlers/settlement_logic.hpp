@@ -58,7 +58,7 @@ inline HttpResponse handleHealthCheck(const HttpRequest&) {
 
 inline HttpResponse handleRootEndpoint(const HttpRequest&) {
     nlohmann::json response = {
-        {"service", "CashCage Settlement Service"},
+        {"service", "Cash Cage Settlement Service"},
         {"version", "1.0.0"},
         {"endpoints", {
             {{"path", "/settlements/optimal"}, {"method", "POST"}},

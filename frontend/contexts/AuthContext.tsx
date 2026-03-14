@@ -16,7 +16,7 @@ initializePurchases();
 // DEV OVERRIDE — remove this block once RevenueCat is fully integrated
 // Set to true to bypass subscription checks during testing.
 // ---------------------------------------------------------------------------
-const DEV_FORCE_PRO = true;
+const DEV_FORCE_PRO = false;
 
 // ---------------------------------------------------------------------------
 // Types
