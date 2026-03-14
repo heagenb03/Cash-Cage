@@ -52,7 +52,6 @@ export default function LoginScreen() {
   const [appleLoading, setAppleLoading] = useState(false);
 
   // Google Sign-In via expo-auth-session (unavailable in Expo Go — requires dev build)
-  // TODO: Add EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID to .env (from Google Cloud Console)
   const [request, response, promptAsync] = useGoogleAuth({
     clientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
   });
@@ -144,7 +143,7 @@ export default function LoginScreen() {
       >
         {/* Logo / branding */}
         <View style={styles.header}>
-          <Text style={styles.logo}>DEALR</Text>
+          <Text style={styles.logo}>CASH CAGE</Text>
           <View style={styles.logoDivider} />
           <Text style={styles.tagline}>Your poker night, sorted.</Text>
         </View>
