@@ -40,8 +40,9 @@ yarn-error.*
 # vscode
 .vscode/
 
-# config json files
-*.json
+# firebase
+dealr-1f955-firebase-adminsdk-fbsvc-45a8e72b7b.json
+google-services.json
 
 # claude
 CLAUDE.md
