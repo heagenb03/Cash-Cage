@@ -152,37 +152,41 @@ export default function LoginScreen() {
         <View style={styles.form}>
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Email</Text>
-            <TextInput
-              style={styles.input}
-              value={email}
-              onChangeText={setEmail}
-              placeholder="you@example.com"
-              placeholderTextColor="#555"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoComplete="email"
-              textContentType="emailAddress"
-            />
+            <View style={styles.inputWrapper}>
+              <TextInput
+                style={styles.input}
+                value={email}
+                onChangeText={setEmail}
+                placeholder="you@example.com"
+                placeholderTextColor="#555"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="email"
+                textContentType="emailAddress"
+              />
+            </View>
           </View>
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Password</Text>
             <View style={styles.passwordRow}>
-              <TextInput
-                style={[styles.input, styles.passwordInput]}
-                value={password}
-                onChangeText={setPassword}
-                placeholder="••••••••"
-                placeholderTextColor="#555"
-                secureTextEntry={!showPassword}
-                autoCapitalize="none"
-                autoCorrect={false}
-                autoComplete="password"
-                textContentType="password"
-                onSubmitEditing={handleEmailSignIn}
-                returnKeyType="go"
-              />
+              <View style={styles.inputWrapper}>
+                <TextInput
+                  style={[styles.input, styles.passwordInput]}
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder="••••••••"
+                  placeholderTextColor="#555"
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoComplete="password"
+                  textContentType="password"
+                  onSubmitEditing={handleEmailSignIn}
+                  returnKeyType="go"
+                />
+              </View>
               <TouchableOpacity
                 style={styles.eyeButton}
                 onPress={() => setShowPassword((v) => !v)}
@@ -354,11 +358,14 @@ const styles = StyleSheet.create({
     color: '#AAAAAA',
     letterSpacing: 0.5,
   },
-  input: {
+  inputWrapper: {
     backgroundColor: '#1A1A1A',
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#2A2A2A',
+    overflow: 'hidden',
+  },
+  input: {
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 16,

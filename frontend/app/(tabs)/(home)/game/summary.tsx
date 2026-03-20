@@ -451,8 +451,7 @@ export default function GameSummaryScreen() {
       : null;
 
     if (cachedResult) {
-      console.log('[cache] Using cached settlements:', cachedResult.algorithm);
-      setSettlementResult(cachedResult);
+setSettlementResult(cachedResult);
       setIsLoadingSettlements(false);
 
       // If server result, we're done

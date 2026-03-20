@@ -88,50 +88,56 @@ export default function SignupScreen() {
         <View style={styles.form}>
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Display Name</Text>
-            <TextInput
-              style={styles.input}
-              value={name}
-              onChangeText={setName}
-              placeholder="Your name"
-              placeholderTextColor="#555"
-              autoCapitalize="words"
-              autoCorrect={false}
-              autoComplete="name"
-              textContentType="name"
-            />
+            <View style={styles.inputWrapper}>
+              <TextInput
+                style={styles.input}
+                value={name}
+                onChangeText={setName}
+                placeholder="Your name"
+                placeholderTextColor="#555"
+                autoCapitalize="words"
+                autoCorrect={false}
+                autoComplete="name"
+                textContentType="name"
+              />
+            </View>
           </View>
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Email</Text>
-            <TextInput
-              style={styles.input}
-              value={email}
-              onChangeText={setEmail}
-              placeholder="you@example.com"
-              placeholderTextColor="#555"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoComplete="email"
-              textContentType="emailAddress"
-            />
+            <View style={styles.inputWrapper}>
+              <TextInput
+                style={styles.input}
+                value={email}
+                onChangeText={setEmail}
+                placeholder="you@example.com"
+                placeholderTextColor="#555"
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoCorrect={false}
+                autoComplete="email"
+                textContentType="emailAddress"
+              />
+            </View>
           </View>
 
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Password</Text>
             <View style={styles.passwordRow}>
-              <TextInput
-                style={[styles.input, styles.passwordInput]}
-                value={password}
-                onChangeText={setPassword}
-                placeholder="At least 8 characters"
-                placeholderTextColor="#555"
-                secureTextEntry={!showPassword}
-                autoCapitalize="none"
-                autoCorrect={false}
-                autoComplete="new-password"
-                textContentType="newPassword"
-              />
+              <View style={styles.inputWrapper}>
+                <TextInput
+                  style={[styles.input, styles.passwordInput]}
+                  value={password}
+                  onChangeText={setPassword}
+                  placeholder="At least 8 characters"
+                  placeholderTextColor="#555"
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoComplete="new-password"
+                  textContentType="password"
+                />
+              </View>
               <TouchableOpacity
                 style={styles.eyeButton}
                 onPress={() => setShowPassword((v) => !v)}
@@ -150,20 +156,22 @@ export default function SignupScreen() {
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Confirm Password</Text>
             <View style={styles.passwordRow}>
-              <TextInput
-                style={[styles.input, styles.passwordInput]}
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                placeholder="Repeat your password"
-                placeholderTextColor="#555"
-                secureTextEntry={!showConfirm}
-                autoCapitalize="none"
-                autoCorrect={false}
-                autoComplete="new-password"
-                textContentType="newPassword"
-                onSubmitEditing={handleSignUp}
-                returnKeyType="go"
-              />
+              <View style={styles.inputWrapper}>
+                <TextInput
+                  style={[styles.input, styles.passwordInput]}
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  placeholder="Repeat your password"
+                  placeholderTextColor="#555"
+                  secureTextEntry={!showConfirm}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoComplete="new-password"
+                  textContentType="password"
+                  onSubmitEditing={handleSignUp}
+                  returnKeyType="go"
+                />
+              </View>
               <TouchableOpacity
                 style={styles.eyeButton}
                 onPress={() => setShowConfirm((v) => !v)}
@@ -284,11 +292,14 @@ const styles = StyleSheet.create({
     color: '#AAAAAA',
     letterSpacing: 0.5,
   },
-  input: {
+  inputWrapper: {
     backgroundColor: '#1A1A1A',
     borderRadius: 12,
     borderWidth: 1,
     borderColor: '#2A2A2A',
+    overflow: 'hidden',
+  },
+  input: {
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 16,

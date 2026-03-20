@@ -17,19 +17,19 @@ export default function HomeLayout() {
       <Stack.Screen
         name="index"
         options={{
-          headerShown: false, // Use the DEALR header from parent tabs layout
+          headerShown: false,
         }}
       />
       <Stack.Screen
         name="game/active"
         options={{
-          headerShown: false, // Use the DEALR header from parent tabs layout
+          headerShown: false,
         }}
       />
       <Stack.Screen
         name="game/summary"
         options={{
-          headerShown: false, // Use the DEALR header from parent tabs layout
+          headerShown: false,
         }}
       />
     </Stack>

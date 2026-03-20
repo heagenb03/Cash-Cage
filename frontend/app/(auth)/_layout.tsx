@@ -2,7 +2,7 @@ import { Stack } from 'expo-router';
 
 /**
  * Auth stack — rendered when the user is not signed in.
- * No tab bar, no DEALR header. Clean white-on-black layout.
+ * No tab bar, no header. Clean white-on-black layout.
  */
 export default function AuthLayout() {
   return (
