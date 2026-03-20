@@ -76,9 +76,12 @@ export async function loginPurchases(uid: string): Promise<void> {
 export async function logoutPurchases(): Promise<void> {
   if (!isConfigured()) return;
   try {
-    await Purchases.logOut();
+    const anonymous = await Purchases.isAnonymous();
+    if (!anonymous) {
+      await Purchases.logOut();
+    }
   } catch (err) {
-    // Suppress — logOut can throw if already anonymous
+    // Suppress — safety net for any unexpected logOut errors
   }
 }
 
