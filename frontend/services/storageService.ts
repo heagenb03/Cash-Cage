@@ -67,7 +67,8 @@ export class StorageService {
 
   static async clearAll(): Promise<void> {
     try {
-      await AsyncStorage.multiRemove([GAMES_KEY, ACTIVE_GAME_ID_KEY]);
+      await AsyncStorage.removeItem(GAMES_KEY);
+      await AsyncStorage.removeItem(ACTIVE_GAME_ID_KEY);
     } catch (error) {
       console.error('Error clearing storage:', error);
       throw error;
