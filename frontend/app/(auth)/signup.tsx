@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -26,8 +26,10 @@ export default function SignupScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading] = useState(false);
+  const signingUp = useRef(false);
 
   const handleSignUp = async () => {
+    if (signingUp.current) return;
     if (!name.trim()) {
       Alert.alert('Missing name', 'Please enter your display name.');
       return;
@@ -49,15 +51,16 @@ export default function SignupScreen() {
       return;
     }
 
+    signingUp.current = true;
     setLoading(true);
     try {
       await signUpWithEmail(name.trim(), email.trim().toLowerCase(), password);
-      router.replace('/(tabs)' as any);
+      // Don't reset loading — AuthNavigator will unmount this screen
     } catch (err: any) {
       const message = friendlyAuthError(err.code);
       Alert.alert('Sign-up failed', message);
-    } finally {
       setLoading(false);
+      signingUp.current = false;
     }
   };
 
@@ -135,7 +138,7 @@ export default function SignupScreen() {
                   autoCapitalize="none"
                   autoCorrect={false}
                   autoComplete="new-password"
-                  textContentType="password"
+                  textContentType="newPassword"
                 />
               </View>
               <TouchableOpacity
@@ -167,7 +170,7 @@ export default function SignupScreen() {
                   autoCapitalize="none"
                   autoCorrect={false}
                   autoComplete="new-password"
-                  textContentType="password"
+                  textContentType="newPassword"
                   onSubmitEditing={handleSignUp}
                   returnKeyType="go"
                 />

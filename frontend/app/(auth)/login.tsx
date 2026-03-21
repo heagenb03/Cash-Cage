@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -50,6 +50,7 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [appleLoading, setAppleLoading] = useState(false);
+  const signingIn = useRef(false);
 
   // Google Sign-In via expo-auth-session (unavailable in Expo Go — requires dev build)
   const [request, response, promptAsync] = useGoogleAuth({
@@ -60,53 +61,67 @@ export default function LoginScreen() {
     if (response?.type === 'success') {
       const { id_token } = response.params;
       if (id_token) {
-        setGoogleLoading(true);
         signInWithGoogleCredential(id_token)
-          .then(() => router.replace('/(tabs)' as any))
           .catch((err) => {
             console.error('Google sign-in error:', err);
             Alert.alert('Sign-in failed', 'Google sign-in could not be completed. Please try again.');
-          })
-          .finally(() => setGoogleLoading(false));
+            setGoogleLoading(false);
+            signingIn.current = false;
+          });
+        // Don't reset loading on success — AuthNavigator will unmount this screen
       }
     } else if (response?.type === 'error') {
       Alert.alert('Sign-in failed', 'Google sign-in was cancelled or failed.');
+      setGoogleLoading(false);
+      signingIn.current = false;
+    } else if (response !== null) {
+      // Cancelled/dismissed — reset loading and guard
+      setGoogleLoading(false);
+      signingIn.current = false;
     }
   }, [response]);
 
   const handleEmailSignIn = async () => {
+    if (signingIn.current) return;
     if (!email.trim() || !password) {
       Alert.alert('Missing fields', 'Please enter your email and password.');
       return;
     }
+    signingIn.current = true;
     setLoading(true);
     try {
       await signInWithEmail(email.trim().toLowerCase(), password);
-      router.replace('/(tabs)' as any);
+      // Don't reset loading — AuthNavigator will unmount this screen
     } catch (err: any) {
       const message = friendlyAuthError(err.code);
       Alert.alert('Sign-in failed', message);
-    } finally {
       setLoading(false);
+      signingIn.current = false;
     }
   };
 
   const handleGoogleSignIn = async () => {
+    if (signingIn.current) return;
+    signingIn.current = true;
     setGoogleLoading(true);
     try {
       await promptAsync();
-    } finally {
-      // Loading cleared in the useEffect above after response arrives
-      // Set false here as safety valve if promptAsync rejects before response
+      // promptAsync resolves when the OAuth browser dismisses, before
+      // response state updates. Keep loading true — the useEffect on
+      // `response` handles both success and error/cancel paths.
+    } catch {
       setGoogleLoading(false);
+      signingIn.current = false;
     }
   };
 
   const handleAppleSignIn = async () => {
+    if (signingIn.current) return;
     if (Platform.OS !== 'ios') {
       Alert.alert('Not available', 'Apple Sign-In is only available on iOS.');
       return;
     }
+    signingIn.current = true;
     setAppleLoading(true);
     try {
       const credential = await AppleAuthentication.signInAsync({
@@ -123,14 +138,14 @@ export default function LoginScreen() {
         .join(' ') || null;
 
       await signInWithAppleCredential(credential.identityToken, fullName);
-      router.replace('/(tabs)' as any);
+      // Don't reset loading — AuthNavigator will unmount this screen
     } catch (err: any) {
       if (err.code !== 'ERR_REQUEST_CANCELED') {
         console.error('Apple sign-in error:', err);
         Alert.alert('Sign-in failed', 'Apple sign-in could not be completed. Please try again.');
       }
-    } finally {
       setAppleLoading(false);
+      signingIn.current = false;
     }
   };
 
