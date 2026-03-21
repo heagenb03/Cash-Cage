@@ -69,9 +69,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
     } catch (err: any) {
       // New users can briefly get permission-denied while Firebase propagates the
-      // auth token to Firestore. Retry up to 3 times with exponential backoff.
-      if (err?.code === 'permission-denied' && attempt < 3) {
-        await new Promise(resolve => setTimeout(resolve, 800 * (attempt + 1)));
+      // auth token to Firestore. Retry up to 4 times with exponential backoff.
+      if (err?.code === 'permission-denied' && attempt < 4) {
+        await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
         return fetchUserDoc(uid, attempt + 1);
       }
       console.error('AuthContext: failed to fetch user doc', err);

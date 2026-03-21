@@ -85,19 +85,33 @@ export const db = initializeFirestore(app, {
 // User document helpers
 // ---------------------------------------------------------------------------
 
-/** Create the /users/{uid} document on first sign-in. */
-export async function createUserDocument(user: User, displayName?: string): Promise<void> {
-  const userRef = doc(db, 'users', user.uid);
-  const snapshot = await getDoc(userRef);
-  if (snapshot.exists()) return;
+/** Create the /users/{uid} document on first sign-in.
+ *  Retries on permission-denied to handle the token propagation delay that
+ *  occurs immediately after createUserWithEmailAndPassword. */
+export async function createUserDocument(
+  user: User,
+  displayName?: string,
+  attempt = 0,
+): Promise<void> {
+  try {
+    const userRef = doc(db, 'users', user.uid);
+    const snapshot = await getDoc(userRef);
+    if (snapshot.exists()) return;
 
-  await setDoc(userRef, {
-    displayName: displayName ?? user.displayName ?? '',
-    email: user.email ?? '',
-    photoURL: user.photoURL ?? null,
-    createdAt: serverTimestamp(),
-    tier: 'free',
-  });
+    await setDoc(userRef, {
+      displayName: displayName ?? user.displayName ?? '',
+      email: user.email ?? '',
+      photoURL: user.photoURL ?? null,
+      createdAt: serverTimestamp(),
+      tier: 'free',
+    });
+  } catch (err: any) {
+    if (err?.code === 'permission-denied' && attempt < 4) {
+      await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+      return createUserDocument(user, displayName, attempt + 1);
+    }
+    throw err;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -112,12 +126,18 @@ export async function signUpWithEmail(
   const { user } = await createUserWithEmailAndPassword(auth, email, password);
   await updateProfile(user, { displayName: name });
   await sendEmailVerification(user);
+  // Force a token refresh so Firestore security rules recognise the new uid
+  // before we attempt to write the user document.
+  await user.getIdToken(true);
   await createUserDocument(user, name);
   return user;
 }
 
 export async function signInWithEmail(email: string, password: string): Promise<User> {
   const { user } = await signInWithEmailAndPassword(auth, email, password);
+  // Safety net: create the user doc if it's missing (e.g. signup doc creation
+  // failed due to token propagation). This is a no-op if the doc already exists.
+  await createUserDocument(user);
   return user;
 }
 
