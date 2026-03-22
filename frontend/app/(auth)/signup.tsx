@@ -203,9 +203,6 @@ export default function SignupScreen() {
             )}
           </TouchableOpacity>
 
-          <Text style={styles.verificationNote}>
-            We'll send a verification link to your email. You can use the app right away.
-          </Text>
         </View>
 
         {/* Sign-in link */}
@@ -336,12 +333,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: '#0A0A0A',
     letterSpacing: 0.5,
-  },
-  verificationNote: {
-    fontSize: 12,
-    color: '#666',
-    textAlign: 'center',
-    lineHeight: 18,
   },
   footer: {
     flexDirection: 'row',
