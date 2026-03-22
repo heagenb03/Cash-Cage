@@ -17,6 +17,7 @@ import {
   restorePurchases,
 } from '@/services/revenueCatService';
 import { useAuth } from '@/contexts/AuthContext';
+import { setProSince } from '@/services/firebaseService';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -60,7 +61,7 @@ const FEATURES = [
 // ---------------------------------------------------------------------------
 
 export default function PaywallModal({ visible, onClose, triggerMessage }: PaywallModalProps) {
-  const { refreshEntitlements } = useAuth();
+  const { user, refreshEntitlements } = useAuth();
 
   const [selectedPeriod, setSelectedPeriod] = useState<'monthly' | 'annual' | 'lifetime'>('annual');
   const [offerings, setOfferings] = useState<{
@@ -125,6 +126,10 @@ export default function PaywallModal({ visible, onClose, triggerMessage }: Paywa
     try {
       const customerInfo = await purchasePackage(selectedPackage);
       if (customerInfo) {
+        // Set proSince timestamp (fire-and-forget, only sets if not already set)
+        if (user?.uid) {
+          setProSince(user.uid).catch(err => console.warn('setProSince failed:', err));
+        }
         // Purchase succeeded — refresh entitlements in AuthContext
         await refreshEntitlements();
         onClose();
@@ -144,6 +149,9 @@ export default function PaywallModal({ visible, onClose, triggerMessage }: Paywa
     try {
       const customerInfo = await restorePurchases();
       if (customerInfo?.entitlements?.active?.['pro']) {
+        if (user?.uid) {
+          setProSince(user.uid).catch(err => console.warn('setProSince failed:', err));
+        }
         await refreshEntitlements();
         onClose();
       } else {

@@ -32,6 +32,8 @@ import {
   updateDoc,
   collection,
   serverTimestamp,
+  increment,
+  runTransaction,
 } from 'firebase/firestore';
 import { Game } from '@/types/game';
 import { getFunctions, httpsCallable } from 'firebase/functions';
@@ -102,6 +104,10 @@ export async function createUserDocument(
       photoURL: user.photoURL ?? null,
       createdAt: serverTimestamp(),
       tier: 'free',
+      totalGamesPlayed: 0,
+      totalMoneyTracked: 0,
+      totalPlayersHosted: 0,
+      proSince: null,
     });
   } catch (err: any) {
     if (err?.code === 'permission-denied' && attempt < 4) {
@@ -237,6 +243,34 @@ export async function deleteCurrentUser(): Promise<void> {
   if (!currentUser) throw new Error('No authenticated user');
 
   await deleteUser(currentUser);
+}
+
+// ---------------------------------------------------------------------------
+// Profile Stats
+// ---------------------------------------------------------------------------
+
+/** Atomically increment profile stat counters on the user document. */
+export async function incrementProfileStats(
+  uid: string,
+  stats: { gamesPlayed: number; moneyTracked: number; playersHosted: number },
+): Promise<void> {
+  const userRef = doc(db, 'users', uid);
+  await updateDoc(userRef, {
+    totalGamesPlayed: increment(stats.gamesPlayed),
+    totalMoneyTracked: increment(stats.moneyTracked),
+    totalPlayersHosted: increment(stats.playersHosted),
+  });
+}
+
+/** Set proSince timestamp on the user document (only if not already set). */
+export async function setProSince(uid: string): Promise<void> {
+  const userRef = doc(db, 'users', uid);
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(userRef);
+    if (snapshot.exists() && !snapshot.data().proSince) {
+      transaction.update(userRef, { proSince: serverTimestamp() });
+    }
+  });
 }
 
 // ---------------------------------------------------------------------------

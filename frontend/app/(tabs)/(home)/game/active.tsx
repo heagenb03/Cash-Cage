@@ -10,6 +10,7 @@ import { GameService } from '@/services/gameService';
 import { getSettlements } from '@/services/settlementService';
 import { Player, PlayerBalance, Validation } from '@/types/game';
 import { getNetBalanceColor, formatNetBalanceDisplay } from '@/utils/formatUtils';
+import { incrementProfileStats } from '@/services/firebaseService';
 import { isValidNumericInput } from '@/utils/validationUtils';
 import PlayerCardActive from '@/components/PlayerCardActive';
 import PlayerCardCompleted from '@/components/PlayerCardCompleted';
@@ -130,7 +131,7 @@ function EmptyState({ label, icon }: { label: string; icon: string }) {
 
 export default function ActiveGameScreen() {
   const { activeGame, updateGame, setActiveGame, createGame } = useGame();
-  const { isPro } = useAuth();
+  const { user, isPro } = useAuth();
   const router = useRouter();
 
   // Helper function to highlight critical values in error/warning messages
@@ -367,6 +368,19 @@ export default function ActiveGameScreen() {
 
       GameService.cacheSettlements(activeGame, result);
       await updateGame(activeGame);
+
+      // Fire-and-forget profile stat increment — after successful completion
+      if (user?.uid) {
+        const totalPot = balances.reduce((sum, b) => sum + b.totalBuyins, 0);
+        const playerCount = activeGame.players.length;
+        if (Number.isFinite(totalPot) && totalPot > 0 && playerCount > 0) {
+          incrementProfileStats(user.uid, {
+            gamesPlayed: 1,
+            moneyTracked: Math.round(totalPot * 100) / 100,
+            playersHosted: playerCount,
+          }).catch(err => console.warn('Profile stats increment failed:', err));
+        }
+      }
 
       setShowSolvingModal(false);
       router.push('/game/summary' as any);

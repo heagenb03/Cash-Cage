@@ -29,6 +29,10 @@ interface UserDocument {
   email: string;
   photoURL: string | null;
   tier: Tier;
+  totalGamesPlayed?: number;
+  totalMoneyTracked?: number;
+  totalPlayersHosted?: number;
+  proSince?: Date | null;
 }
 
 interface AuthContextType {
@@ -63,7 +67,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const snapshot = await getDoc(doc(db, 'users', uid));
       if (snapshot.exists()) {
-        setUserDoc(snapshot.data() as UserDocument);
+        const data = snapshot.data();
+        setUserDoc({
+          ...data,
+          proSince: data.proSince?.toDate?.() ?? data.proSince ?? null,
+        } as UserDocument);
       } else {
         setUserDoc(null);
       }

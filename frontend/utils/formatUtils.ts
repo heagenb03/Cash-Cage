@@ -2,6 +2,24 @@
  * Utility functions for formatting and displaying data
  */
 
+/** Format a large number compactly: 0, 1, 42, 1.2k, 15k, 1.5M */
+export const formatStatNumber = (value: number): string => {
+  if (value >= 1_000_000) return `${parseFloat((value / 1_000_000).toFixed(1))}M`;
+  if (value >= 1_000) return `${parseFloat((value / 1_000).toFixed(1))}k`;
+  return value.toFixed(0);
+};
+
+/** Format a currency stat compactly: $0, $42, $1.2k, $15k */
+export const formatStatCurrency = (value: number): string => {
+  return `$${formatStatNumber(value)}`;
+};
+
+/** Format a date as "Mon YYYY" (e.g., "Jan 2026") */
+export const formatMonthYear = (date: Date): string => {
+  if (isNaN(date.getTime())) return '';
+  return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+};
+
 /**
  * Returns color based on net balance value
  * @param netBalance - The player's net balance (positive = profit, negative = loss)

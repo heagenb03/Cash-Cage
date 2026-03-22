@@ -11,6 +11,7 @@ import HudSectionHeader from '@/components/HudSectionHeader';
 import Button from '@/components/Button';
 import PaywallModal from '@/components/PaywallModal';
 import { useAuth } from '@/contexts/AuthContext';
+import { formatStatNumber, formatStatCurrency, formatMonthYear } from '@/utils/formatUtils';
 
 // ---------------------------------------------------------------------------
 // Account Screen
@@ -40,67 +41,85 @@ export default function AccountScreen() {
       <ScrollView style={styles.scrollView} contentContainerStyle={styles.scrollContent}>
 
         {/* Header */}
-        <View style={styles.section}>
-          <HudSectionHeader
-            label="Account"
-            centered={true}
-            showSettingsIcon={true}
-            onSettingsPress={() => router.push('/(tabs)/(profile)/settings' as any)}
-          />
+        <HudSectionHeader
+          label="Account"
+          centered={true}
+          showSettingsIcon={true}
+          onSettingsPress={() => router.push('/(tabs)/(profile)/settings' as any)}
+        />
 
-          {/* Profile card */}
-          <View style={styles.profileCard}>
-            {/* Avatar */}
-            <View style={styles.avatarContainer}>
-              {photoURL ? (
-                <Image
-                  source={{ uri: photoURL }}
-                  style={styles.avatarImage}
-                  accessibilityLabel="Profile photo"
-                />
-              ) : (
-                <View style={styles.avatarInitials}>
-                  <Text style={styles.initialsText}>{getInitials()}</Text>
-                </View>
-              )}
+        {/* Compact profile row */}
+        <View style={styles.profileRow}>
+          {/* Mini avatar */}
+          {photoURL ? (
+            <Image
+              source={{ uri: photoURL }}
+              style={styles.miniAvatar}
+              accessibilityLabel="Profile photo"
+            />
+          ) : (
+            <View style={styles.miniAvatarInitials}>
+              <Text style={styles.miniInitialsText}>{getInitials()}</Text>
             </View>
+          )}
 
-            {/* Name */}
-            <Text style={styles.displayName}>{displayName}</Text>
+          {/* Name + email */}
+          <View style={styles.profileInfo}>
+            <Text style={styles.profileName}>{displayName}</Text>
+            {!!email && <Text style={styles.profileEmail}>{email}</Text>}
+          </View>
 
-            {/* Email */}
-            <Text style={styles.emailText}>{email}</Text>
+          {/* Tier badge */}
+          <View style={[styles.tierBadge, isPro ? styles.tierBadgePro : styles.tierBadgeFree]}>
+            {isPro && <Ionicons name="star" size={10} color="#FFFFFF" style={styles.tierIcon} />}
+            <Text style={styles.tierText}>{isPro ? 'Pro' : 'Free'}</Text>
+          </View>
+        </View>
 
-            {/* Tier badge */}
-            <View style={[styles.tierBadge, isPro ? styles.tierBadgePro : styles.tierBadgeFree]}>
-              {isPro && (
-                <Ionicons name="star" size={12} color="#FFFFFF" style={styles.tierIcon} />
-              )}
-              <Text style={styles.tierText}>{isPro ? 'Pro' : 'Free Plan'}</Text>
-            </View>
+        {/* Stats row */}
+        <View style={styles.statsRow}>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>{formatStatNumber(userDoc?.totalGamesPlayed ?? 0)}</Text>
+            <Text style={styles.statLabel}>Games</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>{formatStatCurrency(userDoc?.totalMoneyTracked ?? 0)}</Text>
+            <Text style={styles.statLabel}>Tracked</Text>
+          </View>
+          <View style={styles.statCard}>
+            <Text style={styles.statValue}>{formatStatNumber(userDoc?.totalPlayersHosted ?? 0)}</Text>
+            <Text style={styles.statLabel}>Players</Text>
           </View>
         </View>
 
         {/* Upgrade CTA — only shown for free users */}
         {!isPro && (
-          <View style={styles.section}>
-            <View style={styles.upgradeCard}>
-              <View style={styles.upgradeHeader}>
-                <Ionicons name="star" size={20} color="#B072BB" style={styles.upgradeIcon} />
-                <Text style={styles.upgradeTitle}>CASH CAGE PRO</Text>
-              </View>
-              <Text style={styles.upgradeFeatures}>
-                Unlimited game history · Unlimited players · All devices
-              </Text>
-              <Button
-                title="Upgrade Now"
-                variant="primary"
-                fullWidth={true}
-                onPress={() => setShowPaywall(true)}
-                accessibilityLabel="Upgrade to Cash Cage Pro"
-                accessibilityHint="Opens the subscription paywall"
-              />
+          <View style={styles.upgradeCard}>
+            <View style={styles.upgradeHeader}>
+              <Ionicons name="star" size={20} color="#B072BB" style={styles.upgradeIcon} />
+              <Text style={styles.upgradeTitle}>CASH CAGE PRO</Text>
             </View>
+            <Text style={styles.upgradeFeatures}>
+              Unlimited game history · Unlimited players · All devices
+            </Text>
+            <Button
+              title="Upgrade Now"
+              variant="primary"
+              fullWidth={true}
+              onPress={() => setShowPaywall(true)}
+              accessibilityLabel="Upgrade to Cash Cage Pro"
+              accessibilityHint="Opens the subscription paywall"
+            />
+          </View>
+        )}
+
+        {/* Pro member badge — only shown for Pro users */}
+        {isPro && (
+          <View style={styles.proSinceCard}>
+            <Ionicons name="star" size={16} color="#B072BB" />
+            <Text style={styles.proSinceText}>
+              Pro member{userDoc?.proSince ? ` since ${formatMonthYear(userDoc.proSince)}` : ''}
+            </Text>
           </View>
         )}
 
@@ -127,77 +146,118 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingBottom: 40,
   },
-  section: {
+
+  // Compact profile row
+  profileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 4,
     marginBottom: 20,
     backgroundColor: 'transparent',
   },
-
-  // Profile card
-  profileCard: {
-    backgroundColor: '#1A1A1A',
+  miniAvatar: {
+    width: 32,
+    height: 32,
     borderRadius: 16,
-    padding: 24,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(176,114,187,0.2)',
+    marginRight: 10,
   },
-  avatarContainer: {
-    marginBottom: 16,
-    backgroundColor: 'transparent',
-  },
-  avatarImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-  },
-  avatarInitials: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: '#B072BB',
+  miniAvatarInitials: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#49264F',
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 10,
   },
-  initialsText: {
-    fontSize: 28,
-    fontWeight: 'bold',
+  miniInitialsText: {
+    fontSize: 12,
+    fontWeight: '700',
     color: '#FFFFFF',
     backgroundColor: 'transparent',
   },
-  displayName: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 6,
-    textAlign: 'center',
+  profileInfo: {
+    flex: 1,
     backgroundColor: 'transparent',
   },
-  emailText: {
+  profileName: {
     fontSize: 13,
-    color: 'rgba(255,255,255,0.6)',
-    marginBottom: 12,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.9)',
+    backgroundColor: 'transparent',
+  },
+  profileEmail: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.4)',
+    marginTop: 1,
     backgroundColor: 'transparent',
   },
   tierBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
   },
   tierBadgeFree: {
-    backgroundColor: 'rgba(255,255,255,0.1)',
+    backgroundColor: 'rgba(255,255,255,0.08)',
   },
   tierBadgePro: {
     backgroundColor: '#B072BB',
   },
   tierIcon: {
-    marginRight: 4,
+    marginRight: 3,
   },
   tierText: {
-    fontSize: 12,
+    fontSize: 11,
     fontWeight: '600',
     color: '#FFFFFF',
+    backgroundColor: 'transparent',
+  },
+
+  // Stats row
+  statsRow: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 20,
+  },
+  statCard: {
+    flex: 1,
+    backgroundColor: '#1A1A1A',
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center',
+  },
+  statValue: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#B072BB',
+    backgroundColor: 'transparent',
+  },
+  statLabel: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.4)',
+    marginTop: 4,
+    backgroundColor: 'transparent',
+  },
+
+  // Pro member badge
+  proSinceCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1A1A1A',
+    borderRadius: 12,
+    padding: 14,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(176,114,187,0.2)',
+  },
+  proSinceText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.6)',
     backgroundColor: 'transparent',
   },
 
