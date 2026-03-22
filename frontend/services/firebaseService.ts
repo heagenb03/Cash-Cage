@@ -6,10 +6,8 @@ import {
   signInWithEmailAndPassword,
   signInWithCredential,
   signOut,
-  sendEmailVerification,
   sendPasswordResetEmail,
   updateProfile,
-  verifyBeforeUpdateEmail,
   updatePassword,
   reauthenticateWithCredential,
   EmailAuthProvider,
@@ -125,7 +123,6 @@ export async function signUpWithEmail(
 ): Promise<User> {
   const { user } = await createUserWithEmailAndPassword(auth, email, password);
   await updateProfile(user, { displayName: name });
-  await sendEmailVerification(user);
   // Force a token refresh so Firestore security rules recognise the new uid
   // before we attempt to write the user document.
   await user.getIdToken(true);
@@ -209,20 +206,6 @@ export async function updateDisplayName(name: string): Promise<void> {
 }
 
 /**
- * Send a verification email to the new address. The email in Firebase Auth
- * and Firestore is only updated after the user clicks the verification link.
- * Uses verifyBeforeUpdateEmail (updateEmail is deprecated in SDK v12+).
- * May throw auth/requires-recent-login if the session is too old.
- */
-export async function updateUserEmail(newEmail: string): Promise<void> {
-  const currentUser = auth.currentUser;
-  if (!currentUser) throw new Error('No authenticated user');
-
-  await verifyBeforeUpdateEmail(currentUser, newEmail);
-  // NOTE: Do NOT update Firestore here — email only changes after verification.
-}
-
-/**
  * Change the current user's password.
  * May throw auth/requires-recent-login if the session is too old.
  */
@@ -243,16 +226,6 @@ export async function reauthenticateUser(email: string, password: string): Promi
 
   const credential = EmailAuthProvider.credential(email, password);
   await reauthenticateWithCredential(currentUser, credential);
-}
-
-/**
- * Resend the email verification message to the current user.
- */
-export async function resendEmailVerification(): Promise<void> {
-  const currentUser = auth.currentUser;
-  if (!currentUser) throw new Error('No authenticated user');
-
-  await sendEmailVerification(currentUser);
 }
 
 /**
