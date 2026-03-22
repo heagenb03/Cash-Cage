@@ -22,7 +22,12 @@ import { signInWithEmail, signInWithGoogleCredential, signInWithAppleCredential 
 // Using dynamic require() instead of static imports lets us catch the native
 // module error at module load time, so the component can still export and
 // email/password sign-in works in Expo Go. OAuth requires a dev build.
-type GoogleAuthHook = (config: { clientId?: string }) => [
+type GoogleAuthHook = (config: {
+  clientId?: string;
+  iosClientId?: string;
+  androidClientId?: string;
+  webClientId?: string;
+}) => [
   unknown,
   { type: string; params: { id_token?: string } } | null,
   () => Promise<void>,
@@ -53,8 +58,11 @@ export default function LoginScreen() {
   const signingIn = useRef(false);
 
   // Google Sign-In via expo-auth-session (unavailable in Expo Go — requires dev build)
+  // Native platforms need platform-specific client IDs; Web client IDs reject custom scheme redirects.
   const [request, response, promptAsync] = useGoogleAuth({
-    clientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
+    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID,
+    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID,
+    webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
   });
 
   useEffect(() => {
