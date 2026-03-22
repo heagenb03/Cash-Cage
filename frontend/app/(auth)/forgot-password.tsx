@@ -112,7 +112,7 @@ export default function ForgotPasswordScreen() {
               you'll receive a password reset link shortly.
             </Text>
             <TouchableOpacity
-              style={styles.primaryButton}
+              style={[styles.primaryButton, styles.successButton]}
               onPress={() => router.back()}
               activeOpacity={0.8}
             >
@@ -235,5 +235,9 @@ const styles = StyleSheet.create({
   emailHighlight: {
     color: '#FFFFFF',
     fontWeight: '600',
+  },
+  successButton: {
+    alignSelf: 'stretch',
+    marginTop: 8,
   },
 });
