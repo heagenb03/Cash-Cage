@@ -19,7 +19,6 @@ import ModalButton from '@/components/ModalButton';
 import PaywallModal from '@/components/PaywallModal';
 import {
   updateDisplayName,
-  updateUserEmail,
   updateUserPassword,
   reauthenticateUser,
   callDeleteUserData,
@@ -64,7 +63,6 @@ function friendlyFirebaseError(err: any): string {
 type ActiveModal =
   | 'none'
   | 'editName'
-  | 'editEmail'
   | 'changePassword'
   | 'signOutConfirm'
   | 'deleteAccountConfirm'
@@ -102,9 +100,6 @@ export default function SettingsScreen() {
   // Edit name
   const [nameInput, setNameInput] = useState('');
 
-  // Edit email
-  const [emailInput, setEmailInput] = useState('');
-
   // Change password
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -122,7 +117,6 @@ export default function SettingsScreen() {
 
     // Pre-fill inputs
     if (modal === 'editName') setNameInput(displayName);
-    if (modal === 'editEmail') setEmailInput(email);
     if (modal === 'changePassword') {
       setCurrentPassword('');
       setNewPassword('');
@@ -132,7 +126,7 @@ export default function SettingsScreen() {
     if (modal === 'deleteAccountReauth') setReauthPassword('');
 
     setActiveModal(modal);
-  }, [displayName, email]);
+  }, [displayName]);
 
   const closeModal = useCallback(() => {
     setActiveModal('none');
@@ -167,33 +161,6 @@ export default function SettingsScreen() {
       setModalLoading(false);
     }
   }, [nameInput, refreshUserDoc, closeModal]);
-
-  const handleSaveEmail = useCallback(async () => {
-    const trimmed = emailInput.trim();
-    if (!trimmed) {
-      setModalError('Email cannot be empty.');
-      return;
-    }
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(trimmed)) {
-      setModalError('Please enter a valid email address.');
-      return;
-    }
-    setModalLoading(true);
-    setModalError('');
-    try {
-      // verifyBeforeUpdateEmail sends a verification link — the email in Firebase
-      // Auth and Firestore only changes after the user clicks that link.
-      await updateUserEmail(trimmed);
-      closeModal();
-      // Brief UX: show a success toast or banner here in a future pass.
-      // For now the modal just closes; the user should check their inbox.
-    } catch (err: any) {
-      setModalError(friendlyFirebaseError(err));
-    } finally {
-      setModalLoading(false);
-    }
-  }, [emailInput, closeModal]);
 
   const handleChangePassword = useCallback(async () => {
     if (!currentPassword) {
@@ -244,14 +211,17 @@ export default function SettingsScreen() {
     try {
       // Calls the Cloud Function which recursively deletes Firestore data
       // and then deletes the Firebase Auth user server-side.
-      // Requires the functions/ Cloud Function to be deployed.
       await callDeleteUserData();
-      // Navigation is handled by _layout.tsx onAuthStateChanged (user → null)
+      // The Cloud Function deletes the user server-side, but onAuthStateChanged
+      // doesn't fire for server-side deletions — the local auth token remains
+      // valid until it expires. Sign out locally to clear auth state and trigger
+      // the AuthNavigator redirect to login.
+      await signOut();
     } catch (err: any) {
       setModalError(friendlyFirebaseError(err));
       setModalLoading(false);
     }
-  }, []);
+  }, [signOut]);
 
   const handleDeleteConfirm = useCallback(() => {
     if (deleteConfirmInput !== 'DELETE') return;
@@ -328,12 +298,8 @@ export default function SettingsScreen() {
 
             <View style={styles.menuDivider} />
 
-            {/* Email */}
-            <TouchableOpacity
-              style={styles.menuItem}
-              onPress={isEmailProvider ? () => openModal('editEmail') : undefined}
-              activeOpacity={isEmailProvider ? 0.7 : 1}
-            >
+            {/* Email (read-only) */}
+            <View style={styles.menuItem}>
               <View style={styles.menuItemLeft}>
                 <Ionicons name="mail-outline" size={24} color="#B072BB" />
                 <Text style={styles.menuItemLabel}>Email</Text>
@@ -343,11 +309,8 @@ export default function SettingsScreen() {
                   {email}
                   {!isEmailProvider && providerLabel ? ` ${providerLabel}` : ''}
                 </Text>
-                {isEmailProvider && (
-                  <Ionicons name="chevron-forward" size={20} color="#666" />
-                )}
               </View>
-            </TouchableOpacity>
+            </View>
 
             {/* Change Password — only shown for email/password accounts */}
             {isEmailProvider && (
@@ -541,64 +504,6 @@ export default function SettingsScreen() {
                     variant="confirm"
                     onPress={handleSaveName}
                     disabled={modalLoading || !nameInput.trim()}
-                  />
-                </View>
-              </View>
-            </View>
-          </KeyboardAvoidingView>
-        </GestureHandlerRootView>
-      </Modal>
-
-      {/* ------------------------------------------------------------------- */}
-      {/* Modal: Edit Email                                                     */}
-      {/* ------------------------------------------------------------------- */}
-      <Modal
-        visible={activeModal === 'editEmail'}
-        animationType="fade"
-        transparent
-        onRequestClose={closeModal}
-      >
-        <GestureHandlerRootView style={{ flex: 1 }}>
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={{ flex: 1 }}
-          >
-            <View style={styles.modalOverlay}>
-              <View style={styles.modalContent}>
-                <Ionicons name="mail-outline" size={32} color="#B072BB" style={styles.modalIcon} />
-                <Text style={styles.modalTitle}>Email Address</Text>
-                <Text style={styles.modalSubtitle}>
-                  A verification link will be sent to the new address. Your email updates after you verify it.
-                </Text>
-
-                <TextInput
-                  style={styles.textInput}
-                  value={emailInput}
-                  onChangeText={setEmailInput}
-                  placeholder="Email address"
-                  placeholderTextColor="rgba(255,255,255,0.3)"
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  editable={!modalLoading}
-                />
-
-                {modalError ? (
-                  <Text style={styles.modalError}>{modalError}</Text>
-                ) : null}
-
-                <View style={styles.modalButtons}>
-                  <ModalButton
-                    title="Cancel"
-                    variant="cancel"
-                    onPress={closeModal}
-                    disabled={modalLoading}
-                  />
-                  <ModalButton
-                    title={modalLoading ? 'Saving…' : 'Save'}
-                    variant="confirm"
-                    onPress={handleSaveEmail}
-                    disabled={modalLoading || !emailInput.trim()}
                   />
                 </View>
               </View>

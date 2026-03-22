@@ -1,10 +1,8 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   StyleSheet,
   ScrollView,
   Image,
-  TouchableOpacity,
-  ActivityIndicator,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -13,7 +11,6 @@ import HudSectionHeader from '@/components/HudSectionHeader';
 import Button from '@/components/Button';
 import PaywallModal from '@/components/PaywallModal';
 import { useAuth } from '@/contexts/AuthContext';
-import { resendEmailVerification } from '@/services/firebaseService';
 
 // ---------------------------------------------------------------------------
 // Account Screen
@@ -24,44 +21,6 @@ export default function AccountScreen() {
   const { user, userDoc, isPro } = useAuth();
 
   const [showPaywall, setShowPaywall] = useState(false);
-
-  // Email verification banner state
-  const [bannerDismissed, setBannerDismissed] = useState(false);
-  const [resendLoading, setResendLoading] = useState(false);
-  const [resendSent, setResendSent] = useState(false);
-  const [resendCooldown, setResendCooldown] = useState(0);
-  const cooldownRef = useRef<ReturnType<typeof setInterval> | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (cooldownRef.current) clearInterval(cooldownRef.current);
-    };
-  }, []);
-
-  const handleResendVerification = useCallback(async () => {
-    if (resendLoading || resendCooldown > 0) return;
-
-    setResendLoading(true);
-    try {
-      await resendEmailVerification();
-      setResendSent(true);
-      setResendCooldown(60);
-
-      cooldownRef.current = setInterval(() => {
-        setResendCooldown((prev) => {
-          if (prev <= 1) {
-            if (cooldownRef.current) clearInterval(cooldownRef.current);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    } catch (err) {
-      console.error('Failed to resend verification email:', err);
-    } finally {
-      setResendLoading(false);
-    }
-  }, [resendLoading, resendCooldown]);
 
   // Derive initials from display name for avatar fallback
   const getInitials = useCallback((): string => {
@@ -75,8 +34,6 @@ export default function AccountScreen() {
   const displayName = userDoc?.displayName || user?.displayName || 'Anonymous';
   const email = userDoc?.email || user?.email || '';
   const photoURL = userDoc?.photoURL || user?.photoURL || null;
-  const isEmailVerified = user?.emailVerified ?? false;
-  const showBanner = user && !isEmailVerified && !bannerDismissed;
 
   return (
     <View style={styles.container}>
@@ -111,27 +68,8 @@ export default function AccountScreen() {
             {/* Name */}
             <Text style={styles.displayName}>{displayName}</Text>
 
-            {/* Email row */}
-            <View style={styles.emailRow}>
-              <Text style={styles.emailText}>{email}</Text>
-              {isEmailVerified ? (
-                <Ionicons
-                  name="checkmark-circle"
-                  size={16}
-                  color="#4CAF50"
-                  accessibilityLabel="Email verified"
-                  style={styles.emailStatusIcon}
-                />
-              ) : (
-                <Ionicons
-                  name="alert-circle"
-                  size={16}
-                  color="#FFA500"
-                  accessibilityLabel="Email not verified"
-                  style={styles.emailStatusIcon}
-                />
-              )}
-            </View>
+            {/* Email */}
+            <Text style={styles.emailText}>{email}</Text>
 
             {/* Tier badge */}
             <View style={[styles.tierBadge, isPro ? styles.tierBadgePro : styles.tierBadgeFree]}>
@@ -142,43 +80,6 @@ export default function AccountScreen() {
             </View>
           </View>
         </View>
-
-        {/* Email verification banner */}
-        {showBanner && (
-          <View style={styles.verificationBanner}>
-            <View style={styles.verificationBannerContent}>
-              <Ionicons name="mail-outline" size={20} color="#FFA500" style={styles.bannerIcon} />
-              <Text style={styles.bannerText}>Please verify your email address.</Text>
-            </View>
-            <View style={styles.bannerActions}>
-              <TouchableOpacity
-                onPress={handleResendVerification}
-                disabled={resendLoading || resendCooldown > 0}
-                accessibilityLabel="Resend verification email"
-                accessibilityHint="Sends a new verification email to your address"
-              >
-                {resendLoading ? (
-                  <ActivityIndicator size="small" color="#FFA500" />
-                ) : resendSent && resendCooldown > 0 ? (
-                  <Text style={styles.bannerSentText}>Sent! ({resendCooldown}s)</Text>
-                ) : resendCooldown > 0 ? (
-                  <Text style={[styles.bannerResendText, styles.bannerResendDisabled]}>
-                    Resend ({resendCooldown}s)
-                  </Text>
-                ) : (
-                  <Text style={styles.bannerResendText}>Resend</Text>
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => setBannerDismissed(true)}
-                style={styles.bannerDismiss}
-                accessibilityLabel="Dismiss verification banner"
-              >
-                <Ionicons name="close" size={18} color="rgba(255,255,255,0.5)" />
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
 
         {/* Upgrade CTA — only shown for free users */}
         {!isPro && (
@@ -271,19 +172,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     backgroundColor: 'transparent',
   },
-  emailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    backgroundColor: 'transparent',
-  },
   emailText: {
     fontSize: 13,
     color: 'rgba(255,255,255,0.6)',
+    marginBottom: 12,
     backgroundColor: 'transparent',
-  },
-  emailStatusIcon: {
-    marginLeft: 6,
   },
   tierBadge: {
     flexDirection: 'row',
@@ -306,56 +199,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFFFFF',
     backgroundColor: 'transparent',
-  },
-
-  // Email verification banner
-  verificationBanner: {
-    backgroundColor: '#1A1A1A',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(255,165,0,0.3)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  verificationBannerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-    backgroundColor: 'transparent',
-  },
-  bannerIcon: {
-    marginRight: 10,
-  },
-  bannerText: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.8)',
-    flex: 1,
-    backgroundColor: 'transparent',
-  },
-  bannerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: 'transparent',
-  },
-  bannerResendText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#FFA500',
-  },
-  bannerResendDisabled: {
-    opacity: 0.5,
-  },
-  bannerSentText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: '#4CAF50',
-  },
-  bannerDismiss: {
-    padding: 2,
   },
 
   // Upgrade CTA card
