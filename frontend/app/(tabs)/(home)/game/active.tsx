@@ -1,5 +1,5 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Modal, AccessibilityInfo, Animated, ActivityIndicator } from 'react-native';
+import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
+import { StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Modal, Animated, ActivityIndicator } from 'react-native';
 import { GestureHandlerRootView, Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
@@ -18,30 +18,11 @@ import Button from '@/components/Button';
 import ModalButton from '@/components/ModalButton';
 import PaywallModal from '@/components/PaywallModal';
 import { useAuth } from '@/contexts/AuthContext';
+import { useReduceMotion } from '@/hooks/useReduceMotion';
 
 function HudSectionHeader({ label, onAction, actionIcon }: { label: string; onAction?: () => void; actionIcon?: string }) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
-  const [reduceMotion, setReduceMotion] = useState(false);
-
-  useEffect(() => {
-    let isMounted = true;
-    let subscription: any;
-
-    AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
-      if (isMounted) {
-        setReduceMotion(enabled);
-      }
-    });
-
-    subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', (enabled) => {
-      setReduceMotion(enabled);
-    });
-
-    return () => {
-      isMounted = false;
-      subscription?.remove();
-    };
-  }, []);
+  const reduceMotion = useReduceMotion();
 
   const animateScaleDown = useCallback((scaleValue: number = 0.945) => {
     if (!reduceMotion) {
@@ -72,7 +53,7 @@ function HudSectionHeader({ label, onAction, actionIcon }: { label: string; onAc
     }
   }, [onAction]);
 
-  const tapGesture = Gesture.Tap()
+  const tapGesture = useMemo(() => Gesture.Tap()
     .maxDuration(200)
     .maxDistance(10)
     .enabled(!!onAction)
@@ -86,7 +67,7 @@ function HudSectionHeader({ label, onAction, actionIcon }: { label: string; onAc
       } else {
         runOnJS(animateScaleUp)(0);
       }
-    });
+    }), [onAction, animateScaleDown, animateScaleUp, handleTapSuccess]);
 
   return (
     <View style={styles.hudHeader}>
@@ -167,7 +148,7 @@ export default function ActiveGameScreen() {
   const [editedTitle, setEditedTitle] = useState('');
   const [playerToDelete, setPlayerToDelete] = useState<Player | null>(null);
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
-  const [reduceMotionEnabled, setReduceMotionEnabled] = useState(false);
+  const reduceMotionEnabled = useReduceMotion();
   const [showRenameModal, setShowRenameModal] = useState(false);
   const [renamedPlayerName, setRenamedPlayerName] = useState('');
   const [showPaywall, setShowPaywall] = useState(false);
@@ -177,19 +158,6 @@ export default function ActiveGameScreen() {
   const [completionModalMode, setCompletionModalMode] = useState<'error' | 'warning' | 'confirm'>('confirm');
   const [validationResult, setValidationResult] = useState<Validation | null>(null);
   const [showSolvingModal, setShowSolvingModal] = useState(false);
-
-  useEffect(() => {
-    AccessibilityInfo.isReduceMotionEnabled().then(enabled => {
-      setReduceMotionEnabled(enabled ?? false);
-    });
-
-    const subscription = AccessibilityInfo.addEventListener(
-      'reduceMotionChanged',
-      setReduceMotionEnabled
-    );
-
-    return () => subscription.remove();
-  }, []);
 
   const handleCreateNewGame = async () => {
     try {
@@ -229,6 +197,14 @@ export default function ActiveGameScreen() {
     setTransactionAmount(currentTotal.toString());
     setShowAddTransaction(true);
   }, [balances]);
+
+  const handleBuyIn = useCallback((player: Player) => {
+    openTransactionModal(player, 'buyin');
+  }, [openTransactionModal]);
+
+  const handleCashOut = useCallback((player: Player) => {
+    openTransactionModal(player, 'cashout');
+  }, [openTransactionModal]);
 
   const openRenameModal = useCallback((player: Player) => {
     setSelectedPlayer(player);
@@ -535,8 +511,8 @@ export default function ActiveGameScreen() {
                   <PlayerCardActive
                     player={player}
                     balance={balance}
-                    onBuyIn={(player) => openTransactionModal(player, 'buyin')}
-                    onCashOut={(player) => openTransactionModal(player, 'cashout')}
+                    onBuyIn={handleBuyIn}
+                    onCashOut={handleCashOut}
                     onComplete={handleCompletePlayer}
                     onDelete={confirmDeletePlayer}
                     onRename={openRenameModal}

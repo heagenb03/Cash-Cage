@@ -1,16 +1,17 @@
-import { StyleSheet, FlatList, TouchableOpacity, Alert, Modal, AccessibilityInfo, ListRenderItemInfo } from 'react-native';
+import { StyleSheet, FlatList, TouchableOpacity, Alert, Modal, ListRenderItemInfo } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Text, View } from '@/components/Themed';
 import { useGame } from '@/contexts/GameContext';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useState, useCallback, useMemo } from 'react';
 import GameCard from '@/components/GameCard';
 import Button from '@/components/Button';
 import ModalButton from '@/components/ModalButton';
 import PaywallModal from '@/components/PaywallModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { Game } from '@/types/game';
+import { useReduceMotion } from '@/hooks/useReduceMotion';
 
 function HudSectionHeader({ label }: { label: string }) {
   return (
@@ -49,7 +50,7 @@ export default function HomeScreen() {
 
   const [gameToDelete, setGameToDelete] = useState<{ id: string; name: string } | null>(null);
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
-  const [reduceMotionEnabled, setReduceMotionEnabled] = useState(false);
+  const reduceMotionEnabled = useReduceMotion();
   const [showPaywall, setShowPaywall] = useState(false);
 
   const listData = useMemo<ListItem[]>(() => {
@@ -92,21 +93,6 @@ export default function HomeScreen() {
 
     return items;
   }, [games, isPro]);
-
-  useEffect(() => {
-    AccessibilityInfo.isReduceMotionEnabled().then(enabled => {
-      setReduceMotionEnabled(enabled ?? false);
-    });
-
-    const subscription = AccessibilityInfo.addEventListener(
-      'reduceMotionChanged',
-      setReduceMotionEnabled
-    );
-
-    return () => {
-      subscription.remove();
-    };
-  }, []);
 
   const handleGamePress = useCallback(async (gameId: string, isCompleted: boolean) => {
     await setActiveGame(gameId);
@@ -192,7 +178,7 @@ export default function HomeScreen() {
         initialNumToRender={8}
         maxToRenderPerBatch={5}
         windowSize={5}
-        removeClippedSubviews={false}
+        removeClippedSubviews={true}
       />
 
       {/* Actions */}

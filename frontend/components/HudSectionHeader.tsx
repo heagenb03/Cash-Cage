@@ -1,9 +1,10 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { StyleSheet, AccessibilityInfo, Animated } from 'react-native';
+import React, { useCallback, useRef, useMemo } from 'react';
+import { StyleSheet, Animated } from 'react-native';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { Text, View } from '@/components/Themed';
+import { useReduceMotion } from '@/hooks/useReduceMotion';
 
 interface HudSectionHeaderProps {
   label: string;
@@ -24,27 +25,7 @@ export default function HudSectionHeader({
 }: HudSectionHeaderProps) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const settingsScaleAnim = useRef(new Animated.Value(1)).current;
-  const [reduceMotion, setReduceMotion] = useState(false);
-
-  useEffect(() => {
-    let isMounted = true;
-    let subscription: any;
-
-    AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
-      if (isMounted) {
-        setReduceMotion(enabled);
-      }
-    });
-
-    subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', (enabled) => {
-      setReduceMotion(enabled);
-    });
-
-    return () => {
-      isMounted = false;
-      subscription?.remove();
-    };
-  }, []);
+  const reduceMotion = useReduceMotion();
 
   const animateScaleDown = useCallback((scaleValue: number = 0.945) => {
     if (!reduceMotion) {
@@ -104,7 +85,7 @@ export default function HudSectionHeader({
     }
   }, [reduceMotion, settingsScaleAnim]);
 
-  const tapGesture = Gesture.Tap()
+  const tapGesture = useMemo(() => Gesture.Tap()
     .maxDuration(200)
     .maxDistance(10)
     .enabled(!!onAction)
@@ -118,9 +99,9 @@ export default function HudSectionHeader({
       } else {
         runOnJS(animateScaleUp)(0);
       }
-    });
+    }), [onAction, animateScaleDown, animateScaleUp, handleTapSuccess]);
 
-  const settingsTapGesture = Gesture.Tap()
+  const settingsTapGesture = useMemo(() => Gesture.Tap()
     .maxDuration(200)
     .maxDistance(10)
     .enabled(!!onSettingsPress)
@@ -134,7 +115,7 @@ export default function HudSectionHeader({
       } else {
         runOnJS(animateSettingsScaleUp)(0);
       }
-    });
+    }), [onSettingsPress, animateSettingsScaleDown, animateSettingsScaleUp, handleSettingsTap]);
 
   // Determine layout mode
   const isCenteredMode = centered || showSettingsIcon;

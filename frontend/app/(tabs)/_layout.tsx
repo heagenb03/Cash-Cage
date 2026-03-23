@@ -1,14 +1,15 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useRef } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs, usePathname, useRouter } from 'expo-router';
-import { Text, View, TouchableOpacity, Animated, AccessibilityInfo } from 'react-native';
+import { Text, View, TouchableOpacity, Animated } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { GestureDetector, Gesture } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
 
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
+import { useReduceMotion } from '@/hooks/useReduceMotion';
 
 export const unstable_settings = {
   initialRouteName: '(home)',
@@ -27,27 +28,7 @@ function DynamicCashCageHeader() {
   const insets = useSafeAreaInsets();
 
   const scaleAnim = useRef(new Animated.Value(1)).current;
-  const [reduceMotion, setReduceMotion] = useState(false);
-
-  useEffect(() => {
-    let isMounted = true;
-    let subscription: any;
-
-    AccessibilityInfo.isReduceMotionEnabled().then((enabled) => {
-      if (isMounted) {
-        setReduceMotion(enabled);
-      }
-    });
-
-    subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', (enabled) => {
-      setReduceMotion(enabled);
-    });
-
-    return () => {
-      isMounted = false;
-      subscription?.remove();
-    };
-  }, []);
+  const reduceMotion = useReduceMotion();
 
   const animateScaleDown = useCallback((scaleValue: number = 0.9) => {
     if (!reduceMotion) {
@@ -98,7 +79,7 @@ function DynamicCashCageHeader() {
             <TouchableOpacity
               onPress={() => {
                 if (isGameScreen) {
-                  router.push('/');
+                  router.dismissAll();
                 } else {
                   router.back();
                 }

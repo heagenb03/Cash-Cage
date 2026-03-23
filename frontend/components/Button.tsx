@@ -1,8 +1,8 @@
-import React, { useRef, useCallback } from 'react';
+import React, { useRef, useCallback, useMemo } from 'react';
 import { Animated, StyleSheet, Text } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
-import { AccessibilityInfo } from 'react-native';
+import { useReduceMotion } from '@/hooks/useReduceMotion';
 
 interface ButtonProps {
   onPress: () => void;
@@ -24,24 +24,7 @@ const Button: React.FC<ButtonProps> = ({
   accessibilityHint,
 }) => {
   const scaleAnim = useRef(new Animated.Value(1)).current;
-  const [reduceMotion, setReduceMotion] = React.useState(false);
-
-  React.useEffect(() => {
-    const checkReduceMotion = async () => {
-      const isReduceMotionEnabled = await AccessibilityInfo.isReduceMotionEnabled();
-      setReduceMotion(isReduceMotionEnabled);
-    };
-    checkReduceMotion();
-
-    const subscription = AccessibilityInfo.addEventListener(
-      'reduceMotionChanged',
-      setReduceMotion
-    );
-
-    return () => {
-      subscription.remove();
-    };
-  }, []);
+  const reduceMotion = useReduceMotion();
 
   const animateScaleDown = useCallback(() => {
     if (!reduceMotion && !disabled) {
@@ -72,7 +55,7 @@ const Button: React.FC<ButtonProps> = ({
     }
   }, [onPress, disabled]);
 
-  const tapGesture = Gesture.Tap()
+  const tapGesture = useMemo(() => Gesture.Tap()
     .maxDuration(200)
     .maxDistance(10)
     .enabled(!disabled)
@@ -86,7 +69,7 @@ const Button: React.FC<ButtonProps> = ({
       } else {
         runOnJS(animateScaleUp)(0);
       }
-    });
+    }), [disabled, animateScaleDown, animateScaleUp, handleTapSuccess]);
 
   const getButtonStyle = () => {
     switch (variant) {
