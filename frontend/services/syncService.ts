@@ -31,6 +31,7 @@ export class SyncService {
   static async loadGames(
     uid: string | null,
     onRemoteUpdate?: (games: Game[]) => void,
+    signal?: AbortSignal,
   ): Promise<Game[]> {
     const local = await StorageService.loadGames();
     const localWithDates = local.map(deserializeSyncedAt);
@@ -40,10 +41,13 @@ export class SyncService {
       (async () => {
         try {
           const remote = await fetchGamesFromFirestore(uid);
+          if (signal?.aborted) return;
           const merged = SyncService.mergeGames(localWithDates, remote);
           await StorageService.saveGames(merged);
+          if (signal?.aborted) return;
           onRemoteUpdate?.(merged);
         } catch (err) {
+          if (signal?.aborted) return;
           console.warn('SyncService: background Firestore sync failed', err);
         }
       })();
