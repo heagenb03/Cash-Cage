@@ -287,7 +287,26 @@ export async function saveGameToFirestore(uid: string, game: Game): Promise<void
   const gameRef = doc(db, 'users', uid, 'games', game.id);
   // Exclude ephemeral cache fields that don't belong in remote storage
   const { cachedSettlements, transactionHash, syncedAt: _syncedAt, ...gameData } = game;
-  await setDoc(gameRef, { ...gameData, syncedAt: serverTimestamp() }, { merge: true });
+  // Firestore rejects `undefined` values — strip them recursively
+  // (e.g. completedAt on active games/players, optional fields on new objects)
+  await setDoc(gameRef, { ...stripUndefined(gameData), syncedAt: serverTimestamp() }, { merge: true });
+}
+
+/** Recursively remove keys with `undefined` values from an object/array. */
+function stripUndefined(obj: any): any {
+  if (Array.isArray(obj)) {
+    return obj.map(stripUndefined);
+  }
+  if (obj !== null && typeof obj === 'object' && !(obj instanceof Date)) {
+    const clean: Record<string, any> = {};
+    for (const [key, value] of Object.entries(obj)) {
+      if (value !== undefined) {
+        clean[key] = stripUndefined(value);
+      }
+    }
+    return clean;
+  }
+  return obj;
 }
 
 /**
@@ -319,8 +338,8 @@ function deserializeFirestoreGame(data: Record<string, any>): Game {
     date: toDate(data.date),
     status: data.status,
     players: (data.players ?? []).map((p: any) => ({
-      ...p,
-      createdAt: toDate(p.createdAt),
+      id: p.id,
+      name: p.name,
       completedAt: toOptDate(p.completedAt),
     })),
     transactions: (data.transactions ?? []).map((t: any) => ({
@@ -328,7 +347,6 @@ function deserializeFirestoreGame(data: Record<string, any>): Game {
       timestamp: toDate(t.timestamp),
     })),
     createdAt: toDate(data.createdAt),
-    completedAt: toOptDate(data.completedAt),
     syncedAt: toOptDate(data.syncedAt),
   };
 }
