@@ -116,8 +116,6 @@ export class GameService {
     const player: Player = {
       id: `player_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       name,
-      createdAt: new Date(),
-      completedAt: undefined
     };
 
     game.players.push(player);
@@ -167,7 +165,7 @@ export class GameService {
 
     const player = game.players.find(p => p.id === playerId);
     if (player) {
-      player.completedAt = undefined;
+      delete player.completedAt;
     }
   }
 
@@ -189,7 +187,6 @@ export class GameService {
   
   static completeGame(game: Game): void {
     game.status = 'completed';
-    game.completedAt = new Date();
   }
   
   static createGame(name: string): Game {

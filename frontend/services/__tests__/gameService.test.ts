@@ -66,10 +66,9 @@ describe('GameService.addPlayer', () => {
     expect(player.id).toMatch(/^player_/);
   });
 
-  it('sets createdAt and leaves completedAt undefined', () => {
+  it('leaves completedAt undefined for new players', () => {
     const game = createTestGame();
     const player = GameService.addPlayer(game, 'Alice');
-    expect(player.createdAt).toBeInstanceOf(Date);
     expect(player.completedAt).toBeUndefined();
   });
 });
@@ -265,10 +264,12 @@ describe('GameService.completeGame', () => {
     expect(game.status).toBe('completed');
   });
 
-  it('sets completedAt date', () => {
+  it('does not add extra properties to the game', () => {
     const game = createTestGame();
+    const keysBefore = Object.keys(game);
     GameService.completeGame(game);
-    expect(game.completedAt).toBeInstanceOf(Date);
+    // status is updated in-place, no new keys should be added
+    expect(Object.keys(game)).toEqual(keysBefore);
   });
 });
 

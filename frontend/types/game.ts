@@ -2,7 +2,6 @@
 export interface Player {
   id: string;
   name: string;
-  createdAt: Date;
   completedAt?: Date;
 }
 
@@ -22,7 +21,6 @@ export interface Game {
   players: Player[];
   transactions: Transaction[];
   createdAt: Date;
-  completedAt?: Date;
 
   // Settlement cache
   cachedSettlements?: SettlementResult;
