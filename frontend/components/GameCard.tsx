@@ -27,10 +27,13 @@ function formatDate(date: Date): string {
 const GameCard: React.FC<GameCardProps> = ({ game, onPress, onDelete, isCompleted = false, reduceMotion, entryIndex }) => {
   const swipeableRef = useRef<SwipeableMethods>(null);
   const scaleAnim = useRef(new Animated.Value(1)).current;
-  const entryAnim = useRef(new Animated.Value(0)).current;
+  // Capture whether this card should animate at mount time — prevents opacity
+  // from dropping to 0 if entryIndex changes due to sibling deletion.
+  const shouldEntryAnimate = useRef(entryIndex !== undefined && !reduceMotion);
+  const entryAnim = useRef(new Animated.Value(shouldEntryAnimate.current ? 0 : 1)).current;
 
   useEffect(() => {
-    if (!reduceMotion && entryIndex !== undefined) {
+    if (shouldEntryAnimate.current && entryIndex !== undefined) {
       Animated.timing(entryAnim, {
         toValue: 1,
         duration: 280,
@@ -121,10 +124,10 @@ const GameCard: React.FC<GameCardProps> = ({ game, onPress, onDelete, isComplete
             styles.gameCard,
             isCompleted && styles.completedCard,
             !reduceMotion && {
-              opacity: entryIndex !== undefined ? entryAnim : 1,
+              opacity: shouldEntryAnimate.current ? entryAnim : 1,
               transform: [
                 { scale: scaleAnim },
-                ...(entryIndex !== undefined ? [{
+                ...(shouldEntryAnimate.current ? [{
                   translateY: entryAnim.interpolate({
                     inputRange: [0, 1],
                     outputRange: [18, 0]
