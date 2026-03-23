@@ -147,9 +147,9 @@ const GameCard: React.FC<GameCardProps> = ({ game, onPress, onDelete, isComplete
               <Text style={styles.dataValue}>${totalPot.toFixed(0)}</Text>
             </RNView>
             <RNView style={styles.dataDivider} />
-            <RNView style={styles.dataItem}>
+            <RNView style={[styles.dataItem, styles.dateDataItem]}>
               <Text style={styles.dataLabel}>Date</Text>
-              <Text style={styles.dataValue}>{formatDate(game.date)}</Text>
+              <Text style={styles.dataValue} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>{formatDate(game.date)}</Text>
             </RNView>
           </RNView>
         </Animated.View>
@@ -193,6 +193,9 @@ const styles = StyleSheet.create({
   dataItem: {
     flex: 1,
     alignItems: 'flex-start',
+  },
+  dateDataItem: {
+    flex: 1.5,
   },
   dataLabel: {
     fontSize: 9,
