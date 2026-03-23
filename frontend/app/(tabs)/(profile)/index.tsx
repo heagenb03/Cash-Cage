@@ -3,6 +3,7 @@ import {
   StyleSheet,
   ScrollView,
   Image,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -48,9 +49,8 @@ export default function AccountScreen() {
           onSettingsPress={() => router.push('/(tabs)/(profile)/settings' as any)}
         />
 
-        {/* Compact profile row */}
+        {/* Centered profile row */}
         <View style={styles.profileRow}>
-          {/* Mini avatar */}
           {photoURL ? (
             <Image
               source={{ uri: photoURL }}
@@ -62,34 +62,8 @@ export default function AccountScreen() {
               <Text style={styles.miniInitialsText}>{getInitials()}</Text>
             </View>
           )}
-
-          {/* Name + email */}
-          <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>{displayName}</Text>
-            {!!email && <Text style={styles.profileEmail}>{email}</Text>}
-          </View>
-
-          {/* Tier badge */}
-          <View style={[styles.tierBadge, isPro ? styles.tierBadgePro : styles.tierBadgeFree]}>
-            {isPro && <Ionicons name="star" size={10} color="#FFFFFF" style={styles.tierIcon} />}
-            <Text style={styles.tierText}>{isPro ? 'Pro' : 'Free'}</Text>
-          </View>
-        </View>
-
-        {/* Stats row */}
-        <View style={styles.statsRow}>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>{formatStatNumber(userDoc?.totalGamesPlayed ?? 0)}</Text>
-            <Text style={styles.statLabel}>Games</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>{formatStatCurrency(userDoc?.totalMoneyTracked ?? 0)}</Text>
-            <Text style={styles.statLabel}>Tracked</Text>
-          </View>
-          <View style={styles.statCard}>
-            <Text style={styles.statValue}>{formatStatNumber(userDoc?.totalPlayersHosted ?? 0)}</Text>
-            <Text style={styles.statLabel}>Players</Text>
-          </View>
+          <Text style={styles.profileName}>{displayName}</Text>
+          {!!email && <Text style={styles.profileEmail}>{email}</Text>}
         </View>
 
         {/* Upgrade CTA — only shown for free users */}
@@ -123,6 +97,35 @@ export default function AccountScreen() {
           </View>
         )}
 
+        {/* Stats section header */}
+        <View style={styles.statsHeader}>
+          <HudSectionHeader
+            label="Stats"
+            centered={true}
+          />
+        </View>
+
+        {/* Stats HUD strip */}
+        <View style={styles.statsStrip}>
+          <View style={styles.statsStripAccent} />
+          <View style={styles.statsStripContent}>
+            <View style={styles.statCell}>
+              <Text style={styles.statLabel}>GAMES</Text>
+              <Text style={styles.statValue}>{formatStatNumber(userDoc?.totalGamesPlayed ?? 0)}</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statCell}>
+              <Text style={styles.statLabel}>TRACKED</Text>
+              <Text style={styles.statValue}>{formatStatCurrency(userDoc?.totalMoneyTracked ?? 0)}</Text>
+            </View>
+            <View style={styles.statDivider} />
+            <View style={styles.statCell}>
+              <Text style={styles.statLabel}>PLAYERS</Text>
+              <Text style={styles.statValue}>{formatStatNumber(userDoc?.totalPlayersHosted ?? 0)}</Text>
+            </View>
+          </View>
+        </View>
+
       </ScrollView>
 
       <PaywallModal visible={showPaywall} onClose={() => setShowPaywall(false)} />
@@ -147,42 +150,36 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
 
-  // Compact profile row
+  // Centered profile row
   profileRow: {
-    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 4,
+    paddingVertical: 16,
     marginBottom: 20,
     backgroundColor: 'transparent',
   },
   miniAvatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    marginRight: 10,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    marginBottom: 8,
   },
   miniAvatarInitials: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#49264F',
     alignItems: 'center',
     justifyContent: 'center',
-    marginRight: 10,
+    marginBottom: 8,
   },
   miniInitialsText: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '700',
     color: '#FFFFFF',
     backgroundColor: 'transparent',
   },
-  profileInfo: {
-    flex: 1,
-    backgroundColor: 'transparent',
-  },
   profileName: {
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
     color: 'rgba(255,255,255,0.9)',
     backgroundColor: 'transparent',
@@ -190,56 +187,64 @@ const styles = StyleSheet.create({
   profileEmail: {
     fontSize: 11,
     color: 'rgba(255,255,255,0.4)',
-    marginTop: 1,
-    backgroundColor: 'transparent',
-  },
-  tierBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-  },
-  tierBadgeFree: {
-    backgroundColor: 'rgba(255,255,255,0.08)',
-  },
-  tierBadgePro: {
-    backgroundColor: '#B072BB',
-  },
-  tierIcon: {
-    marginRight: 3,
-  },
-  tierText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#FFFFFF',
+    marginTop: 2,
     backgroundColor: 'transparent',
   },
 
-  // Stats row
-  statsRow: {
-    flexDirection: 'row',
-    gap: 10,
+  // Stats section
+  statsHeader: {
+    marginTop: 20,
+  },
+
+  // Stats HUD strip
+  statsStrip: {
+    backgroundColor: '#161616',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#242424',
+    borderTopColor: 'rgba(176,114,187,0.2)',
+    overflow: 'hidden',
     marginBottom: 20,
   },
-  statCard: {
-    flex: 1,
-    backgroundColor: '#1A1A1A',
-    borderRadius: 12,
-    padding: 14,
-    alignItems: 'center',
+  statsStripAccent: {
+    height: 1,
+    backgroundColor: 'rgba(176,114,187,0.15)',
   },
-  statValue: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#B072BB',
+  statsStripContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 14,
+    paddingHorizontal: 8,
+    backgroundColor: 'transparent',
+  },
+  statCell: {
+    flex: 1,
+    alignItems: 'center',
     backgroundColor: 'transparent',
   },
   statLabel: {
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.4)',
-    marginTop: 4,
+    fontSize: 9,
+    fontWeight: '700',
+    color: 'rgba(176,114,187,0.65)',
+    letterSpacing: 1.5,
+    marginBottom: 4,
     backgroundColor: 'transparent',
+  },
+  statValue: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.9)',
+    backgroundColor: 'transparent',
+    ...Platform.select({
+      ios: { fontFamily: 'SpaceMono' },
+      android: { fontFamily: 'SpaceMono' },
+      default: { fontFamily: 'monospace' },
+    }),
+  },
+  statDivider: {
+    width: 1,
+    height: 28,
+    backgroundColor: '#2A2A2A',
   },
 
   // Pro member badge
