@@ -1,15 +1,16 @@
-import { StyleSheet, ScrollView, TouchableOpacity, Alert, Modal, AccessibilityInfo } from 'react-native';
+import { StyleSheet, FlatList, TouchableOpacity, Alert, Modal, AccessibilityInfo, ListRenderItemInfo } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Text, View } from '@/components/Themed';
 import { useGame } from '@/contexts/GameContext';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useMemo } from 'react';
 import GameCard from '@/components/GameCard';
 import Button from '@/components/Button';
 import ModalButton from '@/components/ModalButton';
 import PaywallModal from '@/components/PaywallModal';
 import { useAuth } from '@/contexts/AuthContext';
+import { Game } from '@/types/game';
 
 function HudSectionHeader({ label }: { label: string }) {
   return (
@@ -33,6 +34,13 @@ function EmptyState({ label }: { label: string }) {
 }
 
 const FREE_HISTORY_LIMIT = 10;
+const MAX_ANIMATED_CARDS = 5;
+
+type ListItem =
+  | { type: 'header'; label: string; key: string }
+  | { type: 'empty'; label: string; key: string }
+  | { type: 'game'; game: Game; isCompleted: boolean; entryIndex: number; key: string }
+  | { type: 'upgrade'; hiddenCount: number; key: string };
 
 export default function HomeScreen() {
   const { games, setActiveGame, deleteGame, createGame } = useGame();
@@ -44,12 +52,46 @@ export default function HomeScreen() {
   const [reduceMotionEnabled, setReduceMotionEnabled] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
 
-  const activeGames = games.filter(g => g.status === 'active');
-  const completedGames = games.filter(g => g.status === 'completed');
+  const listData = useMemo<ListItem[]>(() => {
+    const activeGames = games.filter(g => g.status === 'active');
+    const completedGames = games.filter(g => g.status === 'completed');
+    const visibleCompleted = isPro ? completedGames : completedGames.slice(0, FREE_HISTORY_LIMIT);
+    const hiddenCount = isPro ? 0 : Math.max(0, completedGames.length - FREE_HISTORY_LIMIT);
 
-  // Free users see only their most recent 10 completed games
-  const visibleCompletedGames = isPro ? completedGames : completedGames.slice(0, FREE_HISTORY_LIMIT);
-  const hiddenGameCount = isPro ? 0 : Math.max(0, completedGames.length - FREE_HISTORY_LIMIT);
+    const items: ListItem[] = [];
+
+    // Active section
+    items.push({ type: 'header', label: 'Active', key: 'header-active' });
+    if (activeGames.length === 0) {
+      items.push({ type: 'empty', label: 'Active', key: 'empty-active' });
+    } else {
+      activeGames.forEach((game, i) => {
+        items.push({ type: 'game', game, isCompleted: false, entryIndex: i, key: game.id });
+      });
+    }
+
+    // History section
+    items.push({ type: 'header', label: 'History', key: 'header-history' });
+    if (visibleCompleted.length === 0) {
+      items.push({ type: 'empty', label: 'History', key: 'empty-history' });
+    } else {
+      visibleCompleted.forEach((game, i) => {
+        items.push({
+          type: 'game',
+          game,
+          isCompleted: true,
+          entryIndex: activeGames.length + i,
+          key: game.id,
+        });
+      });
+    }
+
+    if (hiddenCount > 0) {
+      items.push({ type: 'upgrade', hiddenCount, key: 'upgrade-cta' });
+    }
+
+    return items;
+  }, [games, isPro]);
 
   useEffect(() => {
     AccessibilityInfo.isReduceMotionEnabled().then(enabled => {
@@ -66,22 +108,21 @@ export default function HomeScreen() {
     };
   }, []);
 
-  const handleGamePress = async (gameId: string) => {
+  const handleGamePress = useCallback(async (gameId: string, isCompleted: boolean) => {
     await setActiveGame(gameId);
-    const game = games.find(g => g.id === gameId);
-    if (game?.status === 'active') {
-      router.push('/game/active' as any);
-    } else {
+    if (isCompleted) {
       router.push('/game/summary' as any);
+    } else {
+      router.push('/game/active' as any);
     }
-  };
+  }, [setActiveGame, router]);
 
-  const confirmDeleteGame = (game: { id: string; name: string }) => {
+  const confirmDeleteGame = useCallback((game: { id: string; name: string }) => {
     setGameToDelete(game);
     setShowDeleteConfirmation(true);
-  };
+  }, []);
 
-  const handleDeleteGame = async () => {
+  const handleDeleteGame = useCallback(async () => {
     if (!gameToDelete) return;
 
     try {
@@ -92,9 +133,9 @@ export default function HomeScreen() {
       Alert.alert('Error', 'Failed to delete game. Please try again.');
       console.error('Error deleting game:', error);
     }
-  };
+  }, [gameToDelete, deleteGame]);
 
-  const handleCreateNewGame = async () => {
+  const handleCreateNewGame = useCallback(async () => {
     try {
       await createGame('Untitled Game');
       router.push('/game/active' as any);
@@ -102,63 +143,57 @@ export default function HomeScreen() {
       Alert.alert('Error', 'Failed to create game');
       console.error('Error creating game:', error);
     }
-  };
+  }, [createGame, router]);
 
-  const renderCards = (
-    gameList: typeof activeGames,
-    isCompleted: boolean,
-    startIndex: number = 0
-  ) =>
-    gameList.map((game, i) => (
-      <GameCard
-        key={game.id}
-        game={game}
-        onPress={handleGamePress}
-        onDelete={confirmDeleteGame}
-        isCompleted={isCompleted}
-        reduceMotion={reduceMotionEnabled}
-        entryIndex={startIndex + i}
-      />
-    ));
+  const renderItem = useCallback(({ item }: ListRenderItemInfo<ListItem>) => {
+    switch (item.type) {
+      case 'header':
+        return <HudSectionHeader label={item.label} />;
+      case 'empty':
+        return <EmptyState label={item.label} />;
+      case 'game':
+        return (
+          <GameCard
+            game={item.game}
+            onPress={handleGamePress}
+            onDelete={confirmDeleteGame}
+            isCompleted={item.isCompleted}
+            reduceMotion={reduceMotionEnabled}
+            entryIndex={item.entryIndex < MAX_ANIMATED_CARDS ? item.entryIndex : undefined}
+          />
+        );
+      case 'upgrade':
+        return (
+          <TouchableOpacity
+            style={styles.upgradeHistoryCard}
+            onPress={() => setShowPaywall(true)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="star" size={16} color="#B072BB" style={styles.upgradeHistoryIcon} />
+            <Text style={styles.upgradeHistoryText}>
+              {item.hiddenCount} older {item.hiddenCount === 1 ? 'game' : 'games'} hidden — upgrade to Pro to see your full history
+            </Text>
+            <Ionicons name="chevron-forward" size={16} color="#B072BB" />
+          </TouchableOpacity>
+        );
+    }
+  }, [handleGamePress, confirmDeleteGame, reduceMotionEnabled]);
+
+  const keyExtractor = useCallback((item: ListItem) => item.key, []);
 
   return (
     <View style={styles.container}>
-      <ScrollView style={styles.scrollView}>
-        {/* Active Games Section */}
-        <View style={styles.section}>
-          <HudSectionHeader label="Active" />
-          {activeGames.length === 0 ? (
-            <EmptyState label="Active" />
-          ) : (
-            renderCards(activeGames, false, 0)
-          )}
-        </View>
-
-        {/* Completed Games Section */}
-        <View style={styles.section}>
-          <HudSectionHeader label="History" />
-          {visibleCompletedGames.length === 0 ? (
-            <EmptyState label="History" />
-          ) : (
-            renderCards(visibleCompletedGames, true, activeGames.length)
-          )}
-
-          {/* Upgrade card — shown to free users when history is capped */}
-          {hiddenGameCount > 0 && (
-            <TouchableOpacity
-              style={styles.upgradeHistoryCard}
-              onPress={() => setShowPaywall(true)}
-              activeOpacity={0.8}
-            >
-              <Ionicons name="star" size={16} color="#B072BB" style={styles.upgradeHistoryIcon} />
-              <Text style={styles.upgradeHistoryText}>
-                {hiddenGameCount} older {hiddenGameCount === 1 ? 'game' : 'games'} hidden — upgrade to Pro to see your full history
-              </Text>
-              <Ionicons name="chevron-forward" size={16} color="#B072BB" />
-            </TouchableOpacity>
-          )}
-        </View>
-      </ScrollView>
+      <FlatList
+        data={listData}
+        renderItem={renderItem}
+        keyExtractor={keyExtractor}
+        style={styles.scrollView}
+        contentContainerStyle={styles.listContent}
+        initialNumToRender={8}
+        maxToRenderPerBatch={5}
+        windowSize={5}
+        removeClippedSubviews={false}
+      />
 
       {/* Actions */}
       <View style={styles.actions}>
@@ -192,7 +227,7 @@ export default function HomeScreen() {
             <Text style={styles.modalTitle}>Delete Game?</Text>
             <Text style={styles.deleteWarningText}>
               Are you sure you want to delete "{gameToDelete?.name}"? This will remove all players,
-              transactions, and settlements. 
+              transactions, and settlements.
               {'\n\n'}This action cannot be undone.
             </Text>
             <View style={styles.modalButtons}>
@@ -225,10 +260,9 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
-    padding: 20,
   },
-  section: {
-    marginBottom: 28,
+  listContent: {
+    padding: 20,
   },
 
   // HUD section header
