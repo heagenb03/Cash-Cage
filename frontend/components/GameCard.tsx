@@ -67,7 +67,7 @@ const GameCard: React.FC<GameCardProps> = ({ game, onPress, onDelete, isComplete
     onPress(game.id, isCompleted);
   }, [onPress, game.id, isCompleted]);
 
-  const tapGesture = Gesture.Tap()
+  const tapGesture = useMemo(() => Gesture.Tap()
     .maxDuration(200)
     .maxDistance(10)
     .onBegin(() => {
@@ -80,7 +80,7 @@ const GameCard: React.FC<GameCardProps> = ({ game, onPress, onDelete, isComplete
       } else {
         runOnJS(animateScaleUp)(0);
       }
-    });
+    }), [animateScaleDown, animateScaleUp, handleTapSuccess]);
 
   const totalPot = useMemo(
     () => game.transactions

@@ -1,4 +1,4 @@
-import React, { useRef, useCallback } from 'react';
+import React, { useRef, useCallback, useMemo } from 'react';
 import { Animated, StyleSheet, TouchableOpacity as RNTouchableOpacity } from 'react-native';
 import { Text, View } from '@/components/Themed';
 import { Gesture, GestureDetector, TouchableOpacity } from 'react-native-gesture-handler';
@@ -53,13 +53,13 @@ const PlayerCardActive: React.FC<PlayerCardActiveProps> = ({
     }
   }, [reduceMotion, scaleAnim]);
 
-  const tapGesture = Gesture.Tap()
+  const tapGesture = useMemo(() => Gesture.Tap()
     .maxDuration(200)
     .maxDistance(10)
     .onBegin(() => runOnJS(animateScaleDown)())
     .onFinalize(() => {
       runOnJS(animateScaleUp)(0);
-    });
+    }), [animateScaleDown, animateScaleUp]);
 
   const renderLeftActions = useCallback(() => (
     <TouchableOpacity

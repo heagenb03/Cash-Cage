@@ -1,4 +1,4 @@
-import React, { useRef, useCallback } from 'react';
+import React, { useRef, useCallback, useMemo } from 'react';
 import { Animated, StyleSheet, TouchableOpacity as RNTouchableOpacity } from 'react-native';
 import { Text, View } from '@/components/Themed';
 import { Gesture, GestureDetector, TouchableOpacity } from 'react-native-gesture-handler';
@@ -49,13 +49,13 @@ const PlayerCardCompleted: React.FC<PlayerCardCompletedProps> = ({
   }, [reduceMotion, scaleAnim]);
 
   // NOTE: PlayerCards don't navigate on tap - only show animation feedback
-  const tapGesture = Gesture.Tap()
+  const tapGesture = useMemo(() => Gesture.Tap()
     .maxDuration(200)
     .maxDistance(10)
     .onBegin(() => runOnJS(animateScaleDown)())
     .onFinalize(() => {
       runOnJS(animateScaleUp)(0);  // No navigation, just animate back
-    });
+    }), [animateScaleDown, animateScaleUp]);
 
   const renderLeftActions = useCallback(() => (
     <TouchableOpacity

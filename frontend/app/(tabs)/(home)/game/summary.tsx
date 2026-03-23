@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { StyleSheet, ScrollView, TouchableOpacity, Share, ActivityIndicator, Animated, AccessibilityInfo } from 'react-native';
+import { StyleSheet, ScrollView, TouchableOpacity, Share, ActivityIndicator, Animated } from 'react-native';
 import { Text, View } from '@/components/Themed';
 import { useGame } from '@/contexts/GameContext';
 import { useRouter } from 'expo-router';
@@ -12,6 +12,7 @@ import Button from '@/components/Button';
 import { Ionicons } from '@expo/vector-icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
+import { useReduceMotion } from '@/hooks/useReduceMotion';
 
 // HUD Section Header Component
 function HudSectionHeader({ label }: { label: string }) {
@@ -55,11 +56,11 @@ function BalanceCard({ balance, reduceMotion }: BalanceCardProps) {
     }
   }, [reduceMotion, scaleAnim]);
 
-  const tapGesture = Gesture.Tap()
+  const tapGesture = useMemo(() => Gesture.Tap()
     .maxDuration(200)
     .maxDistance(10)
     .onBegin(() => runOnJS(animateScaleDown)())
-    .onFinalize(() => runOnJS(animateScaleUp)());
+    .onFinalize(() => runOnJS(animateScaleUp)()), [animateScaleDown, animateScaleUp]);
 
   return (
     <GestureDetector gesture={tapGesture}>
@@ -169,7 +170,7 @@ function SettlementCard({ groupedSettlement, reduceMotion }: SettlementCardProps
     }
   }, [reduceMotion, scaleAnim]);
 
-  const tapGesture = Gesture.Tap()
+  const tapGesture = useMemo(() => Gesture.Tap()
     .maxDuration(200)
     .maxDistance(10)
     .onBegin(() => runOnJS(animateScaleDown)())
@@ -178,7 +179,7 @@ function SettlementCard({ groupedSettlement, reduceMotion }: SettlementCardProps
       if (success) {
         runOnJS(handleToggle)();
       }
-    });
+    }), [animateScaleDown, animateScaleUp, handleToggle]);
 
   return (
     <GestureDetector gesture={tapGesture}>
@@ -306,7 +307,7 @@ function FallbackBanner({ onDismiss, onRetry, isRetrying, reduceMotion }: Fallba
     }
   }, [reduceMotion, dismissScaleAnim]);
 
-  const retryTap = Gesture.Tap()
+  const retryTap = useMemo(() => Gesture.Tap()
     .maxDuration(200)
     .maxDistance(10)
     .enabled(!isRetrying)
@@ -316,9 +317,9 @@ function FallbackBanner({ onDismiss, onRetry, isRetrying, reduceMotion }: Fallba
       if (success) {
         runOnJS(onRetry)();
       }
-    });
+    }), [isRetrying, animateRetryDown, animateRetryUp, onRetry]);
 
-  const dismissTap = Gesture.Tap()
+  const dismissTap = useMemo(() => Gesture.Tap()
     .maxDuration(200)
     .maxDistance(10)
     .onBegin(() => runOnJS(animateDismissDown)())
@@ -327,7 +328,7 @@ function FallbackBanner({ onDismiss, onRetry, isRetrying, reduceMotion }: Fallba
       if (success) {
         runOnJS(onDismiss)();
       }
-    });
+    }), [animateDismissDown, animateDismissUp, onDismiss]);
 
   return (
     <View style={styles.fallbackCard}>
@@ -404,7 +405,7 @@ function FallbackBanner({ onDismiss, onRetry, isRetrying, reduceMotion }: Fallba
 export default function GameSummaryScreen() {
   const { activeGame, updateGame } = useGame();
   const router = useRouter();
-  const [reduceMotion, setReduceMotion] = useState(false);
+  const reduceMotion = useReduceMotion();
 
   const summary = useMemo(
     () => (activeGame ? GameService.generateGameSummary(activeGame) : null),
@@ -426,18 +427,6 @@ export default function GameSummaryScreen() {
   useEffect(() => {
     balancesRef.current = summary?.balances ?? [];
   }, [summary]);
-
-  // Accessibility: Reduce motion
-  useEffect(() => {
-    const checkReduceMotion = async () => {
-      const isEnabled = await AccessibilityInfo.isReduceMotionEnabled();
-      setReduceMotion(isEnabled);
-    };
-    checkReduceMotion();
-
-    const subscription = AccessibilityInfo.addEventListener('reduceMotionChanged', setReduceMotion);
-    return () => subscription.remove();
-  }, []);
 
   useEffect(() => {
     if (!summary) {
