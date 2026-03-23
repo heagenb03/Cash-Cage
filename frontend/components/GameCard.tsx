@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, useEffect } from 'react';
+import React, { useRef, useCallback, useEffect, useMemo } from 'react';
 import { Animated, StyleSheet, TouchableOpacity, View as RNView } from 'react-native';
 import { Text, View } from '@/components/Themed';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -6,29 +6,28 @@ import { runOnJS } from 'react-native-reanimated';
 import Swipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { Ionicons } from '@expo/vector-icons';
 import { Game } from '@/types/game';
-import { GameService } from '@/services/gameService';
 
 interface GameCardProps {
   game: Game;
-  onPress: (gameId: string) => void;
+  onPress: (gameId: string, isCompleted: boolean) => void;
   onDelete: (game: { id: string; name: string }) => void;
   isCompleted?: boolean;
   reduceMotion: boolean;
   entryIndex?: number;
 }
 
+function formatDate(date: Date): string {
+  return new Date(date).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
+}
+
 const GameCard: React.FC<GameCardProps> = ({ game, onPress, onDelete, isCompleted = false, reduceMotion, entryIndex }) => {
   const swipeableRef = useRef<SwipeableMethods>(null);
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const entryAnim = useRef(new Animated.Value(0)).current;
-
-  const formatDate = (date: Date) => {
-    return new Date(date).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    });
-  };
 
   useEffect(() => {
     if (!reduceMotion && entryIndex !== undefined) {
@@ -65,8 +64,8 @@ const GameCard: React.FC<GameCardProps> = ({ game, onPress, onDelete, isComplete
   }, [reduceMotion, scaleAnim]);
 
   const handleTapSuccess = useCallback(() => {
-    onPress(game.id);
-  }, [onPress, game.id]);
+    onPress(game.id, isCompleted);
+  }, [onPress, game.id, isCompleted]);
 
   const tapGesture = Gesture.Tap()
     .maxDuration(200)
@@ -83,7 +82,12 @@ const GameCard: React.FC<GameCardProps> = ({ game, onPress, onDelete, isComplete
       }
     });
 
-  const totalPot = GameService.generateGameSummary(game).totalPot;
+  const totalPot = useMemo(
+    () => game.transactions
+      .filter(t => t.type === 'buyin')
+      .reduce((sum, t) => sum + t.amount, 0),
+    [game.transactions]
+  );
 
   return (
     <Swipeable
@@ -233,7 +237,7 @@ export default React.memo(GameCard, (prevProps, nextProps) => {
     prevProps.game.name === nextProps.game.name &&
     prevProps.game.date === nextProps.game.date &&
     prevProps.game.players.length === nextProps.game.players.length &&
-    prevProps.game.transactions.length === nextProps.game.transactions.length &&
+    prevProps.game.transactions === nextProps.game.transactions &&
     prevProps.reduceMotion === nextProps.reduceMotion &&
     prevProps.isCompleted === nextProps.isCompleted &&
     prevProps.entryIndex === nextProps.entryIndex
