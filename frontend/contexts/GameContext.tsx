@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from 'react';
 import { Game } from '@/types/game';
 import { GameService } from '@/services/gameService';
 import { StorageService } from '@/services/storageService';
@@ -25,6 +25,13 @@ export function GameProvider({ children }: { children: ReactNode }) {
 
   const { user } = useAuth();
   const uid = user?.uid ?? null;
+  const abortRef = useRef<AbortController | null>(null);
+  const gamesRef = useRef<Game[]>([]);
+  const activeGameRef = useRef<Game | null>(null);
+
+  // Keep refs in sync with state for reading in callbacks
+  useEffect(() => { gamesRef.current = games; }, [games]);
+  useEffect(() => { activeGameRef.current = activeGame; }, [activeGame]);
 
   // ---------------------------------------------------------------------------
   // loadGames — reads from AsyncStorage immediately (offline-first), then
@@ -32,7 +39,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   // result updates the UI transparently via onRemoteUpdate.
   // ---------------------------------------------------------------------------
 
-  const loadGames = useCallback(async (currentUid: string | null) => {
+  const loadGames = useCallback(async (currentUid: string | null, signal?: AbortSignal) => {
     try {
       setLoading(true);
 
@@ -42,7 +49,9 @@ export function GameProvider({ children }: { children: ReactNode }) {
         setActiveGameState(prev =>
           prev ? (mergedGames.find(g => g.id === prev.id) ?? null) : null,
         );
-      });
+      }, signal);
+
+      if (signal?.aborted) return;
 
       setGames(localGames);
 
@@ -52,9 +61,12 @@ export function GameProvider({ children }: { children: ReactNode }) {
         setActiveGameState(active ?? null);
       }
     } catch (error) {
+      if (signal?.aborted) return;
       console.error('GameContext: error loading games', error);
     } finally {
-      setLoading(false);
+      if (!signal?.aborted) {
+        setLoading(false);
+      }
     }
   }, []);
 
@@ -62,7 +74,16 @@ export function GameProvider({ children }: { children: ReactNode }) {
   // On sign-in: background Firestore sync merges remote games into local.
   // On sign-out: local games are preserved (uid=null skips Firestore).
   useEffect(() => {
-    loadGames(uid);
+    // Abort any previous background sync before starting a new one
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    loadGames(uid, controller.signal);
+
+    return () => {
+      controller.abort();
+    };
   }, [uid, loadGames]);
 
   // ---------------------------------------------------------------------------
@@ -70,42 +91,46 @@ export function GameProvider({ children }: { children: ReactNode }) {
   // SyncService (AsyncStorage + fire-and-forget Firestore when signed in).
   // ---------------------------------------------------------------------------
 
-  const createGame = async (name: string): Promise<Game> => {
+  const createGame = useCallback(async (name: string): Promise<Game> => {
     const newGame = GameService.createGame(name);
     setGames(prev => [...prev, newGame]);
     await SyncService.saveGame(uid, newGame);
     setActiveGameState(newGame);
     await StorageService.saveActiveGameId(newGame.id);
     return newGame;
-  };
+  }, [uid]);
 
-  const setActiveGame = async (gameId: string | null) => {
-    const game = gameId ? games.find(g => g.id === gameId) ?? null : null;
-    setActiveGameState(game);
+  const setActiveGame = useCallback(async (gameId: string | null) => {
+    if (gameId) {
+      const game = gamesRef.current.find(g => g.id === gameId) ?? null;
+      setActiveGameState(game);
+    } else {
+      setActiveGameState(null);
+    }
     await StorageService.saveActiveGameId(gameId);
-  };
+  }, []);
 
-  const updateGame = async (updatedGame: Game) => {
+  const updateGame = useCallback(async (updatedGame: Game) => {
     const freshGame = { ...updatedGame };
     setGames(prev => prev.map(g => (g.id === updatedGame.id ? freshGame : g)));
-    if (activeGame?.id === updatedGame.id) {
-      setActiveGameState(freshGame);
-    }
+    setActiveGameState(prev =>
+      prev?.id === updatedGame.id ? freshGame : prev,
+    );
     await SyncService.saveGame(uid, freshGame);
-  };
+  }, [uid]);
 
-  const deleteGame = async (gameId: string) => {
+  const deleteGame = useCallback(async (gameId: string) => {
     setGames(prev => prev.filter(g => g.id !== gameId));
-    if (activeGame?.id === gameId) {
+    if (activeGameRef.current?.id === gameId) {
       setActiveGameState(null);
       await StorageService.saveActiveGameId(null);
     }
     await SyncService.deleteGame(uid, gameId);
-  };
+  }, [uid]);
 
-  const refreshGames = async () => {
+  const refreshGames = useCallback(async () => {
     await loadGames(uid);
-  };
+  }, [uid, loadGames]);
 
   return (
     <GameContext.Provider
