@@ -26,6 +26,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth();
   const uid = user?.uid ?? null;
   const abortRef = useRef<AbortController | null>(null);
+  const prevUidRef = useRef<string | null | undefined>(undefined); // undefined = not yet initialized
   const gamesRef = useRef<Game[]>([]);
   const activeGameRef = useRef<Game | null>(null);
 
@@ -71,15 +72,34 @@ export function GameProvider({ children }: { children: ReactNode }) {
   }, []);
 
   // Re-load whenever uid changes (sign-in, sign-out, or initial mount).
-  // On sign-in: background Firestore sync merges remote games into local.
-  // On sign-out: local games are preserved (uid=null skips Firestore).
+  // On user switch: clear local storage so the new user starts with a clean
+  // slate (the background Firestore sync will populate their actual games).
+  // On sign-out: local storage is cleared so the next sign-in sees no stale data.
   useEffect(() => {
-    // Abort any previous background sync before starting a new one
     abortRef.current?.abort();
     const controller = new AbortController();
     abortRef.current = controller;
 
-    loadGames(uid, controller.signal);
+    const prevUid = prevUidRef.current;
+    prevUidRef.current = uid;
+
+    (async () => {
+      // Clear local game data whenever the signed-in user changes.
+      // Skip on initial mount (prevUid === undefined) to avoid an unnecessary clear.
+      if (prevUid !== undefined && prevUid !== uid) {
+        setGames([]);
+        setActiveGameState(null);
+        try {
+          await StorageService.clearAll();
+        } catch (err) {
+          console.warn('GameContext: failed to clear storage on user switch', err);
+        }
+      }
+
+      if (!controller.signal.aborted) {
+        loadGames(uid, controller.signal);
+      }
+    })();
 
     return () => {
       controller.abort();
