@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
 import { auth, db, firebaseSignOut } from '@/services/firebaseService';
@@ -8,6 +8,7 @@ import {
   logoutPurchases,
   getIsPro,
 } from '@/services/revenueCatService';
+import { isTrialActive, getTrialDaysRemaining } from '@/utils/trialUtils';
 
 // Initialize RevenueCat once when this module loads
 initializePurchases();
@@ -16,7 +17,7 @@ initializePurchases();
 // DEV OVERRIDE — remove this block once RevenueCat is fully integrated
 // Set to true to bypass subscription checks during testing.
 // ---------------------------------------------------------------------------
-const DEV_FORCE_PRO = false;
+const DEV_FORCE_PRO = __DEV__ && false;
 
 // ---------------------------------------------------------------------------
 // Types
@@ -33,6 +34,7 @@ interface UserDocument {
   totalMoneyTracked?: number;
   totalPlayersHosted?: number;
   proSince?: Date | null;
+  trialEndsAt?: Date | null;
 }
 
 interface AuthContextType {
@@ -42,8 +44,14 @@ interface AuthContextType {
   userDoc: UserDocument | null;
   /** True until onAuthStateChanged fires for the first time — show splash, not auth screens */
   isLoading: boolean;
-  /** Whether the user has a Pro subscription (Firestore tier OR RevenueCat entitlement) */
+  /** Whether the user has a Pro subscription (Firestore tier OR RevenueCat entitlement OR active trial) */
   isPro: boolean;
+  /** Whether the user is currently on a free trial (not paid Pro) */
+  isTrialing: boolean;
+  /** Number of full days remaining in the trial (0 if expired/not on trial) */
+  trialDaysRemaining: number;
+  /** Whether the user had a trial that has now expired (and they haven't upgraded) */
+  trialExpired: boolean;
   signOut: () => Promise<void>;
   /** Re-fetch the Firestore user document (e.g., after tier changes) */
   refreshUserDoc: () => Promise<void>;
@@ -71,6 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUserDoc({
           ...data,
           proSince: data.proSince?.toDate?.() ?? data.proSince ?? null,
+          trialEndsAt: data.trialEndsAt?.toDate?.() ?? data.trialEndsAt ?? null,
         } as UserDocument);
       } else {
         setUserDoc(null);
@@ -141,9 +150,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  // isPro is true if either Firestore tier is "pro" OR RevenueCat reports an active entitlement.
-  // This handles the race between the webhook updating Firestore and the client knowing the truth.
-  const isPro = DEV_FORCE_PRO || userDoc?.tier === 'pro' || rcIsPro;
+  // Paid Pro: Firestore tier or RevenueCat entitlement
+  const paidPro = userDoc?.tier === 'pro' || rcIsPro;
+
+  // Trial: only active if user is not already a paid Pro subscriber
+  // Counter incremented when the trial expires mid-session to force a re-render
+  const [, setTrialExpiredTick] = useState(0);
+  const trialTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const trialEndsAt = userDoc?.trialEndsAt ?? null;
+  const isTrialing = !paidPro && isTrialActive(trialEndsAt);
+  const trialDaysRemaining = getTrialDaysRemaining(trialEndsAt);
+
+  // isPro is true if paid Pro, active trial, or dev override.
+  const isPro = DEV_FORCE_PRO || paidPro || isTrialing;
+
+  // trialExpired: had a trial, it's over, and user hasn't upgraded
+  const trialExpired = !isTrialing && !!trialEndsAt && !paidPro;
+
+  // Live trial expiry: schedule a re-render when the trial expires while the app is open
+  useEffect(() => {
+    if (trialTimerRef.current) {
+      clearTimeout(trialTimerRef.current);
+      trialTimerRef.current = null;
+    }
+
+    if (trialEndsAt && isTrialing) {
+      const remaining = trialEndsAt.getTime() - Date.now();
+      if (remaining > 0) {
+        trialTimerRef.current = setTimeout(() => {
+          setTrialExpiredTick(prev => prev + 1);
+        }, remaining);
+      }
+    }
+
+    return () => {
+      if (trialTimerRef.current) {
+        clearTimeout(trialTimerRef.current);
+      }
+    };
+  }, [trialEndsAt, isTrialing]);
 
   return (
     <AuthContext.Provider
@@ -152,6 +198,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         userDoc,
         isLoading,
         isPro,
+        isTrialing,
+        trialDaysRemaining,
+        trialExpired,
         signOut: handleSignOut,
         refreshUserDoc,
         refreshEntitlements,
