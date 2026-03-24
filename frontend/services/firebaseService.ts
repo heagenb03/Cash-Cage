@@ -37,6 +37,7 @@ import {
 } from 'firebase/firestore';
 import { Game } from '@/types/game';
 import { getFunctions, httpsCallable } from 'firebase/functions';
+import { TRIAL_DURATION_DAYS } from '@/utils/trialUtils';
 
 // ---------------------------------------------------------------------------
 // Firebase config — values come from environment variables.
@@ -108,6 +109,7 @@ export async function createUserDocument(
       totalMoneyTracked: 0,
       totalPlayersHosted: 0,
       proSince: null,
+      trialEndsAt: new Date(Date.now() + TRIAL_DURATION_DAYS * 24 * 60 * 60 * 1000),
     });
   } catch (err: any) {
     if (err?.code === 'permission-denied' && attempt < 4) {
