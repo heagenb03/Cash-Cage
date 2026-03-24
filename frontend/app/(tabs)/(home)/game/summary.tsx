@@ -252,152 +252,75 @@ function SettlementCard({ groupedSettlement, reduceMotion }: SettlementCardProps
 }
 
 // Fallback Banner Component
+function isRetryableFallback(error?: string, balances?: PlayerBalance[]): boolean {
+  // 4xx = backend rejected (e.g. imbalance too large) — retry won't help
+  if (error && /Server responded with status 4\d{2}/.test(error)) {
+    return false;
+  }
+
+  // Detect imbalance locally — even if the server was unreachable,
+  // retrying won't help when the data itself is the problem
+  if (balances && balances.length > 0) {
+    const totalBuyins = balances.reduce((sum, b) => sum + b.totalBuyins, 0);
+    const totalCashouts = balances.reduce((sum, b) => sum + b.totalCashouts, 0);
+    if (Math.abs(totalBuyins - totalCashouts) > 2.50) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 interface FallbackBannerProps {
   onDismiss: () => void;
   onRetry: () => void;
   isRetrying: boolean;
-  reduceMotion: boolean;
+  errorMessage?: string;
+  balances?: PlayerBalance[];
 }
 
-function FallbackBanner({ onDismiss, onRetry, isRetrying, reduceMotion }: FallbackBannerProps) {
-  const retryScaleAnim = useRef(new Animated.Value(1)).current;
-  const dismissScaleAnim = useRef(new Animated.Value(1)).current;
+function FallbackBanner({ onDismiss, onRetry, isRetrying, errorMessage, balances }: FallbackBannerProps) {
+  const retryable = isRetryableFallback(errorMessage, balances);
 
-  const animateRetryDown = useCallback(() => {
-    if (!reduceMotion) {
-      Animated.spring(retryScaleAnim, {
-        toValue: 0.95,
-        tension: 300,
-        friction: 20,
-        useNativeDriver: true,
-      }).start();
-    }
-  }, [reduceMotion, retryScaleAnim]);
-
-  const animateRetryUp = useCallback(() => {
-    if (!reduceMotion) {
-      Animated.spring(retryScaleAnim, {
-        toValue: 1,
-        tension: 200,
-        friction: 15,
-        useNativeDriver: true,
-      }).start();
-    }
-  }, [reduceMotion, retryScaleAnim]);
-
-  const animateDismissDown = useCallback(() => {
-    if (!reduceMotion) {
-      Animated.spring(dismissScaleAnim, {
-        toValue: 0.9,
-        tension: 300,
-        friction: 20,
-        useNativeDriver: true,
-      }).start();
-    }
-  }, [reduceMotion, dismissScaleAnim]);
-
-  const animateDismissUp = useCallback(() => {
-    if (!reduceMotion) {
-      Animated.spring(dismissScaleAnim, {
-        toValue: 1,
-        tension: 200,
-        friction: 15,
-        useNativeDriver: true,
-      }).start();
-    }
-  }, [reduceMotion, dismissScaleAnim]);
-
-  const retryTap = useMemo(() => Gesture.Tap()
-    .maxDuration(200)
-    .maxDistance(10)
-    .enabled(!isRetrying)
-    .onBegin(() => runOnJS(animateRetryDown)())
-    .onFinalize((_, success) => {
-      runOnJS(animateRetryUp)();
-      if (success) {
-        runOnJS(onRetry)();
-      }
-    }), [isRetrying, animateRetryDown, animateRetryUp, onRetry]);
-
-  const dismissTap = useMemo(() => Gesture.Tap()
-    .maxDuration(200)
-    .maxDistance(10)
-    .onBegin(() => runOnJS(animateDismissDown)())
-    .onFinalize((_, success) => {
-      runOnJS(animateDismissUp)();
-      if (success) {
-        runOnJS(onDismiss)();
-      }
-    }), [animateDismissDown, animateDismissUp, onDismiss]);
+  const icon = retryable ? 'cellular-outline' : 'alert-circle-outline';
+  const text = isRetrying
+    ? 'Optimizing settlements...'
+    : retryable
+      ? "Couldn't reach server — settlements are estimated"
+      : "Totals didn't balance — settlements are estimated";
 
   return (
-    <View style={styles.fallbackCard}>
-      {/* Header Row */}
-      <View style={styles.fallbackHeader}>
-        {/* Icon Ring */}
-        <View style={styles.fallbackIconContainer}>
-          <Ionicons name="information-circle-outline" size={18} color="#B072BB" />
-        </View>
-
-        {/* Title Group */}
-        <View style={styles.fallbackTitleGroup}>
-          <Text style={styles.fallbackTitle}>ON-DEVICE CALCULATION</Text>
-          <View style={styles.fallbackStatusRow}>
-            <View style={styles.fallbackStatusDotOffline} />
-            <Text style={styles.fallbackStatusLabel}>SERVER UNAVAILABLE</Text>
-          </View>
-        </View>
-
-        {/* Dismiss Button */}
-        <GestureDetector gesture={dismissTap}>
-          <Animated.View
-            style={[
-              styles.fallbackDismissButton,
-              !reduceMotion && { transform: [{ scale: dismissScaleAnim }] },
-            ]}
-            accessible={true}
-            accessibilityRole="button"
-            accessibilityLabel="Dismiss fallback banner"
-          >
-            <Ionicons name="close" size={16} color="rgba(255,255,255,0.4)" />
-          </Animated.View>
-        </GestureDetector>
+    <View style={styles.fallbackBanner} accessibilityRole="alert">
+      <View style={styles.fallbackBannerContent}>
+        <Ionicons name={icon as any} size={14} color="rgba(176,114,187,0.7)" />
+        <Text style={styles.fallbackBannerText}>{text}</Text>
       </View>
-
-      {/* Divider */}
-      <View style={styles.fallbackDivider} />
-
-      {/* Description */}
-      <Text style={styles.fallbackDescription}>
-        Using local greedy algorithm. Results may differ from optimal server-side MILP solution.
-      </Text>
-
-      {/* Retry Button */}
-      <GestureDetector gesture={retryTap}>
-        <Animated.View
-          style={[
-            styles.fallbackRetryButton,
-            isRetrying && styles.fallbackRetryButtonDisabled,
-            !reduceMotion && { transform: [{ scale: retryScaleAnim }] },
-          ]}
+      <View style={styles.fallbackBannerActions}>
+        {retryable && (
+          isRetrying ? (
+            <ActivityIndicator size="small" color="#B072BB" />
+          ) : (
+            <TouchableOpacity
+              onPress={onRetry}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              accessible={true}
+              accessibilityRole="button"
+              accessibilityLabel="Retry for optimal settlements"
+            >
+              <Ionicons name="refresh-outline" size={16} color="#B072BB" />
+            </TouchableOpacity>
+          )
+        )}
+        <TouchableOpacity
+          onPress={onDismiss}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
           accessible={true}
           accessibilityRole="button"
-          accessibilityLabel="Retry server optimization"
-          accessibilityState={{ disabled: isRetrying }}
+          accessibilityLabel="Dismiss notice"
         >
-          {isRetrying ? (
-            <>
-              <ActivityIndicator size="small" color="#B072BB" style={{ marginRight: 8 }} />
-              <Text style={styles.fallbackRetryText}>RETRYING...</Text>
-            </>
-          ) : (
-            <>
-              <Ionicons name="refresh-outline" size={14} color="#B072BB" style={{ marginRight: 6 }} />
-              <Text style={styles.fallbackRetryText}>RETRY SERVER OPTIMIZATION</Text>
-            </>
-          )}
-        </Animated.View>
-      </GestureDetector>
+          <Ionicons name="close" size={16} color="rgba(255,255,255,0.4)" />
+        </TouchableOpacity>
+      </View>
     </View>
   );
 }
@@ -490,6 +413,7 @@ setSettlementResult(cachedResult);
 
         const message = error instanceof Error ? error.message : 'unknown-error';
         setLastError(message);
+        setShowFallbackBanner(true);
         setSettlementResult(prev =>
           prev ?? {
             settlements: summary.settlements,
@@ -614,16 +538,6 @@ setSettlementResult(cachedResult);
           </View>
         </View>
 
-        {/* Fallback Banner */}
-        {showFallbackBanner && (
-          <FallbackBanner
-            onDismiss={() => setShowFallbackBanner(false)}
-            onRetry={handleRetry}
-            isRetrying={isLoadingSettlements}
-            reduceMotion={reduceMotion}
-          />
-        )}
-
         {/* Total Pot Hero Metric */}
         <View style={styles.heroPotSection}>
           <HudSectionHeader label="TOTAL POT" />
@@ -676,6 +590,17 @@ setSettlementResult(cachedResult);
         {/* Settlements */}
         <View style={styles.section}>
           <HudSectionHeader label="SETTLEMENTS" />
+
+          {/* Fallback notice */}
+          {showFallbackBanner && (
+            <FallbackBanner
+              onDismiss={() => setShowFallbackBanner(false)}
+              onRetry={handleRetry}
+              isRetrying={isLoadingSettlements}
+              errorMessage={lastError}
+              balances={summary.balances}
+            />
+          )}
 
           {groupedSettlements.length === 0 ? (
             <EmptyState label="All balanced" icon="checkmark-circle-outline" />
@@ -1032,97 +957,36 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
     gap: 12,
   },
-  // Fallback Banner styles
-  fallbackCard: {
-    backgroundColor: '#161616',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#242424',
-    borderTopColor: 'rgba(176,114,187,0.15)',
-    padding: 16,
-    marginBottom: 24,
-  },
-  fallbackHeader: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 10,
-    marginBottom: 12,
-    backgroundColor: 'transparent',
-  },
-  fallbackIconContainer: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: 'rgba(176,114,187,0.08)',
-    borderWidth: 1,
-    borderColor: 'rgba(176,114,187,0.2)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fallbackTitleGroup: {
-    flex: 1,
-    backgroundColor: 'transparent',
-  },
-  fallbackTitle: {
-    fontSize: 11,
-    fontWeight: 'bold',
-    color: '#B072BB',
-    textTransform: 'uppercase',
-    letterSpacing: 2,
-    marginBottom: 4,
-  },
-  fallbackStatusRow: {
+  // Fallback Banner styles (slim inline notice)
+  fallbackBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 5,
-    backgroundColor: 'transparent',
-  },
-  fallbackStatusDotOffline: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: 'rgba(255,255,255,0.4)',
-  },
-  fallbackStatusLabel: {
-    fontSize: 9,
-    color: 'rgba(255,255,255,0.45)',
-    textTransform: 'uppercase',
-    letterSpacing: 1.5,
-  },
-  fallbackDismissButton: {
-    width: 28,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  fallbackDivider: {
-    height: 1,
-    backgroundColor: '#2A2A2A',
-    marginBottom: 12,
-  },
-  fallbackDescription: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.6)',
-    lineHeight: 18,
-    marginBottom: 14,
-  },
-  fallbackRetryButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
+    backgroundColor: 'rgba(176,114,187,0.06)',
     borderRadius: 6,
-    borderWidth: 1.5,
-    borderColor: 'rgba(176,114,187,0.5)',
+    borderWidth: 1,
+    borderColor: 'rgba(176,114,187,0.12)',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 10,
+    gap: 10,
   },
-  fallbackRetryButtonDisabled: {
-    opacity: 0.5,
+  fallbackBannerContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'transparent',
   },
-  fallbackRetryText: {
-    fontSize: 11,
-    fontWeight: 'bold',
-    color: '#B072BB',
-    textTransform: 'uppercase',
-    letterSpacing: 1.5,
+  fallbackBannerText: {
+    flex: 1,
+    fontSize: 12,
+    color: 'rgba(176,114,187,0.85)',
+    lineHeight: 16,
+  },
+  fallbackBannerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: 'transparent',
   },
 });
