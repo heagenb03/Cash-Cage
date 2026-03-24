@@ -827,29 +827,24 @@ export default function ActiveGameScreen() {
         triggerMessage="Upgrade to Pro for unlimited players per game."
       />
 
-      {/* Solving Modal */}
-      <Modal visible={showSolvingModal} animationType="fade" transparent onRequestClose={() => {}}>
-        <GestureHandlerRootView style={{flex: 1}}>
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              {/* Spinner */}
-              <ActivityIndicator size="large" color="#B072BB" style={{ marginBottom: 20 }} />
-
-              {/* Title */}
-              <Text style={styles.solvingTitle}>CALCULATING SETTLEMENTS</Text>
-
-              {/* Status Bar */}
-              <View style={styles.solvingStatusBar}>
-                <View style={styles.solvingStatusDot} />
-                <Text style={styles.solvingStatusText}>OPTIMIZING PAYMENT GRAPH</Text>
-              </View>
-
-              {/* Technical Subtext */}
-              <Text style={styles.solvingSubtext}>Running MILP solver for minimal transfer solution</Text>
+      {/* Solving overlay — uses an absolute View instead of a native <Modal>
+           so that react-native-screens can properly detach it when this screen
+           loses focus.  A native Modal creates an independent overlay window
+           that persists even when the parent screen is frozen/detached, which
+           blocks all touch events on any screen pushed on top. */}
+      {showSolvingModal && (
+        <View style={styles.solvingOverlay}>
+          <View style={styles.modalContent}>
+            <ActivityIndicator size="large" color="#B072BB" style={{ marginBottom: 20 }} />
+            <Text style={styles.solvingTitle}>CALCULATING SETTLEMENTS</Text>
+            <View style={styles.solvingStatusBar}>
+              <View style={styles.solvingStatusDot} />
+              <Text style={styles.solvingStatusText}>OPTIMIZING PAYMENT GRAPH</Text>
             </View>
+            <Text style={styles.solvingSubtext}>Running MILP solver for minimal transfer solution</Text>
           </View>
-        </GestureHandlerRootView>
-      </Modal>
+        </View>
+      )}
 
     </View>
   );
@@ -1144,6 +1139,13 @@ const styles = StyleSheet.create({
     lineHeight: 20,
     marginBottom: 24,
     opacity: 0.6,
+  },
+  solvingOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    zIndex: 100,
   },
   solvingTitle: {
     fontSize: 16,
