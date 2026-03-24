@@ -10,18 +10,21 @@ service cloud.firestore {
       // tier elevation attack.
       allow delete: if false;
 
-      // SECURITY: create enforces tier: "free" and blocks tierUpdatedAt at document birth.
-      // Without this, any authenticated user could call setDoc with tier: "pro" on first sign-up.
+      // SECURITY: create enforces tier: "free", blocks tierUpdatedAt, and caps trialEndsAt
+      // to at most 8 days from now (7-day trial + 1-day clock skew buffer).
       allow create: if request.auth != null
                     && request.auth.uid == uid
                     && request.resource.data.tier == "free"
-                    && !('tierUpdatedAt' in request.resource.data.keys());
+                    && !('tierUpdatedAt' in request.resource.data.keys())
+                    && request.resource.data.trialEndsAt is timestamp
+                    && request.resource.data.trialEndsAt <= request.time + duration.value(8, 'd');
 
-      // Clients cannot directly modify tier or tierUpdatedAt (Cloud Function is the only writer).
+      // Clients cannot directly modify tier, tierUpdatedAt, or trialEndsAt (Cloud Function is the only writer).
       allow update: if request.auth != null
                     && request.auth.uid == uid
                     && !('tier' in request.resource.data.diff(resource.data).affectedKeys())
-                    && !('tierUpdatedAt' in request.resource.data.diff(resource.data).affectedKeys());
+                    && !('tierUpdatedAt' in request.resource.data.diff(resource.data).affectedKeys())
+                    && !('trialEndsAt' in request.resource.data.diff(resource.data).affectedKeys());
 
       match /games/{gameId} {
         allow read, delete: if request.auth != null && request.auth.uid == uid;
