@@ -28,6 +28,8 @@ interface PaywallModalProps {
   onClose: () => void;
   /** Optional message shown at the top to explain why the paywall appeared */
   triggerMessage?: string;
+  /** When true, shows "trial expired" messaging instead of the trigger message */
+  trialExpired?: boolean;
 }
 
 // Hardcoded display data shown while offerings load or as fallback
@@ -60,7 +62,7 @@ const FEATURES = [
 // PaywallModal
 // ---------------------------------------------------------------------------
 
-export default function PaywallModal({ visible, onClose, triggerMessage }: PaywallModalProps) {
+export default function PaywallModal({ visible, onClose, triggerMessage, trialExpired }: PaywallModalProps) {
   const { user, refreshEntitlements } = useAuth();
 
   const [selectedPeriod, setSelectedPeriod] = useState<'monthly' | 'annual' | 'lifetime'>('annual');
@@ -192,7 +194,16 @@ export default function PaywallModal({ visible, onClose, triggerMessage }: Paywa
                 <Text style={styles.title}>CASH CAGE PRO</Text>
               </View>
 
-              {triggerMessage && (
+              {trialExpired && (
+                <View style={styles.trialExpiredBanner}>
+                  <Ionicons name="time-outline" size={16} color="#FFB547" />
+                  <Text style={styles.trialExpiredText}>
+                    Your free trial has ended. Upgrade to keep unlimited access.
+                  </Text>
+                </View>
+              )}
+
+              {triggerMessage && !trialExpired && (
                 <Text style={styles.triggerMessage}>{triggerMessage}</Text>
               )}
 
@@ -344,6 +355,24 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#B072BB',
     letterSpacing: 3,
+    backgroundColor: 'transparent',
+  },
+  trialExpiredBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,181,71,0.1)',
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 16,
+    gap: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(255,181,71,0.2)',
+  },
+  trialExpiredText: {
+    flex: 1,
+    fontSize: 13,
+    color: '#FFB547',
+    lineHeight: 18,
     backgroundColor: 'transparent',
   },
   triggerMessage: {

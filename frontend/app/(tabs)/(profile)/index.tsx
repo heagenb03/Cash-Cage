@@ -4,6 +4,7 @@ import {
   ScrollView,
   Image,
   Platform,
+  TouchableOpacity,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
@@ -13,6 +14,7 @@ import Button from '@/components/Button';
 import PaywallModal from '@/components/PaywallModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { formatStatNumber, formatStatCurrency, formatMonthYear } from '@/utils/formatUtils';
+import { getTrialLabel } from '@/utils/trialUtils';
 
 // ---------------------------------------------------------------------------
 // Account Screen
@@ -20,7 +22,7 @@ import { formatStatNumber, formatStatCurrency, formatMonthYear } from '@/utils/f
 
 export default function AccountScreen() {
   const router = useRouter();
-  const { user, userDoc, isPro } = useAuth();
+  const { user, userDoc, isPro, isTrialing, trialDaysRemaining, trialExpired } = useAuth();
 
   const [showPaywall, setShowPaywall] = useState(false);
 
@@ -66,7 +68,7 @@ export default function AccountScreen() {
           {!!email && <Text style={styles.profileEmail}>{email}</Text>}
         </View>
 
-        {/* Upgrade CTA — only shown for free users */}
+        {/* Upgrade CTA — only shown for free users (not trialing, not Pro) */}
         {!isPro && (
           <View style={styles.upgradeCard}>
             <View style={styles.upgradeHeader}>
@@ -87,8 +89,22 @@ export default function AccountScreen() {
           </View>
         )}
 
-        {/* Pro member badge — only shown for Pro users */}
-        {isPro && (
+        {/* Trial badge — shown during active trial */}
+        {isTrialing && (
+          <View style={styles.trialCard}>
+            <View style={styles.trialHeader}>
+              <Ionicons name="star" size={16} color="#B072BB" />
+              <Text style={styles.trialBadgeText}>PRO TRIAL</Text>
+            </View>
+            <Text style={styles.trialCountdown}>{getTrialLabel(trialDaysRemaining)}</Text>
+            <TouchableOpacity onPress={() => setShowPaywall(true)} activeOpacity={0.7}>
+              <Text style={styles.trialUpgradeLink}>Upgrade to keep Pro</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {/* Pro member badge — only shown for paid Pro users */}
+        {isPro && !isTrialing && (
           <View style={styles.proSinceCard}>
             <Ionicons name="star" size={16} color="#B072BB" />
             <Text style={styles.proSinceText}>
@@ -128,7 +144,11 @@ export default function AccountScreen() {
 
       </ScrollView>
 
-      <PaywallModal visible={showPaywall} onClose={() => setShowPaywall(false)} />
+      <PaywallModal
+        visible={showPaywall}
+        onClose={() => setShowPaywall(false)}
+        trialExpired={trialExpired}
+      />
     </View>
   );
 }
@@ -245,6 +265,42 @@ const styles = StyleSheet.create({
     width: 1,
     height: 28,
     backgroundColor: '#2A2A2A',
+  },
+
+  // Trial badge
+  trialCard: {
+    backgroundColor: '#1A1A1A',
+    borderRadius: 12,
+    padding: 14,
+    alignItems: 'center',
+    gap: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(176,114,187,0.3)',
+  },
+  trialHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'transparent',
+  },
+  trialBadgeText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#B072BB',
+    letterSpacing: 2,
+    backgroundColor: 'transparent',
+  },
+  trialCountdown: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.6)',
+    backgroundColor: 'transparent',
+  },
+  trialUpgradeLink: {
+    fontSize: 12,
+    color: '#B072BB',
+    textDecorationLine: 'underline',
+    backgroundColor: 'transparent',
   },
 
   // Pro member badge

@@ -25,6 +25,7 @@ import {
 } from '@/services/firebaseService';
 import { getCustomerManagementURL } from '@/services/revenueCatService';
 import { useAuth } from '@/contexts/AuthContext';
+import { getTrialLabel } from '@/utils/trialUtils';
 
 // ---------------------------------------------------------------------------
 // Error message helper
@@ -74,7 +75,7 @@ type ActiveModal =
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const { user, userDoc, isPro, signOut, refreshUserDoc } = useAuth();
+  const { user, userDoc, isPro, isTrialing, trialDaysRemaining, trialExpired, signOut, refreshUserDoc } = useAuth();
 
   // Derive auth provider
   const isEmailProvider = user?.providerData?.[0]?.providerId === 'password';
@@ -343,15 +344,19 @@ export default function SettingsScreen() {
                 <Text style={styles.menuItemLabel}>Current Plan</Text>
               </View>
               <View style={styles.menuItemRight}>
-                <Text style={[styles.menuItemValue, isPro && styles.menuItemValuePro]}>
-                  {isPro ? 'Pro' : 'Free'}
+                <Text style={[
+                  styles.menuItemValue,
+                  isTrialing && styles.menuItemValueTrial,
+                  isPro && !isTrialing && styles.menuItemValuePro,
+                ]}>
+                  {isTrialing ? `Trial \u2014 ${getTrialLabel(trialDaysRemaining)}` : isPro ? 'Pro' : 'Free'}
                 </Text>
               </View>
             </View>
 
             <View style={styles.menuDivider} />
 
-            {isPro ? (
+            {isPro && !isTrialing ? (
               /* Manage Subscription — opens RC management URL */
               <TouchableOpacity
                 style={styles.menuItem}
@@ -377,7 +382,7 @@ export default function SettingsScreen() {
                 <View style={styles.menuItemLeft}>
                   <Ionicons name="star-outline" size={24} color="#B072BB" />
                   <Text style={[styles.menuItemLabel, styles.menuItemLabelPurple]}>
-                    Upgrade to Pro
+                    {isTrialing ? 'Upgrade Now' : 'Upgrade to Pro'}
                   </Text>
                 </View>
                 <Ionicons name="chevron-forward" size={20} color="#B072BB" />
@@ -759,7 +764,11 @@ export default function SettingsScreen() {
         </GestureHandlerRootView>
       </Modal>
 
-      <PaywallModal visible={showPaywall} onClose={() => setShowPaywall(false)} />
+      <PaywallModal
+        visible={showPaywall}
+        onClose={() => setShowPaywall(false)}
+        trialExpired={trialExpired}
+      />
     </View>
   );
 }
@@ -835,6 +844,10 @@ const styles = StyleSheet.create({
   },
   menuItemValuePro: {
     color: '#B072BB',
+    fontWeight: '600',
+  },
+  menuItemValueTrial: {
+    color: '#FFB547',
     fontWeight: '600',
   },
   menuDivider: {

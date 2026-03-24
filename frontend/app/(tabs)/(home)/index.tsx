@@ -12,6 +12,7 @@ import PaywallModal from '@/components/PaywallModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { Game } from '@/types/game';
 import { useReduceMotion } from '@/hooks/useReduceMotion';
+import { getTrialLabel } from '@/utils/trialUtils';
 
 function HudSectionHeader({ label }: { label: string }) {
   return (
@@ -45,13 +46,16 @@ type ListItem =
 
 export default function HomeScreen() {
   const { games, setActiveGame, deleteGame, createGame } = useGame();
-  const { isPro } = useAuth();
+  const { isPro, isTrialing, trialDaysRemaining } = useAuth();
   const router = useRouter();
 
   const [gameToDelete, setGameToDelete] = useState<{ id: string; name: string } | null>(null);
   const [showDeleteConfirmation, setShowDeleteConfirmation] = useState(false);
   const reduceMotionEnabled = useReduceMotion();
   const [showPaywall, setShowPaywall] = useState(false);
+  const [trialBannerDismissed, setTrialBannerDismissed] = useState(false);
+
+  const showTrialBanner = isTrialing && trialDaysRemaining <= 2 && !trialBannerDismissed;
 
   const listData = useMemo<ListItem[]>(() => {
     const activeGames = games.filter(g => g.status === 'active');
@@ -169,6 +173,26 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
+      {showTrialBanner && (
+        <TouchableOpacity
+          style={styles.trialBanner}
+          onPress={() => setShowPaywall(true)}
+          activeOpacity={0.8}
+        >
+          <View style={styles.trialBannerContent}>
+            <Ionicons name="time-outline" size={16} color="#FFB547" />
+            <Text style={styles.trialBannerText}>
+              Your Pro trial ends {trialDaysRemaining <= 1 ? 'today' : `in ${trialDaysRemaining} days`}. Upgrade to keep unlimited access.
+            </Text>
+          </View>
+          <TouchableOpacity
+            onPress={() => setTrialBannerDismissed(true)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Ionicons name="close" size={16} color="rgba(255,255,255,0.4)" />
+          </TouchableOpacity>
+        </TouchableOpacity>
+      )}
       <FlatList
         data={listData}
         renderItem={renderItem}
@@ -249,6 +273,31 @@ const styles = StyleSheet.create({
   },
   listContent: {
     padding: 20,
+  },
+
+  // Trial expiry banner
+  trialBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,181,71,0.08)',
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,181,71,0.15)',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    gap: 10,
+  },
+  trialBannerContent: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: 'transparent',
+  },
+  trialBannerText: {
+    flex: 1,
+    fontSize: 12,
+    color: '#FFB547',
+    lineHeight: 16,
   },
 
   // HUD section header
