@@ -11,6 +11,8 @@ import 'react-native-reanimated';
 
 import { GameProvider } from '@/contexts/GameContext';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { NetworkProvider } from '@/contexts/NetworkContext';
+import OfflineBanner from '@/components/OfflineBanner';
 
 export {
   ErrorBoundary,
@@ -59,9 +61,11 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={styles.root}>
       <ThemeProvider value={CustomDarkTheme}>
-        <AuthProvider>
-          <AuthNavigator />
-        </AuthProvider>
+        <NetworkProvider>
+          <AuthProvider>
+            <AuthNavigator />
+          </AuthProvider>
+        </NetworkProvider>
       </ThemeProvider>
     </GestureHandlerRootView>
   );
@@ -112,6 +116,7 @@ function AuthNavigator() {
   // Main navigation tree — always mounted once auth state is known
   return (
     <GameProvider>
+      <OfflineBanner />
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="(tabs)" />

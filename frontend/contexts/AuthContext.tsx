@@ -85,6 +85,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUserDoc(null);
       }
     } catch (err: any) {
+      // Device is offline — skip silently. The app is offline-first and the user
+      // doc will be re-fetched once connectivity is restored.
+      if (err?.code === 'unavailable') {
+        console.debug('AuthContext: skipping user doc fetch — device offline');
+        // Do NOT clear userDoc — preserve any previously loaded data so Pro/trial
+        // state remains accurate while the user is offline.
+        return;
+      }
       // New users can briefly get permission-denied while Firebase propagates the
       // auth token to Firestore. Retry up to 4 times with exponential backoff.
       if (err?.code === 'permission-denied' && attempt < 4) {

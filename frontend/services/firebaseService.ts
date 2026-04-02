@@ -82,6 +82,20 @@ export const db = initializeFirestore(app, {
   localCache: persistentLocalCache(),
 });
 
+// Suppress the raw Firebase offline warning — the app handles offline state
+// gracefully via NetworkContext/OfflineBanner, so this noisy log is not useful.
+const _originalWarn = console.warn;
+console.warn = (...args: any[]) => {
+  if (
+    typeof args[0] === 'string' &&
+    args[0].includes('@firebase/firestore') &&
+    args[0].includes('Could not reach Cloud Firestore backend')
+  ) {
+    return;
+  }
+  _originalWarn.apply(console, args);
+};
+
 // ---------------------------------------------------------------------------
 // User document helpers
 // ---------------------------------------------------------------------------

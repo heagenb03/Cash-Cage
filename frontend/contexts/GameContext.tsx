@@ -4,6 +4,7 @@ import { GameService } from '@/services/gameService';
 import { StorageService } from '@/services/storageService';
 import { SyncService } from '@/services/syncService';
 import { useAuth } from '@/contexts/AuthContext';
+import { useNetwork } from '@/contexts/NetworkContext';
 
 interface GameContextType {
   games: Game[];
@@ -24,11 +25,16 @@ export function GameProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   const { user } = useAuth();
+  const { isOnline } = useNetwork();
   const uid = user?.uid ?? null;
   const abortRef = useRef<AbortController | null>(null);
   const prevUidRef = useRef<string | null | undefined>(undefined); // undefined = not yet initialized
   const gamesRef = useRef<Game[]>([]);
   const activeGameRef = useRef<Game | null>(null);
+  // Track previous online state so we can detect offline -> online transitions
+  const wasOfflineRef = useRef(false);
+  // Debounce timer for re-sync on reconnect
+  const reconnectTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Keep refs in sync with state for reading in callbacks
   useEffect(() => { gamesRef.current = games; }, [games]);
@@ -105,6 +111,38 @@ export function GameProvider({ children }: { children: ReactNode }) {
       controller.abort();
     };
   }, [uid, loadGames]);
+
+  // Re-sync from Firestore when connectivity is restored after an offline period.
+  // Uses a 2-second debounce to let the connection fully stabilise before fetching.
+  useEffect(() => {
+    if (!isOnline) {
+      wasOfflineRef.current = true;
+      return;
+    }
+
+    // isOnline just became true — only re-sync if we were previously offline
+    if (wasOfflineRef.current) {
+      wasOfflineRef.current = false;
+
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+      }
+
+      reconnectTimerRef.current = setTimeout(() => {
+        reconnectTimerRef.current = null;
+        if (uid) {
+          loadGames(uid);
+        }
+      }, 2000);
+    }
+
+    return () => {
+      if (reconnectTimerRef.current) {
+        clearTimeout(reconnectTimerRef.current);
+        reconnectTimerRef.current = null;
+      }
+    };
+  }, [isOnline, uid, loadGames]);
 
   // ---------------------------------------------------------------------------
   // CRUD operations — update React state immediately, then persist via

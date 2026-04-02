@@ -7,6 +7,27 @@ import {
 } from '@/services/firebaseService';
 
 // ---------------------------------------------------------------------------
+// Offline error detection
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns true when the error is a known Firestore "device is offline" error.
+ * These are expected when the user has no internet connection and should be
+ * handled silently — the app is offline-first so no data is lost.
+ */
+function isFirestoreOfflineError(err: unknown): boolean {
+  if (err && typeof err === 'object') {
+    const code = (err as any).code;
+    const message = (err as any).message ?? '';
+    if (code === 'unavailable') return true;
+    if (typeof message === 'string' && message.includes('Could not reach Cloud Firestore backend')) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// ---------------------------------------------------------------------------
 // SyncService — offline-first dual-write with background Firestore sync.
 //
 // Architecture:
@@ -48,6 +69,12 @@ export class SyncService {
           onRemoteUpdate?.(merged);
         } catch (err) {
           if (signal?.aborted) return;
+          // Offline errors are expected — the app is offline-first and the user
+          // sees the OfflineBanner, so downgrade to a silent debug log.
+          if (isFirestoreOfflineError(err)) {
+            console.debug('SyncService: skipping background sync — device offline');
+            return;
+          }
           console.warn('SyncService: background Firestore sync failed', err);
         }
       })();
@@ -72,9 +99,13 @@ export class SyncService {
 
     // Fire-and-forget Firestore write
     if (uid) {
-      saveGameToFirestore(uid, game).catch(err =>
-        console.warn('SyncService: Firestore save failed', err),
-      );
+      saveGameToFirestore(uid, game).catch(err => {
+        if (isFirestoreOfflineError(err)) {
+          console.debug('SyncService: skipping Firestore save — device offline');
+          return;
+        }
+        console.warn('SyncService: Firestore save failed', err);
+      });
     }
   }
 
@@ -87,9 +118,13 @@ export class SyncService {
     await StorageService.saveGames(updated);
 
     if (uid) {
-      deleteGameFromFirestore(uid, gameId).catch(err =>
-        console.warn('SyncService: Firestore delete failed', err),
-      );
+      deleteGameFromFirestore(uid, gameId).catch(err => {
+        if (isFirestoreOfflineError(err)) {
+          console.debug('SyncService: skipping Firestore delete — device offline');
+          return;
+        }
+        console.warn('SyncService: Firestore delete failed', err);
+      });
     }
   }
 
