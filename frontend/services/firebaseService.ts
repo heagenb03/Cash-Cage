@@ -124,6 +124,7 @@ export async function createUserDocument(
       totalPlayersHosted: 0,
       proSince: null,
       trialEndsAt: new Date(Date.now() + TRIAL_DURATION_DAYS * 24 * 60 * 60 * 1000),
+      currency: 'USD',
     });
   } catch (err: any) {
     if (err?.code === 'permission-denied' && attempt < 4) {
@@ -276,6 +277,12 @@ export async function incrementProfileStats(
     totalMoneyTracked: increment(stats.moneyTracked),
     totalPlayersHosted: increment(stats.playersHosted),
   });
+}
+
+/** Update the user's preferred currency code. */
+export async function updateUserCurrency(uid: string, currencyCode: string): Promise<void> {
+  const userRef = doc(db, 'users', uid);
+  await updateDoc(userRef, { currency: currencyCode });
 }
 
 /** Set proSince timestamp on the user document (only if not already set). */

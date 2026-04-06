@@ -181,8 +181,11 @@ export class GameService {
     }
   }
 
-  static validateGame(balances: PlayerBalance[]): Validation {
-    return validateSettlements(balances);
+  static validateGame(
+    balances: PlayerBalance[],
+    formatMoney?: (n: number) => string,
+  ): Validation {
+    return validateSettlements(balances, formatMoney);
   }
   
   static completeGame(game: Game): void {

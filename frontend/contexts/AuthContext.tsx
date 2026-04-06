@@ -35,6 +35,7 @@ interface UserDocument {
   totalPlayersHosted?: number;
   proSince?: Date | null;
   trialEndsAt?: Date | null;
+  currency?: string;
 }
 
 interface AuthContextType {

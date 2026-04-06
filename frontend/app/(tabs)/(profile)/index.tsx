@@ -13,7 +13,8 @@ import HudSectionHeader from '@/components/HudSectionHeader';
 import Button from '@/components/Button';
 import PaywallModal from '@/components/PaywallModal';
 import { useAuth } from '@/contexts/AuthContext';
-import { formatStatNumber, formatStatCurrency, formatMonthYear } from '@/utils/formatUtils';
+import { formatStatNumber, formatMonthYear } from '@/utils/formatUtils';
+import { useCurrency } from '@/contexts/CurrencyContext';
 import { getTrialLabel } from '@/utils/trialUtils';
 
 // ---------------------------------------------------------------------------
@@ -23,6 +24,7 @@ import { getTrialLabel } from '@/utils/trialUtils';
 export default function AccountScreen() {
   const router = useRouter();
   const { user, userDoc, isPro, isTrialing, trialDaysRemaining, trialExpired } = useAuth();
+  const { formatAmountCompact, meta } = useCurrency();
 
   const [showPaywall, setShowPaywall] = useState(false);
 
@@ -108,7 +110,7 @@ export default function AccountScreen() {
           <View style={styles.proSinceCard}>
             <Ionicons name="star" size={16} color="#B072BB" />
             <Text style={styles.proSinceText}>
-              Pro member{userDoc?.proSince ? ` since ${formatMonthYear(userDoc.proSince)}` : ''}
+              Pro member{userDoc?.proSince ? ` since ${formatMonthYear(userDoc.proSince, meta.locale)}` : ''}
             </Text>
           </View>
         )}
@@ -132,7 +134,7 @@ export default function AccountScreen() {
             <View style={styles.statDivider} />
             <View style={styles.statCell}>
               <Text style={styles.statLabel}>TRACKED</Text>
-              <Text style={styles.statValue}>{formatStatCurrency(userDoc?.totalMoneyTracked ?? 0)}</Text>
+              <Text style={styles.statValue}>{formatAmountCompact(userDoc?.totalMoneyTracked ?? 0)}</Text>
             </View>
             <View style={styles.statDivider} />
             <View style={styles.statCell}>

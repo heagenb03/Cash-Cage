@@ -11,6 +11,7 @@ import 'react-native-reanimated';
 
 import { GameProvider } from '@/contexts/GameContext';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
+import { CurrencyProvider } from '@/contexts/CurrencyContext';
 import { NetworkProvider } from '@/contexts/NetworkContext';
 import OfflineBanner from '@/components/OfflineBanner';
 
@@ -115,13 +116,15 @@ function AuthNavigator() {
 
   // Main navigation tree — always mounted once auth state is known
   return (
-    <GameProvider>
-      <OfflineBanner />
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="(auth)" />
-        <Stack.Screen name="(tabs)" />
-      </Stack>
-    </GameProvider>
+    <CurrencyProvider>
+      <GameProvider>
+        <OfflineBanner />
+        <Stack screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="(auth)" />
+          <Stack.Screen name="(tabs)" />
+        </Stack>
+      </GameProvider>
+    </CurrencyProvider>
   );
 }
 

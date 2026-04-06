@@ -25,6 +25,8 @@ import {
 } from '@/services/firebaseService';
 import { getCustomerManagementURL } from '@/services/revenueCatService';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCurrency } from '@/contexts/CurrencyContext';
+import CurrencyPickerModal from '@/components/CurrencyPickerModal';
 import { getTrialLabel } from '@/utils/trialUtils';
 
 // ---------------------------------------------------------------------------
@@ -92,6 +94,9 @@ export default function SettingsScreen() {
   // ---------------------------------------------------------------------------
   // Modal state
   // ---------------------------------------------------------------------------
+
+  const { currency, setCurrency, meta } = useCurrency();
+  const [showCurrencyPicker, setShowCurrencyPicker] = useState(false);
 
   const [showPaywall, setShowPaywall] = useState(false);
   const [activeModal, setActiveModal] = useState<ActiveModal>('none');
@@ -312,6 +317,24 @@ export default function SettingsScreen() {
                 </Text>
               </View>
             </View>
+
+            <View style={styles.menuDivider} />
+
+            {/* Currency */}
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => setShowCurrencyPicker(true)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.menuItemLeft}>
+                <Ionicons name="cash-outline" size={24} color="#B072BB" />
+                <Text style={styles.menuItemLabel}>Currency</Text>
+              </View>
+              <View style={styles.menuItemRight}>
+                <Text style={styles.menuItemValue}>{meta.symbol} {currency}</Text>
+                <Ionicons name="chevron-forward" size={20} color="#666" />
+              </View>
+            </TouchableOpacity>
 
             {/* Change Password — only shown for email/password accounts */}
             {isEmailProvider && (
@@ -763,6 +786,13 @@ export default function SettingsScreen() {
           </KeyboardAvoidingView>
         </GestureHandlerRootView>
       </Modal>
+
+      <CurrencyPickerModal
+        visible={showCurrencyPicker}
+        currentCode={currency}
+        onSelect={(code) => setCurrency(code)}
+        onClose={() => setShowCurrencyPicker(false)}
+      />
 
       <PaywallModal
         visible={showPaywall}

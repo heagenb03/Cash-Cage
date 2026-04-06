@@ -22,6 +22,9 @@ export interface Game {
   transactions: Transaction[];
   createdAt: Date;
 
+  /** Currency the game was created in (defaults to user preference at game time) */
+  currency?: string;
+
   // Settlement cache
   cachedSettlements?: SettlementResult;
   transactionHash?: string;

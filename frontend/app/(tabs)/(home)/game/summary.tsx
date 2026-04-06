@@ -8,6 +8,7 @@ import { getSettlements } from '@/services/settlementService';
 import { PlayerBalance, SettlementResult } from '@/types/game';
 import { groupSettlementsByRecipient, sortPaymentsByAmount } from '@/utils/settlementUtils';
 import { getNetBalanceColor, formatNetBalanceDisplay } from '@/utils/formatUtils';
+import { useCurrency } from '@/contexts/CurrencyContext';
 import Button from '@/components/Button';
 import { Ionicons } from '@expo/vector-icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -33,6 +34,7 @@ interface BalanceCardProps {
 
 function BalanceCard({ balance, reduceMotion }: BalanceCardProps) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
+  const { formatAmount, meta } = useCurrency();
 
   const animateScaleDown = useCallback(() => {
     if (!reduceMotion) {
@@ -67,7 +69,7 @@ function BalanceCard({ balance, reduceMotion }: BalanceCardProps) {
       <Animated.View
         accessible={true}
         accessibilityRole="button"
-        accessibilityLabel={`${balance.playerName}, Net: ${formatNetBalanceDisplay(balance.netBalance)}`}
+        accessibilityLabel={`${balance.playerName}, Net: ${formatNetBalanceDisplay(balance.netBalance, meta.symbol)}`}
         style={[
           styles.playerCard,
           !reduceMotion && { transform: [{ scale: scaleAnim }] }
@@ -84,12 +86,12 @@ function BalanceCard({ balance, reduceMotion }: BalanceCardProps) {
         <View style={styles.dataRow}>
           <View style={styles.dataItem}>
             <Text style={styles.dataLabel}>In</Text>
-            <Text style={styles.dataValue}>${balance.totalBuyins.toFixed(0)}</Text>
+            <Text style={styles.dataValue}>{formatAmount(balance.totalBuyins)}</Text>
           </View>
           <View style={styles.dataDivider} />
           <View style={styles.dataItem}>
             <Text style={styles.dataLabel}>Out</Text>
-            <Text style={styles.dataValue}>${balance.totalCashouts.toFixed(0)}</Text>
+            <Text style={styles.dataValue}>{formatAmount(balance.totalCashouts)}</Text>
           </View>
           <View style={styles.dataDivider} />
           <View style={styles.dataItem}>
@@ -98,7 +100,7 @@ function BalanceCard({ balance, reduceMotion }: BalanceCardProps) {
               styles.dataValue,
               { color: getNetBalanceColor(balance.netBalance) }
             ]}>
-              {formatNetBalanceDisplay(balance.netBalance)}
+              {formatNetBalanceDisplay(balance.netBalance, meta.symbol)}
             </Text>
           </View>
         </View>
@@ -129,6 +131,7 @@ function SettlementCard({ groupedSettlement, reduceMotion }: SettlementCardProps
   const [isExpanded, setIsExpanded] = useState(false);
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
+  const { formatAmount } = useCurrency();
 
   // Sort payments by amount (largest first)
   const sortedPayments = sortPaymentsByAmount(groupedSettlement).payments;
@@ -186,7 +189,7 @@ function SettlementCard({ groupedSettlement, reduceMotion }: SettlementCardProps
       <Animated.View
         accessible={true}
         accessibilityRole="button"
-        accessibilityLabel={`${groupedSettlement.recipient} receives $${groupedSettlement.totalAmount.toFixed(2)}. ${isExpanded ? 'Collapse' : 'Expand'} payment details.`}
+        accessibilityLabel={`${groupedSettlement.recipient} receives ${formatAmount(groupedSettlement.totalAmount)}. ${isExpanded ? 'Collapse' : 'Expand'} payment details.`}
         accessibilityHint={isExpanded ? 'Double tap to collapse payment details' : 'Double tap to expand payment details'}
         accessibilityState={{ expanded: isExpanded }}
         style={[
@@ -205,7 +208,7 @@ function SettlementCard({ groupedSettlement, reduceMotion }: SettlementCardProps
         <View style={styles.totalSection}>
           <Text style={styles.totalLabel}>RECEIVES</Text>
           <Text style={styles.totalAmount}>
-            ${groupedSettlement.totalAmount.toFixed(2)}
+            {formatAmount(groupedSettlement.totalAmount)}
           </Text>
         </View>
 
@@ -237,7 +240,7 @@ function SettlementCard({ groupedSettlement, reduceMotion }: SettlementCardProps
                         style={{ marginRight: 4, marginTop: 1 }}
                       />
                       <Text style={styles.paymentAmountValue}>
-                        ${payment.amount.toFixed(2)}
+                        {formatAmount(payment.amount)}
                       </Text>
                     </View>
                   </View>
@@ -329,6 +332,7 @@ export default function GameSummaryScreen() {
   const { activeGame, updateGame } = useGame();
   const router = useRouter();
   const reduceMotion = useReduceMotion();
+  const { formatAmount } = useCurrency();
 
   const summary = useMemo(
     () => (activeGame ? GameService.generateGameSummary(activeGame) : null),
@@ -493,7 +497,7 @@ setSettlementResult(cachedResult);
   const handleShare = async () => {
     try {
       let message = `${activeGame.name}\n\n`;
-      message += `Total Pot: $${summary.totalPot.toFixed(2)}\n\n`;
+      message += `Total Pot: ${formatAmount(summary.totalPot)}\n\n`;
       message += `Settlements:\n`;
 
       if (settlementsToDisplay.length === 0) {
@@ -501,7 +505,7 @@ setSettlementResult(cachedResult);
       } else {
         groupedSettlements.forEach(({ recipient, payments }) => {
           const details = payments
-            .map(({ from, amount }) => `$${amount.toFixed(2)} from ${from}`)
+            .map(({ from, amount }) => `${formatAmount(amount)} from ${from}`)
             .join(', ');
           message += `• ${recipient}: ${details}\n`;
         });
@@ -543,7 +547,7 @@ setSettlementResult(cachedResult);
           <HudSectionHeader label="TOTAL POT" />
           <View style={styles.heroPotDisplay}>
             <Text style={styles.heroPotAmount}>
-              ${summary.totalPot.toFixed(2)}
+              {formatAmount(summary.totalPot)}
             </Text>
           </View>
         </View>

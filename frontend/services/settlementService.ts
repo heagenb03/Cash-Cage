@@ -216,7 +216,10 @@ export async function getSettlements(
   }
 }
 
-export function validateSettlements(balances: PlayerBalance[]): Validation {
+export function validateSettlements(
+  balances: PlayerBalance[],
+  formatMoney: (n: number) => string = (n) => `$${n.toFixed(2)}`,
+): Validation {
   const tolerance = 2.50;
   const validation : Validation = {
     isValid: false,
@@ -243,7 +246,7 @@ export function validateSettlements(balances: PlayerBalance[]): Validation {
 
   if (validation.netDifference > tolerance) {
     validation.warnings.push(
-      `Total buy-ins of $${validation.totalBuyins.toFixed(2)} with total cash outs of $${validation.totalCashouts.toFixed(2)}. A $${validation.netDifference.toFixed(2)} difference.
+      `Total buy-ins of ${formatMoney(validation.totalBuyins)} with total cash outs of ${formatMoney(validation.totalCashouts)}. A ${formatMoney(validation.netDifference)} difference.
       Double check transactions and chip-counts.
       \n If you proceed, settlement algorithm may have poor results.`
     );

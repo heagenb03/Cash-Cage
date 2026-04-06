@@ -9,15 +9,17 @@ export const formatStatNumber = (value: number): string => {
   return value.toFixed(0);
 };
 
-/** Format a currency stat compactly: $0, $42, $1.2k, $15k */
-export const formatStatCurrency = (value: number): string => {
-  return `$${formatStatNumber(value)}`;
+/** Format a currency stat compactly: $0, $42, $1.2k, $15k
+ *  @param symbol - currency symbol, defaults to '$'
+ */
+export const formatStatCurrency = (value: number, symbol = '$'): string => {
+  return `${symbol}${formatStatNumber(value)}`;
 };
 
-/** Format a date as "Mon YYYY" (e.g., "Jan 2026") */
-export const formatMonthYear = (date: Date): string => {
+/** Format a date as "Mon YYYY" (e.g., "Jan 2026"). Pass locale from CurrencyContext for locale-aware output. */
+export const formatMonthYear = (date: Date, locale = 'en-US'): string => {
   if (isNaN(date.getTime())) return '';
-  return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+  return date.toLocaleDateString(locale, { month: 'short', year: 'numeric' });
 };
 
 /**
@@ -33,24 +35,25 @@ export const getNetBalanceColor = (netBalance: number): string => {
 
 /**
  * Formats net balance for display with +/- prefix
- * Amounts >= $1000 are displayed in "k" format with one decimal place
+ * Amounts >= 1000 are displayed in "k" format with one decimal place
  * @param netBalance - The player's net balance
+ * @param symbol - currency symbol, defaults to '$'
  * @returns Formatted string (e.g., "+$125", "-$50", "+$1.5k", "-$2.0k", "$0")
  */
-export const formatNetBalanceDisplay = (netBalance: number): string => {
+export const formatNetBalanceDisplay = (netBalance: number, symbol = '$'): string => {
   const absValue = Math.abs(netBalance);
 
-  // Format amounts >= $1000 with "k" suffix and one decimal place
+  // Format amounts >= 1000 with "k" suffix and one decimal place
   let formattedValue: string;
   if (absValue >= 1000) {
     const kValue = (absValue / 1000).toFixed(1);
-    formattedValue = `$${kValue}k`;
+    formattedValue = `${symbol}${kValue}k`;
   } else {
-    formattedValue = `$${absValue.toFixed(0)}`;
+    formattedValue = `${symbol}${absValue.toFixed(0)}`;
   }
 
   // Add +/- prefix based on sign
   if (netBalance > 0) return `+${formattedValue}`;
   if (netBalance < 0) return `-${formattedValue}`;
-  return `$0`;
+  return `${symbol}0`;
 };

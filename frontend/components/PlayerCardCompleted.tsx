@@ -7,6 +7,7 @@ import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { Ionicons } from '@expo/vector-icons';
 import { Player, PlayerBalance } from '@/types/game';
 import { getNetBalanceColor, formatNetBalanceDisplay } from '@/utils/formatUtils';
+import { useCurrency } from '@/contexts/CurrencyContext';
 
 interface PlayerCardCompletedProps {
   player: Player;
@@ -24,6 +25,7 @@ const PlayerCardCompleted: React.FC<PlayerCardCompletedProps> = ({
   reduceMotion
 }) => {
   const scaleAnim = useRef(new Animated.Value(1)).current;
+  const { formatAmount, meta } = useCurrency();
 
   const animateScaleDown = useCallback(() => {
     if (!reduceMotion) {
@@ -92,7 +94,7 @@ const PlayerCardCompleted: React.FC<PlayerCardCompletedProps> = ({
           accessible={true}
           accessibilityRole="button"
           accessibilityLabel={balance
-            ? `${player.name}, Net: ${formatNetBalanceDisplay(balance.netBalance)}`
+            ? `${player.name}, Net: ${formatNetBalanceDisplay(balance.netBalance, meta.symbol)}`
             : `${player.name}, No transaction data`
           }
           accessibilityHint="Swipe to reactivate or delete player"
@@ -113,12 +115,12 @@ const PlayerCardCompleted: React.FC<PlayerCardCompletedProps> = ({
             <View style={styles.dataRow}>
               <View style={styles.dataItem}>
                 <Text style={styles.dataLabel}>In</Text>
-                <Text style={styles.dataValue}>${balance.totalBuyins.toFixed(0)}</Text>
+                <Text style={styles.dataValue}>{formatAmount(balance.totalBuyins)}</Text>
               </View>
               <View style={styles.dataDivider} />
               <View style={styles.dataItem}>
                 <Text style={styles.dataLabel}>Out</Text>
-                <Text style={styles.dataValue}>${balance.totalCashouts.toFixed(0)}</Text>
+                <Text style={styles.dataValue}>{formatAmount(balance.totalCashouts)}</Text>
               </View>
               <View style={styles.dataDivider} />
               <View style={styles.dataItem}>
@@ -127,7 +129,7 @@ const PlayerCardCompleted: React.FC<PlayerCardCompletedProps> = ({
                   styles.dataValue,
                   { color: getNetBalanceColor(balance.netBalance) }
                 ]}>
-                  {formatNetBalanceDisplay(balance.netBalance)}
+                  {formatNetBalanceDisplay(balance.netBalance, meta.symbol)}
                 </Text>
               </View>
             </View>

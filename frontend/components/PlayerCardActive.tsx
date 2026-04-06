@@ -6,6 +6,7 @@ import { runOnJS } from 'react-native-reanimated';
 import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { Ionicons } from '@expo/vector-icons';
 import { Player, PlayerBalance } from '@/types/game';
+import { useCurrency } from '@/contexts/CurrencyContext';
 
 interface PlayerCardActiveProps {
   player: Player;
@@ -29,6 +30,7 @@ const PlayerCardActive: React.FC<PlayerCardActiveProps> = ({
   reduceMotion
 }) => {
   const scaleAnim = useRef(new Animated.Value(1)).current;
+  const { formatAmount } = useCurrency();
 
   const animateScaleDown = useCallback(() => {
     if (!reduceMotion) {
@@ -95,7 +97,7 @@ const PlayerCardActive: React.FC<PlayerCardActiveProps> = ({
         <Animated.View
           accessible={true}
           accessibilityRole="button"
-          accessibilityLabel={`${player.name}, Buy-in: $${balance?.totalBuyins ?? 0}, Cash out: $${balance?.totalCashouts ?? 0}`}
+          accessibilityLabel={`${player.name}, Buy-in: ${formatAmount(balance?.totalBuyins ?? 0)}, Cash out: ${formatAmount(balance?.totalCashouts ?? 0)}`}
           accessibilityHint="Tap In or Out values to edit. Swipe for actions."
           style={[
             styles.playerCard,
@@ -114,12 +116,12 @@ const PlayerCardActive: React.FC<PlayerCardActiveProps> = ({
           <View style={styles.dataRow}>
             <RNTouchableOpacity style={styles.dataItem} onPress={() => onBuyIn(player)}>
               <Text style={styles.dataLabel}>In</Text>
-              <Text style={styles.dataValue}>${(balance?.totalBuyins ?? 0).toFixed(0)}</Text>
+              <Text style={styles.dataValue}>{formatAmount(balance?.totalBuyins ?? 0)}</Text>
             </RNTouchableOpacity>
             <View style={styles.dataDivider} />
             <RNTouchableOpacity style={styles.dataItem} onPress={() => onCashOut(player)}>
               <Text style={styles.dataLabel}>Out</Text>
-              <Text style={styles.dataValue}>${(balance?.totalCashouts ?? 0).toFixed(0)}</Text>
+              <Text style={styles.dataValue}>{formatAmount(balance?.totalCashouts ?? 0)}</Text>
             </RNTouchableOpacity>
           </View>
         </Animated.View>

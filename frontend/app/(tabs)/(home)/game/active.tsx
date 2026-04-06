@@ -18,6 +18,7 @@ import Button from '@/components/Button';
 import ModalButton from '@/components/ModalButton';
 import PaywallModal from '@/components/PaywallModal';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCurrency } from '@/contexts/CurrencyContext';
 import { useReduceMotion } from '@/hooks/useReduceMotion';
 
 function HudSectionHeader({ label, onAction, actionIcon }: { label: string; onAction?: () => void; actionIcon?: string }) {
@@ -113,6 +114,7 @@ function EmptyState({ label, icon }: { label: string; icon: string }) {
 export default function ActiveGameScreen() {
   const { activeGame, updateGame, setActiveGame, createGame } = useGame();
   const { user, isPro } = useAuth();
+  const { formatAmount, meta } = useCurrency();
   const router = useRouter();
 
   // Helper function to highlight critical values in error/warning messages
@@ -286,7 +288,7 @@ export default function ActiveGameScreen() {
     if (transactionType === 'buyin') {
       const currentCashout = playerBalance?.totalCashouts ?? 0;
       if (currentCashout > 0 && amount < currentCashout) {
-        Alert.alert('Error', `Buy-in cannot be less than cash out of $${currentCashout.toFixed(2)}`);
+        Alert.alert('Error', `Buy-in cannot be less than cash out of ${formatAmount(currentCashout)}`);
         return;
       }
     }
@@ -316,7 +318,7 @@ export default function ActiveGameScreen() {
 
   const handleCompleteGame = () => {
     const balances = GameService.calculateBalances(activeGame);
-    const validation = GameService.validateGame(balances);
+    const validation = GameService.validateGame(balances, formatAmount);
 
     setValidationResult(validation);
 

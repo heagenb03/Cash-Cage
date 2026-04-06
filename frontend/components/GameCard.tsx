@@ -6,6 +6,7 @@ import { runOnJS } from 'react-native-reanimated';
 import Swipeable, { type SwipeableMethods } from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { Ionicons } from '@expo/vector-icons';
 import { Game } from '@/types/game';
+import { useCurrency } from '@/contexts/CurrencyContext';
 
 interface GameCardProps {
   game: Game;
@@ -26,6 +27,7 @@ function formatDate(date: Date): string {
 
 const GameCard: React.FC<GameCardProps> = ({ game, onPress, onDelete, isCompleted = false, reduceMotion, entryIndex }) => {
   const swipeableRef = useRef<SwipeableMethods>(null);
+  const { formatAmount } = useCurrency();
   const scaleAnim = useRef(new Animated.Value(1)).current;
   // Capture whether this card should animate at mount time — prevents opacity
   // from dropping to 0 if entryIndex changes due to sibling deletion.
@@ -151,7 +153,7 @@ const GameCard: React.FC<GameCardProps> = ({ game, onPress, onDelete, isComplete
             <RNView style={styles.dataDivider} />
             <RNView style={styles.dataItem}>
               <Text style={styles.dataLabel}>Pot</Text>
-              <Text style={styles.dataValue}>${totalPot.toFixed(0)}</Text>
+              <Text style={styles.dataValue}>{formatAmount(totalPot)}</Text>
             </RNView>
             <RNView style={styles.dataDivider} />
             <RNView style={[styles.dataItem, styles.dateDataItem]}>
