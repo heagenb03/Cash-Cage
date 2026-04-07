@@ -1,4 +1,4 @@
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import FontAwesome from '@expo/vector-icons/FontAwesome';
 import { Ionicons } from '@expo/vector-icons';
 import { Tabs, usePathname, useRouter } from 'expo-router';
@@ -10,6 +10,11 @@ import { runOnJS } from 'react-native-reanimated';
 import Colors from '@/constants/Colors';
 import { useColorScheme } from '@/components/useColorScheme';
 import { useReduceMotion } from '@/hooks/useReduceMotion';
+import { useNetwork } from '@/contexts/NetworkContext';
+
+const AMBER = 'rgba(255, 165, 0, 0.85)';
+const AMBER_BG = 'rgba(255, 165, 0, 0.08)';
+const AMBER_BORDER = 'rgba(255, 165, 0, 0.15)';
 
 export const unstable_settings = {
   initialRouteName: '(home)',
@@ -26,9 +31,21 @@ function DynamicCashCageHeader() {
   const pathname = usePathname();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const { isOnline } = useNetwork();
 
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const reduceMotion = useReduceMotion();
+
+  const [offlineDismissed, setOfflineDismissed] = useState(false);
+  const prevIsOnlineRef = useRef(isOnline);
+  useEffect(() => {
+    if (prevIsOnlineRef.current && !isOnline) {
+      setOfflineDismissed(false);
+    }
+    prevIsOnlineRef.current = isOnline;
+  }, [isOnline]);
+
+  const showOfflineStrip = !isOnline && !offlineDismissed;
 
   const animateScaleDown = useCallback((scaleValue: number = 0.9) => {
     if (!reduceMotion) {
@@ -138,6 +155,34 @@ function DynamicCashCageHeader() {
           paddingRight: 16,
         }} />
       </View>
+
+      {showOfflineStrip && (
+        <View style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          paddingHorizontal: 14,
+          height: 32,
+          backgroundColor: AMBER_BG,
+          borderTopWidth: 1,
+          borderTopColor: AMBER_BORDER,
+        }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 }}>
+            <Ionicons name="cloud-offline-outline" size={13} color={AMBER} style={{ marginTop: 1 }} />
+            <Text style={{ color: AMBER, fontSize: 11, fontWeight: '500', letterSpacing: 0.2 }}>
+              You're offline · changes are saved locally
+            </Text>
+          </View>
+          <TouchableOpacity
+            onPress={() => setOfflineDismissed(true)}
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            accessibilityLabel="Dismiss offline banner"
+            accessibilityRole="button"
+          >
+            <Ionicons name="close" size={14} color={AMBER} />
+          </TouchableOpacity>
+        </View>
+      )}
     </View>
   );
 }

@@ -13,7 +13,6 @@ import { GameProvider } from '@/contexts/GameContext';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { CurrencyProvider } from '@/contexts/CurrencyContext';
 import { NetworkProvider } from '@/contexts/NetworkContext';
-import OfflineBanner from '@/components/OfflineBanner';
 
 export {
   ErrorBoundary,
@@ -118,11 +117,12 @@ function AuthNavigator() {
   return (
     <CurrencyProvider>
       <GameProvider>
-        <OfflineBanner />
-        <Stack screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="(auth)" />
-          <Stack.Screen name="(tabs)" />
-        </Stack>
+        <View style={styles.root}>
+          <Stack screenOptions={{ headerShown: false }}>
+            <Stack.Screen name="(auth)" />
+            <Stack.Screen name="(tabs)" />
+          </Stack>
+        </View>
       </GameProvider>
     </CurrencyProvider>
   );

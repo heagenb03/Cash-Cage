@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
-import { StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Modal, Animated, ActivityIndicator } from 'react-native';
+import { StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Modal, Animated } from 'react-native';
 import { GestureHandlerRootView, Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
@@ -107,6 +107,37 @@ function EmptyState({ label, icon }: { label: string; icon: string }) {
         <Ionicons name={icon as any} size={28} color="rgba(176,114,187,0.35)" />
       </View>
       <Text style={styles.emptyStateText}>{label}</Text>
+    </View>
+  );
+}
+
+function SolvingOverlay() {
+  const reduceMotion = useReduceMotion();
+  const [dotCount, setDotCount] = useState(1);
+
+  useEffect(() => {
+    if (reduceMotion) return;
+    const id = setInterval(() => {
+      setDotCount(c => (c >= 3 ? 1 : c + 1));
+    }, 380);
+    return () => clearInterval(id);
+  }, [reduceMotion]);
+
+  return (
+    <View style={styles.solvingOverlay}>
+      <View style={styles.solvingHudHeader}>
+        <View style={styles.solvingHudLine} />
+        <Text style={styles.solvingHudLabel}>SETTLING</Text>
+        <View style={styles.solvingHudLine} />
+      </View>
+
+      <View style={styles.solvingDots}>
+        <View style={[styles.solvingDot, { opacity: reduceMotion ? 0.6 : 1 }]} />
+        <View style={[styles.solvingDot, { opacity: reduceMotion ? 0.6 : dotCount >= 2 ? 1 : 0.15 }]} />
+        <View style={[styles.solvingDot, { opacity: reduceMotion ? 0.6 : dotCount >= 3 ? 1 : 0.15 }]} />
+      </View>
+
+      <Text style={styles.solvingStatusLabel}>OPTIMIZING TRANSFERS</Text>
     </View>
   );
 }
@@ -834,19 +865,7 @@ export default function ActiveGameScreen() {
            loses focus.  A native Modal creates an independent overlay window
            that persists even when the parent screen is frozen/detached, which
            blocks all touch events on any screen pushed on top. */}
-      {showSolvingModal && (
-        <View style={styles.solvingOverlay}>
-          <View style={styles.modalContent}>
-            <ActivityIndicator size="large" color="#B072BB" style={{ marginBottom: 20 }} />
-            <Text style={styles.solvingTitle}>CALCULATING SETTLEMENTS</Text>
-            <View style={styles.solvingStatusBar}>
-              <View style={styles.solvingStatusDot} />
-              <Text style={styles.solvingStatusText}>OPTIMIZING PAYMENT GRAPH</Text>
-            </View>
-            <Text style={styles.solvingSubtext}>Running MILP solver for minimal transfer solution</Text>
-          </View>
-        </View>
-      )}
+      {showSolvingModal && <SolvingOverlay />}
 
     </View>
   );
@@ -1146,49 +1165,50 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+    backgroundColor: '#0A0A0A',
     zIndex: 100,
   },
-  solvingTitle: {
-    fontSize: 16,
+  solvingHudHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    width: 200,
+    marginBottom: 28,
+  },
+  solvingHudLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#2A2A2A',
+  },
+  solvingHudLabel: {
+    fontSize: 11,
     fontWeight: 'bold',
     color: '#B072BB',
     textTransform: 'uppercase',
-    letterSpacing: 2.5,
-    textAlign: 'center',
-    marginBottom: 12,
+    letterSpacing: 3,
   },
-  solvingStatusBar: {
+  solvingDots: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    marginBottom: 10,
-    backgroundColor: 'transparent',
+    gap: 14,
+    marginBottom: 24,
   },
-  solvingStatusDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#00D66F',
-    shadowColor: '#00D66F',
+  solvingDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#B072BB',
+    shadowColor: '#B072BB',
     shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOpacity: 0.9,
+    shadowRadius: 6,
+    elevation: 3,
   },
-  solvingStatusText: {
+  solvingStatusLabel: {
     fontSize: 9,
     fontWeight: 'bold',
-    color: 'rgba(176,114,187,0.7)',
+    color: 'rgba(176,114,187,0.6)',
     textTransform: 'uppercase',
     letterSpacing: 1.5,
-  },
-  solvingSubtext: {
-    fontSize: 11,
-    fontFamily: 'SpaceMono',
-    color: 'rgba(255,255,255,0.4)',
-    textAlign: 'center' as const,
-    letterSpacing: 0.5,
   },
 });
