@@ -43,6 +43,7 @@ yarn-error.*
 # firebase
 dealr-1f955-firebase-adminsdk-fbsvc-45a8e72b7b.json
 google-services.json
+google-play-service-account.json
 
 # claude
 CLAUDE.md
