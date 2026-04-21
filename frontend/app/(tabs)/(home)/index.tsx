@@ -58,8 +58,9 @@ export default function HomeScreen() {
   const showTrialBanner = isTrialing && trialDaysRemaining <= 2 && !trialBannerDismissed;
 
   const listData = useMemo<ListItem[]>(() => {
-    const activeGames = games.filter(g => g.status === 'active');
-    const completedGames = games.filter(g => g.status === 'completed');
+    const byNewest = (a: Game, b: Game) => b.createdAt.getTime() - a.createdAt.getTime();
+    const activeGames = games.filter(g => g.status === 'active').sort(byNewest);
+    const completedGames = games.filter(g => g.status === 'completed').sort(byNewest);
     const visibleCompleted = isPro ? completedGames : completedGames.slice(0, FREE_HISTORY_LIMIT);
     const hiddenCount = isPro ? 0 : Math.max(0, completedGames.length - FREE_HISTORY_LIMIT);
 
