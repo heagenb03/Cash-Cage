@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { auth, db, firebaseSignOut } from '@/services/firebaseService';
 import {
   initializePurchases,
@@ -127,6 +128,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             await fetchRcEntitlements();
           })(),
         ]);
+        // Set install date once on first sign-in
+        AsyncStorage.getItem('review_install_date').then(val => {
+          if (!val) AsyncStorage.setItem('review_install_date', String(Date.now()));
+        }).catch(() => {});
       } else {
         setUserDoc(null);
         setRcIsPro(false);

@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { StyleSheet, ScrollView, TouchableOpacity, Share, ActivityIndicator, Animated } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as StoreReview from 'expo-store-review';
 import { Text, View } from '@/components/Themed';
 import { useGame } from '@/contexts/GameContext';
 import { useRouter } from 'expo-router';
@@ -354,6 +356,49 @@ export default function GameSummaryScreen() {
   useEffect(() => {
     balancesRef.current = summary?.balances ?? [];
   }, [summary]);
+
+  const settlementsLoaded =
+    !isLoadingSettlements && settlementResult !== null;
+
+  useEffect(() => {
+    if (!settlementsLoaded) return;
+    if (showFallbackBanner) return;
+
+    const maybeRequestReview = async () => {
+      try {
+        const canReview = await StoreReview.hasAction();
+        if (!canReview) return;
+
+        const [lastPromptStr, gamesCompletedStr, installDateStr] = await Promise.all([
+          AsyncStorage.getItem('review_last_prompt_date'),
+          AsyncStorage.getItem('review_games_completed'),
+          AsyncStorage.getItem('review_install_date'),
+        ]);
+
+        const now = Date.now();
+        const gamesCompleted = parseInt(gamesCompletedStr ?? '0', 10);
+        const installDate = parseInt(installDateStr ?? String(now), 10);
+        const lastPrompt = parseInt(lastPromptStr ?? '0', 10);
+        const daysSinceInstall = (now - installDate) / (1000 * 60 * 60 * 24);
+        const daysSinceLastPrompt = (now - lastPrompt) / (1000 * 60 * 60 * 24);
+
+        const qualified =
+          gamesCompleted >= 2 &&
+          daysSinceInstall >= 5 &&
+          daysSinceLastPrompt >= 90;
+
+        if (!qualified) return;
+
+        await AsyncStorage.setItem('review_last_prompt_date', String(now));
+        await StoreReview.requestReview();
+      } catch {
+        // review prompt is best-effort; ignore errors
+      }
+    };
+
+    const timer = setTimeout(maybeRequestReview, 5000);
+    return () => clearTimeout(timer);
+  }, [settlementsLoaded, showFallbackBanner]);
 
   useEffect(() => {
     if (!summary) {
