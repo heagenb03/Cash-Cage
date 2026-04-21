@@ -1,0 +1,48 @@
+# Dependencies (EAS runs its own install)
+node_modules/
+
+# Native folders (EAS runs expo prebuild)
+android/
+ios/
+
+# Expo / build caches
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Test / coverage / reports
+coverage/
+.reports/
+
+# Env files (EAS uses its own environment vars)
+.env
+.env.*
+
+# Credentials & keys (never upload)
+*.jks
+*.p8
+*.p12
+*.key
+*.pem
+*.mobileprovision
+*.plist
+google-services.json
+google-play-service-account.json
+dealr-*.json
+AuthKey_*.p8
+
+# Editor / VCS / misc
+.vscode/
+.idea/
+.git/
+CLAUDE.md
+
+# Metro / logs
+.metro-health-check*
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# TypeScript build info
+*.tsbuildinfo
