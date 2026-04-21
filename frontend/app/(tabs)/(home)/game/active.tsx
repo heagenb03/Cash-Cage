@@ -12,6 +12,8 @@ import { Player, PlayerBalance, Validation } from '@/types/game';
 import { getNetBalanceColor, formatNetBalanceDisplay } from '@/utils/formatUtils';
 import { incrementProfileStats } from '@/services/firebaseService';
 import { isValidNumericInput } from '@/utils/validationUtils';
+import { getSavedPlayers, savePlayerName } from '@/services/savedPlayersService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import PlayerCardActive from '@/components/PlayerCardActive';
 import PlayerCardCompleted from '@/components/PlayerCardCompleted';
 import Button from '@/components/Button';
@@ -185,6 +187,8 @@ export default function ActiveGameScreen() {
   const [showRenameModal, setShowRenameModal] = useState(false);
   const [renamedPlayerName, setRenamedPlayerName] = useState('');
   const [showPaywall, setShowPaywall] = useState(false);
+  const [savedPlayers, setSavedPlayers] = useState<string[]>([]);
+  const [playerSuggestions, setPlayerSuggestions] = useState<string[]>([]);
 
   // Game completion modal state
   const [showCompletionModal, setShowCompletionModal] = useState(false);
@@ -288,9 +292,23 @@ export default function ActiveGameScreen() {
     }
 
     await updateGame(activeGame);
+    savePlayerName(newPlayerName.trim()).catch(() => {});
     setNewPlayerName('');
     setNewPlayerBuyIn('');
+    setPlayerSuggestions([]);
     setShowAddPlayer(false);
+  };
+
+  const handlePlayerNameChange = (text: string) => {
+    setNewPlayerName(text);
+    if (text.trim().length === 0) {
+      setPlayerSuggestions([]);
+      return;
+    }
+    const lower = text.toLowerCase();
+    setPlayerSuggestions(
+      savedPlayers.filter(n => n.toLowerCase().startsWith(lower)).slice(0, 4)
+    );
   };
 
   const handleAddTransaction = async () => {
@@ -377,6 +395,12 @@ export default function ActiveGameScreen() {
 
       GameService.cacheSettlements(activeGame, result);
       await updateGame(activeGame);
+
+      // Fire-and-forget review games counter
+      AsyncStorage.getItem('review_games_completed').then(val => {
+        const count = parseInt(val ?? '0', 10);
+        AsyncStorage.setItem('review_games_completed', String(count + 1));
+      }).catch(() => {});
 
       // Fire-and-forget profile stat increment — after successful completion
       if (user?.uid) {
@@ -528,6 +552,7 @@ export default function ActiveGameScreen() {
               if (!isPro && activeGame.players.length >= 12) {
                 setShowPaywall(true);
               } else {
+                getSavedPlayers().then(setSavedPlayers);
                 setShowAddPlayer(true);
               }
             }}
@@ -607,12 +632,28 @@ export default function ActiveGameScreen() {
             <TextInput
               style={styles.input}
               value={newPlayerName}
-              onChangeText={setNewPlayerName}
+              onChangeText={handlePlayerNameChange}
               placeholder="Name"
               placeholderTextColor="#666"
               autoFocus
               returnKeyType="next"
             />
+            {playerSuggestions.length > 0 && (
+              <View style={styles.suggestionsContainer}>
+                {playerSuggestions.map(name => (
+                  <TouchableOpacity
+                    key={name}
+                    style={styles.suggestionItem}
+                    onPress={() => {
+                      setNewPlayerName(name);
+                      setPlayerSuggestions([]);
+                    }}
+                  >
+                    <Text style={styles.suggestionText}>{name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
             <TextInput
               style={styles.input}
               value={newPlayerBuyIn}
@@ -630,6 +671,7 @@ export default function ActiveGameScreen() {
                 onPress={() => {
                   setNewPlayerName('');
                   setNewPlayerBuyIn('');
+                  setPlayerSuggestions([]);
                   setShowAddPlayer(false);
                 }}
               />
@@ -1210,5 +1252,24 @@ const styles = StyleSheet.create({
     color: 'rgba(176,114,187,0.6)',
     textTransform: 'uppercase',
     letterSpacing: 1.5,
+  },
+  suggestionsContainer: {
+    width: '100%',
+    backgroundColor: '#111',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(176,114,187,0.2)',
+    marginBottom: 8,
+    overflow: 'hidden',
+  },
+  suggestionItem: {
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.06)',
+  },
+  suggestionText: {
+    color: '#E0E0E0',
+    fontSize: 15,
   },
 });
