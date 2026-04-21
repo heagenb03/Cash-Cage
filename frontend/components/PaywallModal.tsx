@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
+  Linking,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -57,6 +58,9 @@ const FEATURES = [
   'Unlimited players per game',
   'All your devices',
 ];
+
+const PRIVACY_POLICY_URL = 'https://heagenb03.github.io/cashcage-legal/privacy-policy.html';
+const TERMS_URL = 'https://heagenb03.github.io/cashcage-legal/terms-of-service.html';
 
 // ---------------------------------------------------------------------------
 // PaywallModal
@@ -303,6 +307,36 @@ export default function PaywallModal({ visible, onClose, triggerMessage, trialEx
                 )}
               </TouchableOpacity>
 
+              {/* Subscription disclosure (required by Apple Guideline 3.1.2) */}
+              <Text style={styles.disclosureText}>
+                Cash Cage Pro is offered as a monthly auto-renewing subscription ($1.99/month) or
+                an annual auto-renewing subscription ($10.99/year), or as a one-time Lifetime
+                purchase ($17.99). Payment will be charged to your Apple ID account at confirmation
+                of purchase. Subscriptions automatically renew unless auto-renew is turned off at
+                least 24 hours before the end of the current period. Your account will be charged
+                for renewal within 24 hours prior to the end of the current period. You can manage
+                and cancel your subscriptions by going to your App Store account settings after
+                purchase.
+              </Text>
+
+              <View style={styles.legalRow}>
+                <Text
+                  style={styles.legalLink}
+                  onPress={() => Linking.openURL(TERMS_URL).catch(() => {})}
+                  accessibilityRole="link"
+                >
+                  Terms of Use (EULA)
+                </Text>
+                <Text style={styles.legalSep}>  ·  </Text>
+                <Text
+                  style={styles.legalLink}
+                  onPress={() => Linking.openURL(PRIVACY_POLICY_URL).catch(() => {})}
+                  accessibilityRole="link"
+                >
+                  Privacy Policy
+                </Text>
+              </View>
+
             </ScrollView>
           </View>
         </View>
@@ -500,21 +534,31 @@ const styles = StyleSheet.create({
   },
 
   // Legal
+  disclosureText: {
+    fontSize: 10,
+    lineHeight: 14,
+    color: 'rgba(255,255,255,0.45)',
+    textAlign: 'center',
+    marginTop: 4,
+    marginBottom: 10,
+    backgroundColor: 'transparent',
+  },
   legalRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 4,
+    marginBottom: 8,
     backgroundColor: 'transparent',
   },
   legalLink: {
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.3)',
+    fontSize: 12,
+    color: '#B072BB',
     textDecorationLine: 'underline',
   },
   legalSep: {
-    fontSize: 11,
-    color: 'rgba(255,255,255,0.2)',
+    fontSize: 12,
+    color: 'rgba(255,255,255,0.3)',
     backgroundColor: 'transparent',
   },
 });
