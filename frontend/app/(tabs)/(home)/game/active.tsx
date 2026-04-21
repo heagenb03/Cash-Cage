@@ -189,6 +189,7 @@ export default function ActiveGameScreen() {
   const [showPaywall, setShowPaywall] = useState(false);
   const [savedPlayers, setSavedPlayers] = useState<string[]>([]);
   const [playerSuggestions, setPlayerSuggestions] = useState<string[]>([]);
+  const [renameSuggestions, setRenameSuggestions] = useState<string[]>([]);
 
   // Game completion modal state
   const [showCompletionModal, setShowCompletionModal] = useState(false);
@@ -246,6 +247,8 @@ export default function ActiveGameScreen() {
   const openRenameModal = useCallback((player: Player) => {
     setSelectedPlayer(player);
     setRenamedPlayerName(player.name);
+    setRenameSuggestions([]);
+    getSavedPlayers().then(setSavedPlayers);
     setShowRenameModal(true);
   }, []);
 
@@ -507,6 +510,7 @@ export default function ActiveGameScreen() {
     setShowRenameModal(false);
     setSelectedPlayer(null);
     setRenamedPlayerName('');
+    setRenameSuggestions([]);
   };
 
   return (
@@ -630,7 +634,7 @@ export default function ActiveGameScreen() {
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Add Player</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, playerSuggestions.length > 0 && styles.inputWithSuggestions]}
               value={newPlayerName}
               onChangeText={handlePlayerNameChange}
               placeholder="Name"
@@ -640,10 +644,13 @@ export default function ActiveGameScreen() {
             />
             {playerSuggestions.length > 0 && (
               <View style={styles.suggestionsContainer}>
-                {playerSuggestions.map(name => (
+                {playerSuggestions.map((name, index) => (
                   <TouchableOpacity
                     key={name}
-                    style={styles.suggestionItem}
+                    style={[
+                      styles.suggestionItem,
+                      index === playerSuggestions.length - 1 && styles.suggestionItemLast,
+                    ]}
                     onPress={() => {
                       setNewPlayerName(name);
                       setPlayerSuggestions([]);
@@ -738,6 +745,7 @@ export default function ActiveGameScreen() {
           setShowRenameModal(false);
           setSelectedPlayer(null);
           setRenamedPlayerName('');
+          setRenameSuggestions([]);
         }}
       >
         <GestureHandlerRootView style={{flex: 1}}>
@@ -745,15 +753,44 @@ export default function ActiveGameScreen() {
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Rename Player</Text>
             <TextInput
-              style={styles.input}
+              style={[styles.input, renameSuggestions.length > 0 && styles.inputWithSuggestions]}
               value={renamedPlayerName}
-              onChangeText={setRenamedPlayerName}
+              onChangeText={text => {
+                setRenamedPlayerName(text);
+                if (text.trim().length === 0) {
+                  setRenameSuggestions([]);
+                  return;
+                }
+                const lower = text.toLowerCase();
+                setRenameSuggestions(
+                  savedPlayers.filter(n => n.toLowerCase().startsWith(lower)).slice(0, 4)
+                );
+              }}
               placeholder="New name"
               placeholderTextColor="#666"
               autoFocus
               onSubmitEditing={handleRenamePlayer}
               returnKeyType="done"
             />
+            {renameSuggestions.length > 0 && (
+              <View style={styles.suggestionsContainer}>
+                {renameSuggestions.map((name, index) => (
+                  <TouchableOpacity
+                    key={name}
+                    style={[
+                      styles.suggestionItem,
+                      index === renameSuggestions.length - 1 && styles.suggestionItemLast,
+                    ]}
+                    onPress={() => {
+                      setRenamedPlayerName(name);
+                      setRenameSuggestions([]);
+                    }}
+                  >
+                    <Text style={styles.suggestionText}>{name}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            )}
             <View style={styles.modalButtons}>
               <ModalButton
                 variant="cancel"
@@ -762,6 +799,7 @@ export default function ActiveGameScreen() {
                   setShowRenameModal(false);
                   setSelectedPlayer(null);
                   setRenamedPlayerName('');
+                  setRenameSuggestions([]);
                 }}
               />
               <ModalButton
@@ -1253,23 +1291,37 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 1.5,
   },
+  inputWithSuggestions: {
+    borderBottomLeftRadius: 0,
+    borderBottomRightRadius: 0,
+    borderBottomColor: 'rgba(176,114,187,0.25)',
+    marginBottom: 0,
+  },
   suggestionsContainer: {
     width: '100%',
-    backgroundColor: '#111',
-    borderRadius: 8,
+    backgroundColor: '#0A0A0A',
+    borderBottomLeftRadius: 6,
+    borderBottomRightRadius: 6,
     borderWidth: 1,
-    borderColor: 'rgba(176,114,187,0.2)',
-    marginBottom: 8,
+    borderTopWidth: 0,
+    borderColor: '#2A2A2A',
+    marginBottom: 20,
     overflow: 'hidden',
   },
   suggestionItem: {
-    paddingHorizontal: 14,
-    paddingVertical: 11,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: 'rgba(255,255,255,0.06)',
+    borderBottomColor: 'rgba(255,255,255,0.05)',
+  },
+  suggestionItemLast: {
+    borderBottomWidth: 0,
   },
   suggestionText: {
-    color: '#E0E0E0',
+    color: 'rgba(255,255,255,0.75)',
     fontSize: 15,
   },
 });
