@@ -1,6 +1,6 @@
 # Cash Cage
 
-A poker buyin/cashout tracker that calculates optimal settlements between players.
+A poker buyin/cashout mobile app that calculates optimal settlements between players. Find it in the App Store [Here](https://apps.apple.com/us/app/cash-cage/id6759301097)
 
 ## Overview
 
