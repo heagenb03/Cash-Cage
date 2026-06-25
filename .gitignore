@@ -4,6 +4,9 @@
 CLAUDE.md
 .claude/
 .reports
+.wolf/
+.firecrawl/
+docs/superpowers/
 
 functions/
 
