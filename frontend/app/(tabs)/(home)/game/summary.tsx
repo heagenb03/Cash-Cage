@@ -330,6 +330,9 @@ function FallbackBanner({ onDismiss, onRetry, isRetrying, errorMessage, balances
   );
 }
 
+// Module-level (above the component) — single source of truth for the share link.
+const SHARE_FOOTER = '\n\nSettled with Cash Cage\nhttps://apps.apple.com/app/id6759301097';
+
 export default function GameSummaryScreen() {
   const { activeGame, updateGame } = useGame();
   const router = useRouter();
@@ -556,6 +559,7 @@ setSettlementResult(cachedResult);
         });
       }
 
+      message += SHARE_FOOTER;
       await Share.share({ message });
     } catch (error) {
       console.error('Error sharing:', error);
