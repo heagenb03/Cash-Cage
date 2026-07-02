@@ -19,9 +19,11 @@ import PlayerCardCompleted from '@/components/PlayerCardCompleted';
 import Button from '@/components/Button';
 import ModalButton from '@/components/ModalButton';
 import PaywallModal from '@/components/PaywallModal';
+import CashUnitPickerModal from '@/components/CashUnitPickerModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useReduceMotion } from '@/hooks/useReduceMotion';
+import { EXACT_CASH_UNIT, DEFAULT_CASH_UNIT } from '@/constants/CashUnits';
 
 function HudSectionHeader({ label, onAction, actionIcon }: { label: string; onAction?: () => void; actionIcon?: string }) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
@@ -147,7 +149,7 @@ function SolvingOverlay() {
 export default function ActiveGameScreen() {
   const { activeGame, updateGame, setActiveGame, createGame } = useGame();
   const { user, isPro } = useAuth();
-  const { formatAmount, meta } = useCurrency();
+  const { formatAmount, meta, currency } = useCurrency();
   const router = useRouter();
 
   // Helper function to highlight critical values in error/warning messages
@@ -196,6 +198,7 @@ export default function ActiveGameScreen() {
   const [completionModalMode, setCompletionModalMode] = useState<'error' | 'warning' | 'confirm'>('confirm');
   const [validationResult, setValidationResult] = useState<Validation | null>(null);
   const [showSolvingModal, setShowSolvingModal] = useState(false);
+  const [showCashUnitPicker, setShowCashUnitPicker] = useState(false);
 
   const handleCreateNewGame = async () => {
     try {
@@ -548,6 +551,18 @@ export default function ActiveGameScreen() {
               year: 'numeric'
             })}
           </Text>
+          <TouchableOpacity
+            style={styles.cashUnitRow}
+            onPress={() => setShowCashUnitPicker(true)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.cashUnitLabel}>Cash rounding</Text>
+            <Text style={styles.cashUnitValue}>
+              {(activeGame.cashUnit ?? DEFAULT_CASH_UNIT) === EXACT_CASH_UNIT
+                ? 'Exact'
+                : formatAmount(activeGame.cashUnit ?? DEFAULT_CASH_UNIT)}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Active Players List */}
@@ -942,6 +957,19 @@ export default function ActiveGameScreen() {
         triggerMessage="Upgrade to Pro for unlimited players per game."
       />
 
+      {/* Cash Unit Picker Modal */}
+      <CashUnitPickerModal
+        visible={showCashUnitPicker}
+        currentUnit={activeGame.cashUnit}
+        currency={currency}
+        onSelect={async (unit) => {
+          activeGame.cashUnit = unit;
+          GameService.clearSettlementCache(activeGame);
+          await updateGame(activeGame);
+        }}
+        onClose={() => setShowCashUnitPicker(false)}
+      />
+
       {/* Solving overlay — uses an absolute View instead of a native <Modal>
            so that react-native-screens can properly detach it when this screen
            loses focus.  A native Modal creates an independent overlay window
@@ -1325,5 +1353,21 @@ const styles = StyleSheet.create({
   suggestionText: {
     color: 'rgba(255,255,255,0.75)',
     fontSize: 15,
+  },
+  cashUnitRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
+  cashUnitLabel: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.45)',
+    letterSpacing: 0.5,
+  },
+  cashUnitValue: {
+    fontSize: 13,
+    color: '#B072BB',
+    fontWeight: '500',
   },
 });
