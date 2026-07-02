@@ -24,6 +24,7 @@ struct SettlementRequest {
     std::vector<PlayerBalance> balances;
     std::optional<int> maxTransfersPerPlayer;
     std::optional<double> minTransferAmount;
+    std::optional<double> cashRoundingUnit;
 };
 
 struct SettlementResponse {

@@ -138,8 +138,10 @@ std::vector<PlayerBalance> roundBalancesToDollars(
 MILPResult solveMILP(
     const std::vector<PlayerBalance>& balances,
     std::optional<int> maxTransfersPerPlayer,
-    std::optional<double> minTransferAmount
+    std::optional<double> minTransferAmount,
+    std::optional<double> cashRoundingUnit
 ) {
+    (void)cashRoundingUnit;  // wired in Task 2
     using namespace operations_research;
 
     MILPResult result;
