@@ -355,9 +355,11 @@ export default function GameSummaryScreen() {
   const [lastError, setLastError] = useState<string | undefined>();
   const [showFallbackBanner, setShowFallbackBanner] = useState(false);
   const balancesRef = useRef<PlayerBalance[]>(summary?.balances ?? []);
+  const cashUnitRef = useRef<number | undefined>(summary?.game.cashUnit);
 
   useEffect(() => {
     balancesRef.current = summary?.balances ?? [];
+    cashUnitRef.current = summary?.game.cashUnit;
   }, [summary]);
 
   const settlementsLoaded =
@@ -442,7 +444,9 @@ setSettlementResult(cachedResult);
 
     (async () => {
       try {
-        const result = await getSettlements(summary.balances);
+        const result = await getSettlements(summary.balances, {
+          settings: { cashRoundingUnit: summary.game.cashUnit },
+        });
         if (cancelled) return;
 
         setSettlementResult(result);
@@ -492,7 +496,10 @@ setSettlementResult(cachedResult);
     setLastError(undefined);
 
     try {
-      const result = await getSettlements(balancesRef.current, { timeoutMs: 5000 });
+      const result = await getSettlements(balancesRef.current, {
+        timeoutMs: 5000,
+        settings: { cashRoundingUnit: cashUnitRef.current },
+      });
       setSettlementResult(result);
 
       // Cache the new result

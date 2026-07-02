@@ -5,6 +5,23 @@ import {
 } from '../settlementService';
 import { PlayerBalance } from '@/types/game';
 
+// ---- local fallback cashRoundingUnit parity ----
+
+describe('local fallback honors cashRoundingUnit', () => {
+  it('rounds local greedy amounts to whole units', async () => {
+    const balances = [
+      { playerId: 'a', playerName: 'A', totalBuyins: 53, totalCashouts: 0, netBalance: -53 },
+      { playerId: 'c', playerName: 'C', totalBuyins: 0, totalCashouts: 53, netBalance: 53 },
+    ];
+    const result = await getSettlements(balances, {
+      forceLocal: true,
+      settings: { cashRoundingUnit: 20 },
+    });
+    expect(result.source).toBe('client');
+    expect(result.settlements.every(s => s.amount % 20 === 0)).toBe(true);
+  });
+});
+
 function makeBalance(
   name: string,
   buyins: number,

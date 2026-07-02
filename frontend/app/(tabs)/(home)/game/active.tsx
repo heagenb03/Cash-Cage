@@ -394,7 +394,9 @@ export default function ActiveGameScreen() {
       setShowSolvingModal(true);
 
       const balances = GameService.calculateBalances(activeGame);
-      const result = await getSettlements(balances);
+      const result = await getSettlements(balances, {
+        settings: { cashRoundingUnit: activeGame.cashUnit },
+      });
 
       GameService.cacheSettlements(activeGame, result);
       await updateGame(activeGame);

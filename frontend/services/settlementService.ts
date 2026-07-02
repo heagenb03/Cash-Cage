@@ -5,6 +5,7 @@ import {
   SettlementResult,
   Validation,
 } from '@/types/game';
+import { roundBalancesToUnit } from '@/utils/roundingUtils';
 
 const DEFAULT_TIMEOUT_MS = 10000;
 const SETTLEMENT_ENDPOINT_PATH = '/settlements/optimal';
@@ -75,10 +76,15 @@ const DEFAULT_SERVER_ALGORITHM_ID = 'server-milp-v1';
 
 function createLocalSettlementResult(
   balances: PlayerBalance[],
-  reason?: string
+  reason?: string,
+  cashRoundingUnit?: number,
 ): SettlementResult {
+  const prepared =
+    typeof cashRoundingUnit === 'number' && cashRoundingUnit > 0
+      ? roundBalancesToUnit(balances, cashRoundingUnit)
+      : balances;
   return {
-    settlements: calculateOptimalSettlements(balances),
+    settlements: calculateOptimalSettlements(prepared),
     algorithm: LOCAL_ALGORITHM_ID,
     source: 'client',
     generatedAt: new Date().toISOString(),
@@ -156,12 +162,12 @@ export async function getSettlements(
   const fallbackReason = options.forceLocal ? 'force-local' : undefined;
 
   if (options.forceLocal || balances.length === 0) {
-    return createLocalSettlementResult(balances, fallbackReason);
+    return createLocalSettlementResult(balances, fallbackReason, options.settings?.cashRoundingUnit);
   }
 
   const endpoint = resolveEndpoint(options.endpoint);
   if (!endpoint) {
-    return createLocalSettlementResult(balances, 'missing-endpoint');
+    return createLocalSettlementResult(balances, 'missing-endpoint', options.settings?.cashRoundingUnit);
   }
 
   const controller = options.signal ? null : new AbortController();
@@ -208,7 +214,7 @@ export async function getSettlements(
   } catch (error) {
     console.warn('[settlements] Falling back to local solver:', error);
     const message = error instanceof Error ? error.message : 'unknown-error';
-    return createLocalSettlementResult(balances, message);
+    return createLocalSettlementResult(balances, message, options.settings?.cashRoundingUnit);
   } finally {
     if (timeoutId) {
       clearTimeout(timeoutId);
