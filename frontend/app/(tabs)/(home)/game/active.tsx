@@ -12,7 +12,7 @@ import { Player, PlayerBalance, Validation } from '@/types/game';
 import { getNetBalanceColor, formatNetBalanceDisplay } from '@/utils/formatUtils';
 import { incrementProfileStats } from '@/services/firebaseService';
 import { isValidNumericInput } from '@/utils/validationUtils';
-import { getSavedPlayers, savePlayerName } from '@/services/savedPlayersService';
+import { getSavedPlayerNames, savePlayerName, getSavedPlayer, savePlayer } from '@/services/savedPlayersService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import PlayerCardActive from '@/components/PlayerCardActive';
 import PlayerCardCompleted from '@/components/PlayerCardCompleted';
@@ -254,7 +254,7 @@ export default function ActiveGameScreen() {
     setSelectedPlayer(player);
     setRenamedPlayerName(player.name);
     setRenameSuggestions([]);
-    getSavedPlayers().then(setSavedPlayers);
+    getSavedPlayerNames().then(setSavedPlayers);
     setShowRenameModal(true);
   }, []);
 
@@ -589,7 +589,7 @@ export default function ActiveGameScreen() {
               if (!isPro && activeGame.players.length >= 12) {
                 setShowPaywall(true);
               } else {
-                getSavedPlayers().then(setSavedPlayers);
+                getSavedPlayerNames().then(setSavedPlayers);
                 setShowAddPlayer(true);
               }
             }}
