@@ -8,7 +8,7 @@ import { useGame } from '@/contexts/GameContext';
 import { useRouter } from 'expo-router';
 import { GameService } from '@/services/gameService';
 import { getSettlements } from '@/services/settlementService';
-import { Player, PlayerBalance, Validation } from '@/types/game';
+import { Player, PlayerBalance, Validation, PaymentMethod } from '@/types/game';
 import { getNetBalanceColor, formatNetBalanceDisplay } from '@/utils/formatUtils';
 import { incrementProfileStats } from '@/services/firebaseService';
 import { isValidNumericInput } from '@/utils/validationUtils';
@@ -24,6 +24,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useReduceMotion } from '@/hooks/useReduceMotion';
 import { EXACT_CASH_UNIT, DEFAULT_CASH_UNIT } from '@/constants/CashUnits';
+import { PAYMENT_METHODS } from '@/constants/PaymentMethods';
 import { computeRoundingDistortion } from '@/utils/roundingUtils';
 
 function HudSectionHeader({ label, onAction, actionIcon }: { label: string; onAction?: () => void; actionIcon?: string }) {
@@ -203,6 +204,12 @@ export default function ActiveGameScreen() {
   const [showZeroOutModal, setShowZeroOutModal] = useState(false);
   const [zeroOutNames, setZeroOutNames] = useState<string[]>([]);
 
+  // Payment editor state
+  const [showPaymentEditor, setShowPaymentEditor] = useState(false);
+  const [paymentPlayer, setPaymentPlayer] = useState<Player | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
+  const [paymentHandle, setPaymentHandle] = useState('');
+
   const handleCreateNewGame = async () => {
     try {
       await createGame('Untitled Game');
@@ -211,6 +218,24 @@ export default function ActiveGameScreen() {
       Alert.alert('Error', 'Failed to create game');
       console.error('Error creating game:', error);
     }
+  };
+
+  const openPaymentEditor = (player: Player) => {
+    setPaymentPlayer(player);
+    setPaymentMethod(player.preferredPayment?.method ?? 'cash');
+    setPaymentHandle(player.preferredPayment?.handle ?? '');
+    setShowPaymentEditor(true);
+  };
+
+  const handleSavePayment = async () => {
+    if (!paymentPlayer || !activeGame) return;
+    const pref = { method: paymentMethod, handle: paymentHandle.trim() || undefined };
+    const idx = activeGame.players.findIndex(p => p.id === paymentPlayer.id);
+    if (idx !== -1) activeGame.players[idx] = { ...activeGame.players[idx], preferredPayment: pref };
+    await updateGame(activeGame);
+    savePlayer(paymentPlayer.name, pref).catch(() => {});
+    setShowPaymentEditor(false);
+    setPaymentPlayer(null);
   };
 
   // Calculate balances - must be before early return to avoid hooks error
@@ -294,6 +319,14 @@ export default function ActiveGameScreen() {
     }
 
     const player = GameService.addPlayer(activeGame, newPlayerName.trim());
+
+    // Surface a remembered payment for this name (visible on the card badge;
+    // the handle is shown again prominently at payment time — see summary).
+    const saved = await getSavedPlayer(newPlayerName.trim());
+    if (saved?.preferredPayment) {
+      const i = activeGame.players.findIndex(p => p.id === player.id);
+      if (i !== -1) activeGame.players[i] = { ...activeGame.players[i], preferredPayment: saved.preferredPayment };
+    }
 
     // Add initial buy-in if amount was provided
     if (!isNaN(buyInAmount) && buyInAmount > 0) {
@@ -611,6 +644,7 @@ export default function ActiveGameScreen() {
                     onComplete={handleCompletePlayer}
                     onDelete={confirmDeletePlayer}
                     onRename={openRenameModal}
+                    onEditPayment={openPaymentEditor}
                     reduceMotion={reduceMotionEnabled}
                   />
                 </View>
@@ -1018,6 +1052,38 @@ export default function ActiveGameScreen() {
         onClose={() => setShowCashUnitPicker(false)}
       />
 
+      {/* Payment Editor Modal */}
+      <Modal visible={showPaymentEditor} animationType="fade" transparent
+             onRequestClose={() => setShowPaymentEditor(false)}>
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Preferred payment</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginVertical: 12 }}>
+                {PAYMENT_METHODS.map(m => (
+                  <TouchableOpacity key={m.key} onPress={() => setPaymentMethod(m.key)}
+                    style={[styles.methodChip, paymentMethod === m.key && styles.methodChipActive]}>
+                    <Text style={styles.methodChipText}>{m.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <TextInput
+                value={paymentHandle}
+                onChangeText={setPaymentHandle}
+                placeholder={PAYMENT_METHODS.find(m => m.key === paymentMethod)?.handlePlaceholder}
+                placeholderTextColor="rgba(255,255,255,0.3)"
+                autoCapitalize="none"
+                style={styles.input}
+              />
+              <View style={styles.modalButtons}>
+                <ModalButton variant="cancel" title="Cancel" onPress={() => setShowPaymentEditor(false)} />
+                <ModalButton variant="confirm" title="Save" onPress={handleSavePayment} />
+              </View>
+            </View>
+          </View>
+        </GestureHandlerRootView>
+      </Modal>
+
       {/* Solving overlay — uses an absolute View instead of a native <Modal>
            so that react-native-screens can properly detach it when this screen
            loses focus.  A native Modal creates an independent overlay window
@@ -1417,5 +1483,20 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#B072BB',
     fontWeight: '500',
+  },
+  methodChip: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#2A2A2A',
+    backgroundColor: '#0A0A0A',
+  },
+  methodChipActive: {
+    borderColor: '#B072BB',
+  },
+  methodChipText: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.8)',
   },
 });
