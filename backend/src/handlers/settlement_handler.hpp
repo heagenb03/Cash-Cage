@@ -66,7 +66,8 @@ inline void setupRoutes(crow::SimpleApp& app) {
                 auto milpResult = solveMILP(
                     request.balances,
                     request.maxTransfersPerPlayer,
-                    request.minTransferAmount
+                    request.minTransferAmount,
+                    request.cashRoundingUnit
                 );
 
                 // Build response
