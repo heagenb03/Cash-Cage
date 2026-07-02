@@ -20,7 +20,9 @@ export function buildPaymentUri(
   const h = (handle ?? '').trim();
   if (!h) return null;
 
-  const amt = String(amount);
+  // Two-decimal string so the deep-linked amount matches what the UI displays
+  // (e.g. "10.10", not "10.1") and is robust against float precision residue.
+  const amt = amount.toFixed(2);
   switch (method) {
     case 'venmo': {
       const r = h.replace(/^@/, '');

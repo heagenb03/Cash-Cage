@@ -16,17 +16,17 @@ describe('isDeepLinkable', () => {
 describe('buildPaymentUri', () => {
   it('builds a Venmo pay URI, stripping a leading @', () => {
     expect(buildPaymentUri('venmo', '@alice', 50, 'Poker')).toBe(
-      'venmo://paycharge?txn=pay&recipients=alice&amount=50&note=Poker',
+      'venmo://paycharge?txn=pay&recipients=alice&amount=50.00&note=Poker',
     );
   });
   it('builds a Cash App URI, stripping a leading $', () => {
     expect(buildPaymentUri('cashapp', '$alice', 50, 'Poker')).toBe(
-      'https://cash.app/$alice/50',
+      'https://cash.app/$alice/50.00',
     );
   });
   it('builds a PayPal.me URI', () => {
     expect(buildPaymentUri('paypal', 'alice', 50, 'Poker')).toBe(
-      'https://paypal.me/alice/50',
+      'https://paypal.me/alice/50.00',
     );
   });
   it('returns null for non-linkable methods or empty handle', () => {
