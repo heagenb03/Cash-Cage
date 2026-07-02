@@ -402,7 +402,7 @@ export default function ActiveGameScreen() {
 
       const balances = GameService.calculateBalances(activeGame);
       const result = await getSettlements(balances, {
-        settings: { cashRoundingUnit: activeGame.cashUnit },
+        settings: { cashRoundingUnit: activeGame.cashUnit ?? DEFAULT_CASH_UNIT },
       });
 
       GameService.cacheSettlements(activeGame, result);

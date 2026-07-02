@@ -44,6 +44,10 @@ describe('computeRoundingDistortion', () => {
     expect(d.perPlayer.every(p => p.delta === 0)).toBe(true);
     expect(d.zeroOuts).toHaveLength(0);
   });
+  it('does NOT flag a balance of exactly $2.50 that rounds to 0 (strict > 2.50)', () => {
+    const d = computeRoundingDistortion([bal('A', 2.50), bal('C', -2.50)], 10);
+    expect(d.zeroOuts).toHaveLength(0);
+  });
 });
 
 describe('roundBalancesToUnit', () => {

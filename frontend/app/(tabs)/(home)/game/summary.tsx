@@ -447,7 +447,7 @@ setSettlementResult(cachedResult);
     (async () => {
       try {
         const result = await getSettlements(summary.balances, {
-          settings: { cashRoundingUnit: summary.game.cashUnit },
+          settings: { cashRoundingUnit: summary.game.cashUnit ?? DEFAULT_CASH_UNIT },
         });
         if (cancelled) return;
 
@@ -500,7 +500,7 @@ setSettlementResult(cachedResult);
     try {
       const result = await getSettlements(balancesRef.current, {
         timeoutMs: 5000,
-        settings: { cashRoundingUnit: cashUnitRef.current },
+        settings: { cashRoundingUnit: cashUnitRef.current ?? DEFAULT_CASH_UNIT },
       });
       setSettlementResult(result);
 

@@ -20,6 +20,19 @@ describe('local fallback honors cashRoundingUnit', () => {
     expect(result.source).toBe('client');
     expect(result.settlements.every(s => s.amount % 20 === 0)).toBe(true);
   });
+
+  it('rounds local greedy amounts to the resolved default unit (5)', async () => {
+    const balances = [
+      { playerId: 'a', playerName: 'A', totalBuyins: 53, totalCashouts: 0, netBalance: -53 },
+      { playerId: 'c', playerName: 'C', totalBuyins: 0, totalCashouts: 53, netBalance: 53 },
+    ];
+    const result = await getSettlements(balances, {
+      forceLocal: true,
+      settings: { cashRoundingUnit: 5 },
+    });
+    expect(result.source).toBe('client');
+    expect(result.settlements.every(s => s.amount % 5 === 0)).toBe(true);
+  });
 });
 
 function makeBalance(
