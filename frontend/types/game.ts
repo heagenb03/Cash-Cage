@@ -25,6 +25,9 @@ export interface Game {
   /** Currency the game was created in (defaults to user preference at game time) */
   currency?: string;
 
+  /** Cash rounding unit in the game's currency. Default 5. 0 (or <=0) = Exact (no rounding). */
+  cashUnit?: number;
+
   // Settlement cache
   cachedSettlements?: SettlementResult;
   transactionHash?: string;
@@ -65,6 +68,8 @@ export interface SettlementResult extends SettlementMeta {
 export interface SettlementRequestSettings {
   maxTransfersPerPlayer?: number;
   minTransferAmount?: number;
+  /** Forwarded to the solver. Default 5. <= 0 = Exact (no rounding). */
+  cashRoundingUnit?: number;
 }
 
 export interface Validation {
