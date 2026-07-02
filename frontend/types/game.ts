@@ -1,8 +1,16 @@
+export type PaymentMethod =
+  | 'cash' | 'venmo' | 'paypal' | 'cashapp' | 'zelle' | 'applecash' | 'other';
+
+export interface PreferredPayment {
+  method: PaymentMethod;
+  handle?: string;
+}
 
 export interface Player {
   id: string;
   name: string;
   completedAt?: Date;
+  preferredPayment?: PreferredPayment;
 }
 
 export interface Transaction {
