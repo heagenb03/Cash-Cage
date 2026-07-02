@@ -16,6 +16,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
 import { useReduceMotion } from '@/hooks/useReduceMotion';
+import { computeRoundingDistortion } from '@/utils/roundingUtils';
+import { DEFAULT_CASH_UNIT } from '@/constants/CashUnits';
 
 // HUD Section Header Component
 function HudSectionHeader({ label }: { label: string }) {
@@ -573,6 +575,8 @@ setSettlementResult(cachedResult);
     }
   };
 
+  const distortion = computeRoundingDistortion(summary.balances, summary.game.cashUnit ?? DEFAULT_CASH_UNIT);
+
   return (
     <View style={styles.container}>
       <ScrollView style={styles.scrollView}>
@@ -660,6 +664,13 @@ setSettlementResult(cachedResult);
               errorMessage={lastError}
               balances={summary.balances}
             />
+          )}
+
+          {/* Rounding distortion note */}
+          {distortion.maxDelta > 0 && (
+            <Text style={styles.roundingNote}>
+              Rounded to {formatAmount(summary.game.cashUnit ?? DEFAULT_CASH_UNIT)} — largest change {formatAmount(distortion.maxDelta)}.
+            </Text>
           )}
 
           {groupedSettlements.length === 0 ? (
@@ -1048,5 +1059,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 12,
     backgroundColor: 'transparent',
+  },
+  roundingNote: {
+    fontSize: 12,
+    color: 'rgba(176,114,187,0.55)',
+    textAlign: 'center',
+    marginBottom: 10,
+    letterSpacing: 0.3,
   },
 });

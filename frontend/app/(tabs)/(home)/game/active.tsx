@@ -24,6 +24,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useReduceMotion } from '@/hooks/useReduceMotion';
 import { EXACT_CASH_UNIT, DEFAULT_CASH_UNIT } from '@/constants/CashUnits';
+import { computeRoundingDistortion } from '@/utils/roundingUtils';
 
 function HudSectionHeader({ label, onAction, actionIcon }: { label: string; onAction?: () => void; actionIcon?: string }) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
@@ -199,6 +200,8 @@ export default function ActiveGameScreen() {
   const [validationResult, setValidationResult] = useState<Validation | null>(null);
   const [showSolvingModal, setShowSolvingModal] = useState(false);
   const [showCashUnitPicker, setShowCashUnitPicker] = useState(false);
+  const [showZeroOutModal, setShowZeroOutModal] = useState(false);
+  const [zeroOutNames, setZeroOutNames] = useState<string[]>([]);
 
   const handleCreateNewGame = async () => {
     try {
@@ -389,11 +392,12 @@ export default function ActiveGameScreen() {
     setShowCompletionModal(true);
   };
 
-  const handleConfirmCompletion = async () => {
+  const finalizeCompletion = async () => {
     try {
       GameService.completeGame(activeGame);
       await updateGame(activeGame);
       setShowCompletionModal(false);
+      setShowZeroOutModal(false);
       setShowSolvingModal(true);
 
       const balances = GameService.calculateBalances(activeGame);
@@ -430,6 +434,18 @@ export default function ActiveGameScreen() {
       Alert.alert('Error', 'Failed to complete game. Please try again.');
       console.error('Error completing game:', error);
     }
+  };
+
+  const handleConfirmCompletion = async () => {
+    const balances = GameService.calculateBalances(activeGame);
+    const { zeroOuts } = computeRoundingDistortion(balances, activeGame.cashUnit ?? DEFAULT_CASH_UNIT);
+    if (zeroOuts.length > 0) {
+      setZeroOutNames(zeroOuts.map(z => z.playerName));
+      setShowCompletionModal(false);
+      setShowZeroOutModal(true);
+      return;
+    }
+    await finalizeCompletion();
   };
 
   const handleTitlePress = () => {
@@ -945,6 +961,38 @@ export default function ActiveGameScreen() {
                   />
                 </View>
               )}
+            </View>
+          </View>
+        </GestureHandlerRootView>
+      </Modal>
+
+      {/* Zero-out Confirm Modal */}
+      <Modal
+        visible={showZeroOutModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowZeroOutModal(false)}
+      >
+        <GestureHandlerRootView style={{flex: 1}}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Ionicons name="warning" size={48} color="#E0A800" style={styles.completionModalIcon} />
+              <Text style={styles.modalTitle}>Rounding zeroes out a balance</Text>
+              <Text style={styles.completionModalConfirmText}>
+                At {formatAmount(activeGame.cashUnit ?? DEFAULT_CASH_UNIT)} rounding, {zeroOutNames.join(', ')} will settle nothing. Continue?
+              </Text>
+              <View style={styles.modalButtons}>
+                <ModalButton
+                  variant="cancel"
+                  title="Back"
+                  onPress={() => { setShowZeroOutModal(false); setShowCompletionModal(true); }}
+                />
+                <ModalButton
+                  variant="destructive"
+                  title="Continue"
+                  onPress={finalizeCompletion}
+                />
+              </View>
             </View>
           </View>
         </GestureHandlerRootView>
