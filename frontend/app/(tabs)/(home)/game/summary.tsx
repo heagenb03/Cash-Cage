@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { StyleSheet, ScrollView, TouchableOpacity, Share, ActivityIndicator, Animated } from 'react-native';
+import { StyleSheet, ScrollView, TouchableOpacity, Share, ActivityIndicator, Animated, Linking } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as StoreReview from 'expo-store-review';
 import { Text, View } from '@/components/Themed';
@@ -18,6 +18,10 @@ import { runOnJS } from 'react-native-reanimated';
 import { useReduceMotion } from '@/hooks/useReduceMotion';
 import { computeRoundingDistortion } from '@/utils/roundingUtils';
 import { DEFAULT_CASH_UNIT } from '@/constants/CashUnits';
+import * as Clipboard from 'expo-clipboard';
+import { PreferredPayment } from '@/types/game';
+import { getPaymentMethodMeta } from '@/constants/PaymentMethods';
+import { buildPaymentUri } from '@/utils/paymentLinks';
 
 // HUD Section Header Component
 function HudSectionHeader({ label }: { label: string }) {
@@ -129,9 +133,10 @@ function EmptyState({ label, icon }: { label: string; icon: string }) {
 interface SettlementCardProps {
   groupedSettlement: { recipient: string; totalAmount: number; payments: Array<{ from: string; amount: number }> };
   reduceMotion: boolean;
+  recipientPayment?: PreferredPayment;
 }
 
-function SettlementCard({ groupedSettlement, reduceMotion }: SettlementCardProps) {
+function SettlementCard({ groupedSettlement, reduceMotion, recipientPayment }: SettlementCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
@@ -188,6 +193,16 @@ function SettlementCard({ groupedSettlement, reduceMotion }: SettlementCardProps
       }
     }), [animateScaleDown, animateScaleUp, handleToggle]);
 
+  const handlePay = useCallback((amount: number) => {
+    if (!recipientPayment) return;
+    const uri = buildPaymentUri(recipientPayment.method, recipientPayment.handle, amount, 'Poker settle up');
+    if (uri) Linking.openURL(uri).catch(() => {});
+  }, [recipientPayment]);
+
+  const handleCopyHandle = useCallback(() => {
+    if (recipientPayment?.handle) Clipboard.setStringAsync(recipientPayment.handle).catch(() => {});
+  }, [recipientPayment]);
+
   return (
     <GestureDetector gesture={tapGesture}>
       <Animated.View
@@ -202,7 +217,15 @@ function SettlementCard({ groupedSettlement, reduceMotion }: SettlementCardProps
         ]}
       >
         <View style={styles.settlementHeader}>
-          <Text style={styles.recipientName}>{groupedSettlement.recipient}</Text>
+          <View style={{ flex: 1, backgroundColor: 'transparent' }}>
+            <Text style={styles.recipientName}>{groupedSettlement.recipient}</Text>
+            {recipientPayment && (
+              <Text style={styles.payeeBadge} numberOfLines={1}>
+                {getPaymentMethodMeta(recipientPayment.method).label}
+                {recipientPayment.handle ? ` · ${recipientPayment.handle}` : ''}
+              </Text>
+            )}
+          </View>
           <Ionicons
             name={isExpanded ? "chevron-up" : "chevron-down"}
             size={20}
@@ -247,6 +270,18 @@ function SettlementCard({ groupedSettlement, reduceMotion }: SettlementCardProps
                         {formatAmount(payment.amount)}
                       </Text>
                     </View>
+                    {recipientPayment && buildPaymentUri(recipientPayment.method, recipientPayment.handle, payment.amount, 'x') && (
+                      <TouchableOpacity onPress={() => handlePay(payment.amount)} style={styles.payButton}>
+                        <Text style={styles.payButtonText}>
+                          Pay {getPaymentMethodMeta(recipientPayment.method).label}
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                    {recipientPayment && !buildPaymentUri(recipientPayment.method, recipientPayment.handle, payment.amount, 'x') && recipientPayment.handle && (
+                      <TouchableOpacity onPress={handleCopyHandle} style={styles.payButton}>
+                        <Text style={styles.payButtonText}>Copy handle</Text>
+                      </TouchableOpacity>
+                    )}
                   </View>
                 </React.Fragment>
               ))}
@@ -541,6 +576,14 @@ setSettlementResult(cachedResult);
     [settlementsToDisplay]
   );
 
+  const paymentByName = useMemo(() => {
+    const map = new Map<string, PreferredPayment>();
+    summary?.game.players.forEach(p => {
+      if (p.preferredPayment) map.set(p.name, p.preferredPayment);
+    });
+    return map;
+  }, [summary?.game.players]);
+
   if (!activeGame || !summary) {
     return (
       <View style={styles.container}>
@@ -680,6 +723,7 @@ setSettlementResult(cachedResult);
               <SettlementCard
                 key={index}
                 groupedSettlement={groupedSettlement}
+                recipientPayment={paymentByName.get(groupedSettlement.recipient)}
                 reduceMotion={reduceMotion}
               />
             ))
@@ -1065,6 +1109,28 @@ const styles = StyleSheet.create({
     color: 'rgba(176,114,187,0.55)',
     textAlign: 'center',
     marginBottom: 10,
+    letterSpacing: 0.3,
+  },
+  payeeBadge: {
+    fontSize: 12,
+    fontFamily: 'SpaceMono',
+    color: 'rgba(176,114,187,0.9)',
+    marginTop: 2,
+    letterSpacing: 0.2,
+  },
+  payButton: {
+    marginTop: 6,
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: 'rgba(176,114,187,0.35)',
+    alignSelf: 'flex-start',
+  },
+  payButtonText: {
+    fontSize: 11,
+    color: '#B072BB',
+    fontWeight: '600',
     letterSpacing: 0.3,
   },
 });

@@ -18,6 +18,7 @@
     "expo": "~55.0.8",
     "expo-apple-authentication": "~55.0.9",
     "expo-auth-session": "~55.0.9",
+    "expo-clipboard": "~55.0.14",
     "expo-constants": "~55.0.9",
     "expo-crypto": "~55.0.10",
     "expo-dev-client": "~55.0.18",
