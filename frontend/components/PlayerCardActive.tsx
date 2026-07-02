@@ -7,6 +7,7 @@ import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import { Ionicons } from '@expo/vector-icons';
 import { Player, PlayerBalance } from '@/types/game';
 import { useCurrency } from '@/contexts/CurrencyContext';
+import { getPaymentMethodMeta } from '@/constants/PaymentMethods';
 
 interface PlayerCardActiveProps {
   player: Player;
@@ -16,6 +17,7 @@ interface PlayerCardActiveProps {
   onComplete: (player: Player) => void;
   onDelete: (player: Player) => void;
   onRename: (player: Player) => void;
+  onEditPayment: (player: Player) => void;
   reduceMotion: boolean;
 }
 
@@ -27,6 +29,7 @@ const PlayerCardActive: React.FC<PlayerCardActiveProps> = ({
   onComplete,
   onDelete,
   onRename,
+  onEditPayment,
   reduceMotion
 }) => {
   const scaleAnim = useRef(new Animated.Value(1)).current;
@@ -109,6 +112,16 @@ const PlayerCardActive: React.FC<PlayerCardActiveProps> = ({
             <RNTouchableOpacity onPress={() => onRename(player)} style={styles.nameRow}>
               <Text style={styles.playerName}>{player.name}</Text>
               <Text style={styles.nameEditIcon}>✎</Text>
+            </RNTouchableOpacity>
+            <RNTouchableOpacity onPress={() => onEditPayment(player)} style={styles.paymentBadge}>
+              {player.preferredPayment ? (
+                <Text style={styles.paymentBadgeText} numberOfLines={1}>
+                  {getPaymentMethodMeta(player.preferredPayment.method).label}
+                  {player.preferredPayment.handle ? ` · ${player.preferredPayment.handle}` : ''}
+                </Text>
+              ) : (
+                <Text style={styles.paymentBadgeAdd}>+ Payment</Text>
+              )}
             </RNTouchableOpacity>
           </View>
 
@@ -212,6 +225,24 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(192,70,87,0.25)',
     height: '100%',
   },
+  paymentBadge: {
+    maxWidth: 160,
+    paddingVertical: 3,
+    paddingHorizontal: 8,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: 'rgba(176,114,187,0.25)',
+    backgroundColor: 'transparent',
+  },
+  paymentBadgeText: {
+    fontSize: 11,
+    color: 'rgba(176,114,187,0.9)',
+    fontFamily: 'SpaceMono',
+  },
+  paymentBadgeAdd: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.35)',
+  },
 });
 
 export default React.memo(PlayerCardActive, (prevProps, nextProps) => {
@@ -220,6 +251,8 @@ export default React.memo(PlayerCardActive, (prevProps, nextProps) => {
     prevProps.player.name === nextProps.player.name &&
     prevProps.balance?.totalBuyins === nextProps.balance?.totalBuyins &&
     prevProps.balance?.totalCashouts === nextProps.balance?.totalCashouts &&
+    prevProps.player.preferredPayment?.method === nextProps.player.preferredPayment?.method &&
+    prevProps.player.preferredPayment?.handle === nextProps.player.preferredPayment?.handle &&
     prevProps.reduceMotion === nextProps.reduceMotion
   );
 });

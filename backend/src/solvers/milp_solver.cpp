@@ -138,7 +138,8 @@ std::vector<PlayerBalance> roundBalancesToDollars(
 MILPResult solveMILP(
     const std::vector<PlayerBalance>& balances,
     std::optional<int> maxTransfersPerPlayer,
-    std::optional<double> minTransferAmount
+    std::optional<double> minTransferAmount,
+    std::optional<double> cashRoundingUnit
 ) {
     using namespace operations_research;
 
@@ -154,20 +155,31 @@ MILPResult solveMILP(
 
     result.warnings = adjustmentResult.warnings;
 
-    // Step 2: Round to $5 increments for easier cash payments
-    auto roundedBalances = roundBalancesToDollars(adjustmentResult.adjustedBalances, 5);
+    // Step 2: Round to the requested cash unit for whole-bill payments.
+    // unit <= 0 means "Exact" — skip rounding entirely (cent-precise transfers).
+    const double unit = cashRoundingUnit.value_or(5.0);
+    std::vector<PlayerBalance> roundedBalances;
 
-    // Add rounding warning if different from adjusted
-    bool wasRounded = false;
-    for (size_t i = 0; i < adjustmentResult.adjustedBalances.size(); ++i) {
-        if (std::abs(adjustmentResult.adjustedBalances[i].netBalance - roundedBalances[i].netBalance) > 0.01) {
-            wasRounded = true;
-            break;
+    if (unit > 0.0) {
+        roundedBalances = roundBalancesToDollars(
+            adjustmentResult.adjustedBalances, static_cast<int>(unit));
+
+        bool wasRounded = false;
+        for (size_t i = 0; i < adjustmentResult.adjustedBalances.size(); ++i) {
+            if (std::abs(adjustmentResult.adjustedBalances[i].netBalance -
+                         roundedBalances[i].netBalance) > 0.01) {
+                wasRounded = true;
+                break;
+            }
         }
-    }
-
-    if (wasRounded) {
-        result.warnings.push_back("Balances rounded to $5 increments for easier cash payments");
+        if (wasRounded) {
+            std::ostringstream oss;
+            oss << "Balances rounded to $" << static_cast<int>(unit)
+                << " increments for easier cash payments";
+            result.warnings.push_back(oss.str());
+        }
+    } else {
+        roundedBalances = adjustmentResult.adjustedBalances;  // Exact: no rounding
     }
 
     const auto& adjustedBalances = roundedBalances;

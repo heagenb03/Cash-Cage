@@ -18,15 +18,21 @@ FetchContent_Declare(
     GIT_TAG v3.11.3
 )
 
-find_package(aws-lambda-runtime QUIET)
+option(BUILD_LAMBDA "Build the AWS Lambda handler" ON)
 
-if(NOT aws-lambda-runtime_FOUND)
-    FetchContent_Declare(
-        aws-lambda-runtime
-        GIT_REPOSITORY https://github.com/awslabs/aws-lambda-cpp.git
-        GIT_TAG v0.2.8
-    )
-    FetchContent_MakeAvailable(Crow json aws-lambda-runtime)
+if(BUILD_LAMBDA)
+    find_package(aws-lambda-runtime QUIET)
+
+    if(NOT aws-lambda-runtime_FOUND)
+        FetchContent_Declare(
+            aws-lambda-runtime
+            GIT_REPOSITORY https://github.com/awslabs/aws-lambda-cpp.git
+            GIT_TAG v0.2.8
+        )
+        FetchContent_MakeAvailable(Crow json aws-lambda-runtime)
+    else()
+        FetchContent_MakeAvailable(Crow json)
+    endif()
 else()
     FetchContent_MakeAvailable(Crow json)
 endif()
@@ -64,27 +70,29 @@ endif()
 install(TARGETS cashcage-backend DESTINATION bin)
 
 # AWS Lambda
-set(LAMBDA_SOURCES
-    ${COMMON_SOURCES}
-    src/lambda_main.cpp
-)
+if(BUILD_LAMBDA)
+    set(LAMBDA_SOURCES
+        ${COMMON_SOURCES}
+        src/lambda_main.cpp
+    )
 
-add_executable(cashcage-lambda ${LAMBDA_SOURCES})
+    add_executable(cashcage-lambda ${LAMBDA_SOURCES})
 
-target_include_directories(cashcage-lambda PRIVATE
-    ${CMAKE_SOURCE_DIR}/src
-)
+    target_include_directories(cashcage-lambda PRIVATE
+        ${CMAKE_SOURCE_DIR}/src
+    )
 
-target_link_libraries(cashcage-lambda PRIVATE
-    AWS::aws-lambda-runtime
-    nlohmann_json::nlohmann_json
-    ortools::ortools
-)
+    target_link_libraries(cashcage-lambda PRIVATE
+        AWS::aws-lambda-runtime
+        nlohmann_json::nlohmann_json
+        ortools::ortools
+    )
 
-if(MSVC)
-    target_compile_options(cashcage-lambda PRIVATE /W4)
-else()
-    target_compile_options(cashcage-lambda PRIVATE -Wall -Wextra -pedantic)
+    if(MSVC)
+        target_compile_options(cashcage-lambda PRIVATE /W4)
+    else()
+        target_compile_options(cashcage-lambda PRIVATE -Wall -Wextra -pedantic)
+    endif()
+
+    install(TARGETS cashcage-lambda DESTINATION bin)
 endif()
-
-install(TARGETS cashcage-lambda DESTINATION bin)

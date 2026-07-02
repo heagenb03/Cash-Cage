@@ -76,6 +76,11 @@ inline SettlementRequest parseRequest(const nlohmann::json& body) {
             settings["minTransferAmount"].is_number()) {
             request.minTransferAmount = settings["minTransferAmount"].get<double>();
         }
+
+        if (settings.contains("cashRoundingUnit") &&
+            settings["cashRoundingUnit"].is_number()) {
+            request.cashRoundingUnit = settings["cashRoundingUnit"].get<double>();
+        }
     }
 
     return request;

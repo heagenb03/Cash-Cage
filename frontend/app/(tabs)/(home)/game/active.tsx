@@ -8,20 +8,24 @@ import { useGame } from '@/contexts/GameContext';
 import { useRouter } from 'expo-router';
 import { GameService } from '@/services/gameService';
 import { getSettlements } from '@/services/settlementService';
-import { Player, PlayerBalance, Validation } from '@/types/game';
+import { Player, PlayerBalance, Validation, PaymentMethod } from '@/types/game';
 import { getNetBalanceColor, formatNetBalanceDisplay } from '@/utils/formatUtils';
 import { incrementProfileStats } from '@/services/firebaseService';
 import { isValidNumericInput } from '@/utils/validationUtils';
-import { getSavedPlayers, savePlayerName } from '@/services/savedPlayersService';
+import { getSavedPlayerNames, savePlayerName, getSavedPlayer, savePlayer } from '@/services/savedPlayersService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import PlayerCardActive from '@/components/PlayerCardActive';
 import PlayerCardCompleted from '@/components/PlayerCardCompleted';
 import Button from '@/components/Button';
 import ModalButton from '@/components/ModalButton';
 import PaywallModal from '@/components/PaywallModal';
+import CashUnitPickerModal from '@/components/CashUnitPickerModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useReduceMotion } from '@/hooks/useReduceMotion';
+import { EXACT_CASH_UNIT, DEFAULT_CASH_UNIT } from '@/constants/CashUnits';
+import { PAYMENT_METHODS } from '@/constants/PaymentMethods';
+import { computeRoundingDistortion } from '@/utils/roundingUtils';
 
 function HudSectionHeader({ label, onAction, actionIcon }: { label: string; onAction?: () => void; actionIcon?: string }) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
@@ -147,7 +151,7 @@ function SolvingOverlay() {
 export default function ActiveGameScreen() {
   const { activeGame, updateGame, setActiveGame, createGame } = useGame();
   const { user, isPro } = useAuth();
-  const { formatAmount, meta } = useCurrency();
+  const { formatAmount, meta, currency } = useCurrency();
   const router = useRouter();
 
   // Helper function to highlight critical values in error/warning messages
@@ -196,6 +200,15 @@ export default function ActiveGameScreen() {
   const [completionModalMode, setCompletionModalMode] = useState<'error' | 'warning' | 'confirm'>('confirm');
   const [validationResult, setValidationResult] = useState<Validation | null>(null);
   const [showSolvingModal, setShowSolvingModal] = useState(false);
+  const [showCashUnitPicker, setShowCashUnitPicker] = useState(false);
+  const [showZeroOutModal, setShowZeroOutModal] = useState(false);
+  const [zeroOutNames, setZeroOutNames] = useState<string[]>([]);
+
+  // Payment editor state
+  const [showPaymentEditor, setShowPaymentEditor] = useState(false);
+  const [paymentPlayer, setPaymentPlayer] = useState<Player | null>(null);
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
+  const [paymentHandle, setPaymentHandle] = useState('');
 
   const handleCreateNewGame = async () => {
     try {
@@ -205,6 +218,24 @@ export default function ActiveGameScreen() {
       Alert.alert('Error', 'Failed to create game');
       console.error('Error creating game:', error);
     }
+  };
+
+  const openPaymentEditor = (player: Player) => {
+    setPaymentPlayer(player);
+    setPaymentMethod(player.preferredPayment?.method ?? 'cash');
+    setPaymentHandle(player.preferredPayment?.handle ?? '');
+    setShowPaymentEditor(true);
+  };
+
+  const handleSavePayment = async () => {
+    if (!paymentPlayer || !activeGame) return;
+    const pref = { method: paymentMethod, handle: paymentHandle.trim() || undefined };
+    const idx = activeGame.players.findIndex(p => p.id === paymentPlayer.id);
+    if (idx !== -1) activeGame.players[idx] = { ...activeGame.players[idx], preferredPayment: pref };
+    await updateGame(activeGame);
+    savePlayer(paymentPlayer.name, pref).catch(() => {});
+    setShowPaymentEditor(false);
+    setPaymentPlayer(null);
   };
 
   // Calculate balances - must be before early return to avoid hooks error
@@ -248,7 +279,7 @@ export default function ActiveGameScreen() {
     setSelectedPlayer(player);
     setRenamedPlayerName(player.name);
     setRenameSuggestions([]);
-    getSavedPlayers().then(setSavedPlayers);
+    getSavedPlayerNames().then(setSavedPlayers);
     setShowRenameModal(true);
   }, []);
 
@@ -288,6 +319,14 @@ export default function ActiveGameScreen() {
     }
 
     const player = GameService.addPlayer(activeGame, newPlayerName.trim());
+
+    // Surface a remembered payment for this name (visible on the card badge;
+    // the handle is shown again prominently at payment time — see summary).
+    const saved = await getSavedPlayer(newPlayerName.trim());
+    if (saved?.preferredPayment) {
+      const i = activeGame.players.findIndex(p => p.id === player.id);
+      if (i !== -1) activeGame.players[i] = { ...activeGame.players[i], preferredPayment: saved.preferredPayment };
+    }
 
     // Add initial buy-in if amount was provided
     if (!isNaN(buyInAmount) && buyInAmount > 0) {
@@ -386,15 +425,18 @@ export default function ActiveGameScreen() {
     setShowCompletionModal(true);
   };
 
-  const handleConfirmCompletion = async () => {
+  const finalizeCompletion = async () => {
     try {
       GameService.completeGame(activeGame);
       await updateGame(activeGame);
       setShowCompletionModal(false);
+      setShowZeroOutModal(false);
       setShowSolvingModal(true);
 
       const balances = GameService.calculateBalances(activeGame);
-      const result = await getSettlements(balances);
+      const result = await getSettlements(balances, {
+        settings: { cashRoundingUnit: activeGame.cashUnit ?? DEFAULT_CASH_UNIT },
+      });
 
       GameService.cacheSettlements(activeGame, result);
       await updateGame(activeGame);
@@ -425,6 +467,18 @@ export default function ActiveGameScreen() {
       Alert.alert('Error', 'Failed to complete game. Please try again.');
       console.error('Error completing game:', error);
     }
+  };
+
+  const handleConfirmCompletion = async () => {
+    const balances = GameService.calculateBalances(activeGame);
+    const { zeroOuts } = computeRoundingDistortion(balances, activeGame.cashUnit ?? DEFAULT_CASH_UNIT);
+    if (zeroOuts.length > 0) {
+      setZeroOutNames(zeroOuts.map(z => z.playerName));
+      setShowCompletionModal(false);
+      setShowZeroOutModal(true);
+      return;
+    }
+    await finalizeCompletion();
   };
 
   const handleTitlePress = () => {
@@ -546,6 +600,18 @@ export default function ActiveGameScreen() {
               year: 'numeric'
             })}
           </Text>
+          <TouchableOpacity
+            style={styles.cashUnitRow}
+            onPress={() => setShowCashUnitPicker(true)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.cashUnitLabel}>Cash rounding</Text>
+            <Text style={styles.cashUnitValue}>
+              {(activeGame.cashUnit ?? DEFAULT_CASH_UNIT) === EXACT_CASH_UNIT
+                ? 'Exact'
+                : formatAmount(activeGame.cashUnit ?? DEFAULT_CASH_UNIT)}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Active Players List */}
@@ -556,7 +622,7 @@ export default function ActiveGameScreen() {
               if (!isPro && activeGame.players.length >= 12) {
                 setShowPaywall(true);
               } else {
-                getSavedPlayers().then(setSavedPlayers);
+                getSavedPlayerNames().then(setSavedPlayers);
                 setShowAddPlayer(true);
               }
             }}
@@ -578,6 +644,7 @@ export default function ActiveGameScreen() {
                     onComplete={handleCompletePlayer}
                     onDelete={confirmDeletePlayer}
                     onRename={openRenameModal}
+                    onEditPayment={openPaymentEditor}
                     reduceMotion={reduceMotionEnabled}
                   />
                 </View>
@@ -933,12 +1000,89 @@ export default function ActiveGameScreen() {
         </GestureHandlerRootView>
       </Modal>
 
+      {/* Zero-out Confirm Modal */}
+      <Modal
+        visible={showZeroOutModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowZeroOutModal(false)}
+      >
+        <GestureHandlerRootView style={{flex: 1}}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Ionicons name="warning" size={48} color="#E0A800" style={styles.completionModalIcon} />
+              <Text style={styles.modalTitle}>Rounding zeroes out a balance</Text>
+              <Text style={styles.completionModalConfirmText}>
+                At {formatAmount(activeGame.cashUnit ?? DEFAULT_CASH_UNIT)} rounding, {zeroOutNames.join(', ')} will settle nothing. Continue?
+              </Text>
+              <View style={styles.modalButtons}>
+                <ModalButton
+                  variant="cancel"
+                  title="Back"
+                  onPress={() => { setShowZeroOutModal(false); setShowCompletionModal(true); }}
+                />
+                <ModalButton
+                  variant="destructive"
+                  title="Continue"
+                  onPress={finalizeCompletion}
+                />
+              </View>
+            </View>
+          </View>
+        </GestureHandlerRootView>
+      </Modal>
+
       {/* Paywall Modal — shown when free user tries to add an 11th player */}
       <PaywallModal
         visible={showPaywall}
         onClose={() => setShowPaywall(false)}
         triggerMessage="Upgrade to Pro for unlimited players per game."
       />
+
+      {/* Cash Unit Picker Modal */}
+      <CashUnitPickerModal
+        visible={showCashUnitPicker}
+        currentUnit={activeGame.cashUnit}
+        currency={currency}
+        onSelect={async (unit) => {
+          activeGame.cashUnit = unit;
+          GameService.clearSettlementCache(activeGame);
+          await updateGame(activeGame);
+        }}
+        onClose={() => setShowCashUnitPicker(false)}
+      />
+
+      {/* Payment Editor Modal */}
+      <Modal visible={showPaymentEditor} animationType="fade" transparent
+             onRequestClose={() => setShowPaymentEditor(false)}>
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Preferred payment</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginVertical: 12 }}>
+                {PAYMENT_METHODS.map(m => (
+                  <TouchableOpacity key={m.key} onPress={() => setPaymentMethod(m.key)}
+                    style={[styles.methodChip, paymentMethod === m.key && styles.methodChipActive]}>
+                    <Text style={styles.methodChipText}>{m.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <TextInput
+                value={paymentHandle}
+                onChangeText={setPaymentHandle}
+                placeholder={PAYMENT_METHODS.find(m => m.key === paymentMethod)?.handlePlaceholder}
+                placeholderTextColor="rgba(255,255,255,0.3)"
+                autoCapitalize="none"
+                style={styles.input}
+              />
+              <View style={styles.modalButtons}>
+                <ModalButton variant="cancel" title="Cancel" onPress={() => setShowPaymentEditor(false)} />
+                <ModalButton variant="confirm" title="Save" onPress={handleSavePayment} />
+              </View>
+            </View>
+          </View>
+        </GestureHandlerRootView>
+      </Modal>
 
       {/* Solving overlay — uses an absolute View instead of a native <Modal>
            so that react-native-screens can properly detach it when this screen
@@ -1323,5 +1467,36 @@ const styles = StyleSheet.create({
   suggestionText: {
     color: 'rgba(255,255,255,0.75)',
     fontSize: 15,
+  },
+  cashUnitRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
+  cashUnitLabel: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.45)',
+    letterSpacing: 0.5,
+  },
+  cashUnitValue: {
+    fontSize: 13,
+    color: '#B072BB',
+    fontWeight: '500',
+  },
+  methodChip: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#2A2A2A',
+    backgroundColor: '#0A0A0A',
+  },
+  methodChipActive: {
+    borderColor: '#B072BB',
+  },
+  methodChipText: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.8)',
   },
 });
