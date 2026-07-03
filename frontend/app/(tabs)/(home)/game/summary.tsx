@@ -22,6 +22,7 @@ import * as Clipboard from 'expo-clipboard';
 import { PreferredPayment } from '@/types/game';
 import { getPaymentMethodMeta } from '@/constants/PaymentMethods';
 import { buildPaymentUri, formatHandleForDisplay } from '@/utils/paymentLinks';
+import { buildShareMessage } from '@/utils/shareMessage';
 
 // HUD Section Header Component
 function HudSectionHeader({ label }: { label: string }) {
@@ -375,9 +376,6 @@ function FallbackBanner({ onDismiss, onRetry, isRetrying, errorMessage, balances
   );
 }
 
-// Module-level (above the component) — single source of truth for the share link.
-const SHARE_FOOTER = '\n\nSettled with Cash Cage\nhttps://apps.apple.com/app/id6759301097';
-
 export default function GameSummaryScreen() {
   const { activeGame, updateGame } = useGame();
   const router = useRouter();
@@ -604,22 +602,13 @@ setSettlementResult(cachedResult);
 
   const handleShare = async () => {
     try {
-      let message = `${activeGame.name}\n\n`;
-      message += `Total Pot: ${formatAmount(summary.totalPot)}\n\n`;
-      message += `Settlements:\n`;
-
-      if (settlementsToDisplay.length === 0) {
-        message += `All balanced! No settlements needed.\n`;
-      } else {
-        groupedSettlements.forEach(({ recipient, payments }) => {
-          const details = payments
-            .map(({ from, amount }) => `${formatAmount(amount)} from ${from}`)
-            .join(', ');
-          message += `• ${recipient}: ${details}\n`;
-        });
-      }
-
-      message += SHARE_FOOTER;
+      const message = buildShareMessage({
+        gameName: activeGame.name,
+        totalPot: summary.totalPot,
+        grouped: groupedSettlements,
+        paymentByName,
+        formatAmount,
+      });
       await Share.share({ message });
     } catch (error) {
       console.error('Error sharing:', error);
