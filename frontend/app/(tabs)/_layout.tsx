@@ -73,6 +73,7 @@ function DynamicCashCageHeader() {
   const isGameScreen = pathname?.includes('/game/');
   const isSettingsScreen = pathname?.includes('/settings');
   const isAboutScreen = pathname?.includes('/about');
+  const isSavedPlayersScreen = pathname?.includes('/saved-players');
 
   return (
     <View style={{
@@ -92,7 +93,7 @@ function DynamicCashCageHeader() {
           justifyContent: 'center',
           paddingLeft: 16,
         }}>
-          {(isGameScreen || isSettingsScreen || isAboutScreen) && (
+          {(isGameScreen || isSettingsScreen || isAboutScreen || isSavedPlayersScreen) && (
             <TouchableOpacity
               onPress={() => {
                 if (isGameScreen) {

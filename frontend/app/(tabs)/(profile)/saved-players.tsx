@@ -1,0 +1,427 @@
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import {
+  StyleSheet,
+  ScrollView,
+  View,
+  Text,
+  TouchableOpacity,
+  Modal,
+  TextInput,
+  Alert,
+  KeyboardAvoidingView,
+  Platform,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
+import ModalButton from '@/components/ModalButton';
+import PaymentEditorModal from '@/components/PaymentEditorModal';
+import PaywallModal from '@/components/PaywallModal';
+import { useAuth } from '@/contexts/AuthContext';
+import {
+  getSavedPlayers,
+  savePlayer,
+  deleteSavedPlayer,
+  deleteSavedPlayers,
+  addSavedPlayers,
+  FREE_SAVED_CAP,
+  PRO_SAVED_CAP,
+  SavedPlayer,
+} from '@/services/savedPlayersService';
+import { PreferredPayment, Player } from '@/types/game';
+import { getPaymentMethodMeta } from '@/constants/PaymentMethods';
+import { formatHandleForDisplay } from '@/utils/paymentLinks';
+
+type AddRow = { name: string; preferredPayment?: PreferredPayment };
+type PaymentTarget =
+  | { kind: 'edit'; player: SavedPlayer }
+  | { kind: 'row'; index: number }
+  | null;
+
+function badgeText(p: SavedPlayer): string | null {
+  if (!p.preferredPayment) return null;
+  const { method, handle } = p.preferredPayment;
+  const label = getPaymentMethodMeta(method).label;
+  return handle ? `${label} · ${formatHandleForDisplay(method, handle)}` : label;
+}
+
+export default function SavedPlayersScreen() {
+  const { isPro, trialExpired } = useAuth();
+  const cap = isPro ? PRO_SAVED_CAP : FREE_SAVED_CAP;
+
+  const [players, setPlayers] = useState<SavedPlayer[]>([]);
+  const reload = useCallback(() => {
+    getSavedPlayers().then(setPlayers);
+  }, []);
+  useEffect(() => {
+    reload();
+  }, [reload]);
+
+  const sorted = [...players].sort((a, b) =>
+    a.name.toLowerCase().localeCompare(b.name.toLowerCase()),
+  );
+
+  const [paymentTarget, setPaymentTarget] = useState<PaymentTarget>(null);
+
+  const [selectMode, setSelectMode] = useState(false);
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  const [showAdd, setShowAdd] = useState(false);
+  const [addRows, setAddRows] = useState<AddRow[]>([{ name: '' }]);
+
+  const [showPaywall, setShowPaywall] = useState(false);
+  const requirePro = useCallback(
+    (action: () => void) => {
+      if (isPro) action();
+      else setShowPaywall(true);
+    },
+    [isPro],
+  );
+
+  const toggleSelected = useCallback((name: string) => {
+    const lower = name.toLowerCase();
+    setSelected(prev => {
+      const next = new Set(prev);
+      if (next.has(lower)) next.delete(lower);
+      else next.add(lower);
+      return next;
+    });
+  }, []);
+  const exitSelectMode = useCallback(() => {
+    setSelectMode(false);
+    setSelected(new Set());
+  }, []);
+  const handleBulkDelete = useCallback(() => {
+    const names = players.filter(p => selected.has(p.name.toLowerCase())).map(p => p.name);
+    if (names.length === 0) {
+      exitSelectMode();
+      return;
+    }
+    deleteSavedPlayers(names).then(() => {
+      exitSelectMode();
+      reload();
+    });
+  }, [players, selected, exitSelectMode, reload]);
+
+  const openAdd = useCallback(() => {
+    setAddRows([{ name: '' }]);
+    setShowAdd(true);
+  }, []);
+  const updateRowName = (i: number, name: string) =>
+    setAddRows(rows => rows.map((r, idx) => (idx === i ? { ...r, name } : r)));
+  const addAnotherRow = () => setAddRows(rows => [...rows, { name: '' }]);
+  const handleAddAll = useCallback(async () => {
+    const entries = addRows
+      .map(r => ({ name: r.name.trim(), preferredPayment: r.preferredPayment }))
+      .filter(r => r.name.length > 0);
+    if (entries.length === 0) {
+      setShowAdd(false);
+      return;
+    }
+    const { added, updated, skippedFull } = await addSavedPlayers(entries, { limit: cap });
+    setShowAdd(false);
+    reload();
+    const parts: string[] = [];
+    if (added) parts.push(`${added} added`);
+    if (updated) parts.push(`${updated} updated`);
+    if (skippedFull) parts.push(`${skippedFull} skipped (list full)`);
+    Alert.alert('Saved Players', parts.join(' · ') || 'No changes.');
+  }, [addRows, cap, reload]);
+
+  // Shared PaymentEditorModal target → synthetic Player (its player prop is init-only).
+  // useMemo keyed on paymentTarget gives a STABLE reference: PaymentEditorModal re-seeds
+  // its fields on [visible, player], so a fresh object each render (e.g. from AuthContext's
+  // trial-timer re-render) would wipe what the user is typing. The snapshot is captured at
+  // open time, which is exactly what a re-seed-on-open editor wants.
+  const paymentPlayer: Player | null = useMemo(() => {
+    if (!paymentTarget) return null;
+    if (paymentTarget.kind === 'edit') {
+      const p = paymentTarget.player;
+      return { id: p.name, name: p.name, preferredPayment: p.preferredPayment };
+    }
+    const row = addRows[paymentTarget.index];
+    return {
+      id: `row-${paymentTarget.index}`,
+      name: row?.name || 'Player',
+      preferredPayment: row?.preferredPayment,
+    };
+    // addRows intentionally omitted: capture the row snapshot at open time only.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [paymentTarget]);
+  const handlePaymentSave = useCallback(
+    (pref: PreferredPayment) => {
+      if (!paymentTarget) return;
+      if (paymentTarget.kind === 'edit') {
+        savePlayer(paymentTarget.player.name, pref, cap).then(() => {
+          setPaymentTarget(null);
+          reload();
+        });
+      } else {
+        const i = paymentTarget.index;
+        setAddRows(rows => rows.map((r, idx) => (idx === i ? { ...r, preferredPayment: pref } : r)));
+        setPaymentTarget(null);
+      }
+    },
+    [paymentTarget, cap, reload],
+  );
+
+  const renderRow = (p: SavedPlayer) => {
+    const badge = badgeText(p);
+    const textBlock = (
+      <View style={styles.rowTextWrap}>
+        <Text style={styles.rowName}>{p.name}</Text>
+        {badge ? (
+          <Text style={styles.rowBadge} numberOfLines={1}>{badge}</Text>
+        ) : (
+          <Text style={styles.rowBadgeMuted}>No payment set</Text>
+        )}
+      </View>
+    );
+
+    if (selectMode) {
+      const isSel = selected.has(p.name.toLowerCase());
+      return (
+        <TouchableOpacity key={p.name} style={styles.row} onPress={() => toggleSelected(p.name)} activeOpacity={0.7}>
+          <Ionicons
+            name={isSel ? 'checkbox' : 'square-outline'}
+            size={22}
+            color={isSel ? '#B072BB' : '#666'}
+            style={styles.checkbox}
+          />
+          {textBlock}
+        </TouchableOpacity>
+      );
+    }
+
+    return (
+      <Swipeable
+        key={p.name}
+        renderRightActions={() => (
+          <TouchableOpacity
+            style={styles.deleteAction}
+            onPress={() => deleteSavedPlayer(p.name).then(reload)}
+            activeOpacity={0.8}
+          >
+            <Ionicons name="trash" size={22} color="rgba(192,70,87,0.85)" />
+          </TouchableOpacity>
+        )}
+        overshootRight={false}
+        rightThreshold={40}
+        friction={2}
+      >
+        <TouchableOpacity
+          style={styles.row}
+          onPress={() => setPaymentTarget({ kind: 'edit', player: p })}
+          activeOpacity={0.7}
+        >
+          {textBlock}
+          <Ionicons name="chevron-forward" size={18} color="#666" />
+        </TouchableOpacity>
+      </Swipeable>
+    );
+  };
+
+  return (
+    <GestureHandlerRootView style={styles.container}>
+      <View style={styles.topBar}>
+        <View style={styles.topSide}>
+          {selectMode ? (
+            <TouchableOpacity onPress={exitSelectMode}>
+              <Text style={styles.topAction}>Cancel</Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity onPress={() => requirePro(() => setSelectMode(true))}>
+              <Text style={styles.topAction}>Select</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+        <Text style={styles.title}>Saved Players</Text>
+        <View style={[styles.topSide, styles.topSideRight]}>
+          {!selectMode && (
+            <TouchableOpacity
+              onPress={() => requirePro(openAdd)}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="add" size={26} color="#B072BB" />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        {sorted.length === 0 ? (
+          <View style={styles.empty}>
+            <Ionicons name="people-outline" size={40} color="#3A3A3A" />
+            <Text style={styles.emptyText}>No saved players yet</Text>
+            <Text style={styles.emptySub}>Players you add to games are saved here for quick reuse.</Text>
+          </View>
+        ) : (
+          sorted.map(renderRow)
+        )}
+      </ScrollView>
+
+      {selectMode && (
+        <View style={styles.bulkBar}>
+          <ModalButton
+            variant="destructive"
+            title={`Delete (${selected.size})`}
+            onPress={handleBulkDelete}
+            disabled={selected.size === 0}
+          />
+        </View>
+      )}
+
+      <Modal visible={showAdd} animationType="fade" transparent onRequestClose={() => setShowAdd(false)}>
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>Add players</Text>
+                <ScrollView style={styles.addRowsScroll} keyboardShouldPersistTaps="handled">
+                  {addRows.map((row, i) => (
+                    <View key={i} style={styles.addRow}>
+                      <TextInput
+                        style={styles.addRowInput}
+                        value={row.name}
+                        onChangeText={t => updateRowName(i, t)}
+                        placeholder="Name"
+                        placeholderTextColor="rgba(255,255,255,0.3)"
+                        autoCapitalize="words"
+                        autoCorrect={false}
+                      />
+                      <TouchableOpacity
+                        style={styles.rowPayBtn}
+                        onPress={() => setPaymentTarget({ kind: 'row', index: i })}
+                      >
+                        <Text style={styles.rowPayText} numberOfLines={1}>
+                          {row.preferredPayment ? getPaymentMethodMeta(row.preferredPayment.method).label : '+ Payment'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                </ScrollView>
+                <TouchableOpacity onPress={addAnotherRow} style={styles.addAnother}>
+                  <Ionicons name="add-circle-outline" size={18} color="#B072BB" />
+                  <Text style={styles.addAnotherText}>Add another</Text>
+                </TouchableOpacity>
+                <View style={styles.modalButtons}>
+                  <ModalButton variant="cancel" title="Cancel" onPress={() => setShowAdd(false)} />
+                  <ModalButton variant="confirm" title="Add" onPress={handleAddAll} />
+                </View>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </GestureHandlerRootView>
+      </Modal>
+
+      <PaymentEditorModal
+        visible={paymentTarget !== null}
+        player={paymentPlayer}
+        onSave={handlePaymentSave}
+        onClose={() => setPaymentTarget(null)}
+      />
+
+      <PaywallModal
+        visible={showPaywall}
+        onClose={() => setShowPaywall(false)}
+        triggerMessage="Upgrade to Pro to bulk-add and manage your saved players."
+        trialExpired={trialExpired}
+      />
+    </GestureHandlerRootView>
+  );
+}
+
+const styles = StyleSheet.create({
+  container: { flex: 1, backgroundColor: '#0A0A0A' },
+  topBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: 8,
+  },
+  topSide: { width: 70, alignItems: 'flex-start' },
+  topSideRight: { alignItems: 'flex-end' },
+  topAction: { fontSize: 15, color: '#B072BB', fontWeight: '600' },
+  title: { fontSize: 18, fontWeight: 'bold', color: '#FFFFFF', letterSpacing: 1 },
+  scrollContent: { padding: 20, paddingTop: 8, paddingBottom: 40, gap: 10 },
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#161616',
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: '#242424',
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    gap: 12,
+  },
+  checkbox: { marginRight: 2 },
+  rowTextWrap: { flex: 1, gap: 3 },
+  rowName: { fontSize: 16, color: '#FFFFFF', fontWeight: '600' },
+  rowBadge: { fontSize: 12, color: 'rgba(176,114,187,0.9)', fontFamily: 'SpaceMono' },
+  rowBadgeMuted: { fontSize: 12, color: 'rgba(255,255,255,0.35)' },
+  deleteAction: {
+    backgroundColor: '#1A1414',
+    justifyContent: 'center',
+    alignItems: 'center',
+    width: 72,
+    marginLeft: 10,
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(192,70,87,0.25)',
+  },
+  empty: { alignItems: 'center', paddingVertical: 64, gap: 10 },
+  emptyText: { fontSize: 16, color: 'rgba(255,255,255,0.6)', fontWeight: '600' },
+  emptySub: { fontSize: 13, color: 'rgba(255,255,255,0.35)', textAlign: 'center', paddingHorizontal: 24 },
+  bulkBar: {
+    padding: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#2A2A2A',
+    backgroundColor: '#0A0A0A',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  modalContent: {
+    backgroundColor: '#1A1A1A',
+    borderRadius: 20,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    borderWidth: 1,
+    borderColor: 'rgba(176,114,187,0.2)',
+  },
+  modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#FFFFFF', textAlign: 'center', marginBottom: 16 },
+  addRowsScroll: { maxHeight: 260 },
+  addRow: { flexDirection: 'row', gap: 8, marginBottom: 10, alignItems: 'stretch' },
+  addRowInput: {
+    flex: 1,
+    backgroundColor: '#0A0A0A',
+    borderWidth: 1,
+    borderColor: 'rgba(176,114,187,0.3)',
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    fontSize: 15,
+    color: '#FFFFFF',
+  },
+  rowPayBtn: {
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(176,114,187,0.3)',
+    borderRadius: 10,
+    minWidth: 96,
+    alignItems: 'center',
+  },
+  rowPayText: { fontSize: 12, color: 'rgba(176,114,187,0.9)' },
+  addAnother: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'center', marginTop: 4, marginBottom: 16 },
+  addAnotherText: { fontSize: 14, color: '#B072BB', fontWeight: '600' },
+  modalButtons: { flexDirection: 'row', gap: 10 },
+});

@@ -336,6 +336,21 @@ export default function SettingsScreen() {
               </View>
             </TouchableOpacity>
 
+            <View style={styles.menuDivider} />
+
+            {/* Saved Players */}
+            <TouchableOpacity
+              style={styles.menuItem}
+              onPress={() => router.push('/(tabs)/(profile)/saved-players' as any)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.menuItemLeft}>
+                <Ionicons name="people-outline" size={24} color="#B072BB" />
+                <Text style={styles.menuItemLabel}>Saved Players</Text>
+              </View>
+              <Ionicons name="chevron-forward" size={20} color="#666" />
+            </TouchableOpacity>
+
             {/* Change Password — only shown for email/password accounts */}
             {isEmailProvider && (
               <>
