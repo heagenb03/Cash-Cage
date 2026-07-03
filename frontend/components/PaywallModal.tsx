@@ -56,6 +56,7 @@ const DISPLAY_LIFETIME = {
 const FEATURES = [
   'Unlimited game history',
   'Unlimited players per game',
+  'Save & bulk-manage players',
   'All your devices',
 ];
 
