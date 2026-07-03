@@ -9,7 +9,7 @@ import { GameService } from '@/services/gameService';
 import { getSettlements } from '@/services/settlementService';
 import { PlayerBalance, SettlementResult } from '@/types/game';
 import { groupSettlementsByRecipient, sortPaymentsByAmount } from '@/utils/settlementUtils';
-import { getNetBalanceColor, formatNetBalanceDisplay } from '@/utils/formatUtils';
+import { getNetBalanceColor } from '@/utils/formatUtils';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import Button from '@/components/Button';
 import { Ionicons } from '@expo/vector-icons';
@@ -17,7 +17,7 @@ import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
 import { useReduceMotion } from '@/hooks/useReduceMotion';
 import { computeRoundingDistortion } from '@/utils/roundingUtils';
-import { DEFAULT_CASH_UNIT } from '@/constants/CashUnits';
+import { resolveCashUnit } from '@/constants/CashUnits';
 import * as Clipboard from 'expo-clipboard';
 import { PreferredPayment } from '@/types/game';
 import { getPaymentMethodMeta } from '@/constants/PaymentMethods';
@@ -42,7 +42,7 @@ interface BalanceCardProps {
 
 function BalanceCard({ balance, reduceMotion }: BalanceCardProps) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
-  const { formatAmount, meta } = useCurrency();
+  const { formatAmountCompact } = useCurrency();
 
   const animateScaleDown = useCallback(() => {
     if (!reduceMotion) {
@@ -72,12 +72,16 @@ function BalanceCard({ balance, reduceMotion }: BalanceCardProps) {
     .onBegin(() => runOnJS(animateScaleDown)())
     .onFinalize(() => runOnJS(animateScaleUp)()), [animateScaleDown, animateScaleUp]);
 
+  // Summary cards show compact (k/M) figures at a glance; settlement cards carry the exact amounts.
+  const netSign = balance.netBalance > 0 ? '+' : balance.netBalance < 0 ? '-' : '';
+  const netDisplay = `${netSign}${formatAmountCompact(balance.netBalance)}`;
+
   return (
     <GestureDetector gesture={tapGesture}>
       <Animated.View
         accessible={true}
         accessibilityRole="button"
-        accessibilityLabel={`${balance.playerName}, Net: ${formatNetBalanceDisplay(balance.netBalance, meta.symbol)}`}
+        accessibilityLabel={`${balance.playerName}, Net: ${netDisplay}`}
         style={[
           styles.playerCard,
           !reduceMotion && { transform: [{ scale: scaleAnim }] }
@@ -94,12 +98,12 @@ function BalanceCard({ balance, reduceMotion }: BalanceCardProps) {
         <View style={styles.dataRow}>
           <View style={styles.dataItem}>
             <Text style={styles.dataLabel}>In</Text>
-            <Text style={styles.dataValue}>{formatAmount(balance.totalBuyins)}</Text>
+            <Text style={styles.dataValue}>{formatAmountCompact(balance.totalBuyins)}</Text>
           </View>
           <View style={styles.dataDivider} />
           <View style={styles.dataItem}>
             <Text style={styles.dataLabel}>Out</Text>
-            <Text style={styles.dataValue}>{formatAmount(balance.totalCashouts)}</Text>
+            <Text style={styles.dataValue}>{formatAmountCompact(balance.totalCashouts)}</Text>
           </View>
           <View style={styles.dataDivider} />
           <View style={styles.dataItem}>
@@ -108,7 +112,7 @@ function BalanceCard({ balance, reduceMotion }: BalanceCardProps) {
               styles.dataValue,
               { color: getNetBalanceColor(balance.netBalance) }
             ]}>
-              {formatNetBalanceDisplay(balance.netBalance, meta.symbol)}
+              {netDisplay}
             </Text>
           </View>
         </View>
@@ -212,6 +216,7 @@ function SettlementCard({ groupedSettlement, reduceMotion, recipientPayment }: S
     >
       <GestureDetector gesture={tapGesture}>
         <View
+          style={styles.settlementCardBody}
           accessible={true}
           accessibilityRole="button"
           accessibilityLabel={`${groupedSettlement.recipient} receives ${formatAmount(groupedSettlement.totalAmount)}. ${isExpanded ? 'Collapse' : 'Expand'} payment details.`}
@@ -377,7 +382,7 @@ export default function GameSummaryScreen() {
   const { activeGame, updateGame } = useGame();
   const router = useRouter();
   const reduceMotion = useReduceMotion();
-  const { formatAmount } = useCurrency();
+  const { formatAmount, currency } = useCurrency();
 
   const summary = useMemo(
     () => (activeGame ? GameService.generateGameSummary(activeGame) : null),
@@ -485,7 +490,7 @@ setSettlementResult(cachedResult);
     (async () => {
       try {
         const result = await getSettlements(summary.balances, {
-          settings: { cashRoundingUnit: summary.game.cashUnit ?? DEFAULT_CASH_UNIT },
+          settings: { cashRoundingUnit: resolveCashUnit(summary.game.cashUnit, currency) },
         });
         if (cancelled) return;
 
@@ -538,7 +543,7 @@ setSettlementResult(cachedResult);
     try {
       const result = await getSettlements(balancesRef.current, {
         timeoutMs: 5000,
-        settings: { cashRoundingUnit: cashUnitRef.current ?? DEFAULT_CASH_UNIT },
+        settings: { cashRoundingUnit: resolveCashUnit(cashUnitRef.current, currency) },
       });
       setSettlementResult(result);
 
@@ -621,7 +626,7 @@ setSettlementResult(cachedResult);
     }
   };
 
-  const distortion = computeRoundingDistortion(summary.balances, summary.game.cashUnit ?? DEFAULT_CASH_UNIT);
+  const distortion = computeRoundingDistortion(summary.balances, resolveCashUnit(summary.game.cashUnit, currency));
 
   return (
     <View style={styles.container}>
@@ -715,7 +720,7 @@ setSettlementResult(cachedResult);
           {/* Rounding distortion note */}
           {distortion.maxDelta > 0 && (
             <Text style={styles.roundingNote}>
-              Rounded to {formatAmount(summary.game.cashUnit ?? DEFAULT_CASH_UNIT)} — largest change {formatAmount(distortion.maxDelta)}.
+              Rounded to {formatAmount(resolveCashUnit(summary.game.cashUnit, currency))} — largest change {formatAmount(distortion.maxDelta)}.
             </Text>
           )}
 
@@ -921,6 +926,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: '#242424',
     borderTopColor: 'rgba(176,114,187,0.15)',
+  },
+  settlementCardBody: {
+    backgroundColor: 'transparent',
   },
   settlementHeader: {
     flexDirection: 'row',

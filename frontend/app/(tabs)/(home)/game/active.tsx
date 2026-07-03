@@ -23,7 +23,7 @@ import CashUnitPickerModal from '@/components/CashUnitPickerModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useReduceMotion } from '@/hooks/useReduceMotion';
-import { EXACT_CASH_UNIT, DEFAULT_CASH_UNIT } from '@/constants/CashUnits';
+import { EXACT_CASH_UNIT, resolveCashUnit } from '@/constants/CashUnits';
 import { PAYMENT_METHODS } from '@/constants/PaymentMethods';
 import { computeRoundingDistortion } from '@/utils/roundingUtils';
 
@@ -435,7 +435,7 @@ export default function ActiveGameScreen() {
 
       const balances = GameService.calculateBalances(activeGame);
       const result = await getSettlements(balances, {
-        settings: { cashRoundingUnit: activeGame.cashUnit ?? DEFAULT_CASH_UNIT },
+        settings: { cashRoundingUnit: resolveCashUnit(activeGame.cashUnit, currency) },
       });
 
       GameService.cacheSettlements(activeGame, result);
@@ -471,7 +471,7 @@ export default function ActiveGameScreen() {
 
   const handleConfirmCompletion = async () => {
     const balances = GameService.calculateBalances(activeGame);
-    const { zeroOuts } = computeRoundingDistortion(balances, activeGame.cashUnit ?? DEFAULT_CASH_UNIT);
+    const { zeroOuts } = computeRoundingDistortion(balances, resolveCashUnit(activeGame.cashUnit, currency));
     if (zeroOuts.length > 0) {
       setZeroOutNames(zeroOuts.map(z => z.playerName));
       setShowCompletionModal(false);
@@ -559,6 +559,17 @@ export default function ActiveGameScreen() {
     }
     if (trimmedName !== selectedPlayer.name) {
       GameService.renamePlayer(activeGame!, selectedPlayer.id, trimmedName);
+      // Re-resolve preferred payment for the new name so a renamed player doesn't
+      // keep the previous person's payment info. Mirrors the Add Player autofill:
+      // apply the new name's saved payment, or clear the badge if it has none.
+      const saved = await getSavedPlayer(trimmedName);
+      const i = activeGame!.players.findIndex(p => p.id === selectedPlayer.id);
+      if (i !== -1) {
+        const { preferredPayment, ...rest } = activeGame!.players[i];
+        activeGame!.players[i] = saved?.preferredPayment
+          ? { ...rest, preferredPayment: saved.preferredPayment }
+          : rest;
+      }
       await updateGame(activeGame!);
     }
     setShowRenameModal(false);
@@ -607,9 +618,9 @@ export default function ActiveGameScreen() {
           >
             <Text style={styles.cashUnitLabel}>Cash rounding</Text>
             <Text style={styles.cashUnitValue}>
-              {(activeGame.cashUnit ?? DEFAULT_CASH_UNIT) === EXACT_CASH_UNIT
+              {resolveCashUnit(activeGame.cashUnit, currency) === EXACT_CASH_UNIT
                 ? 'Exact'
-                : formatAmount(activeGame.cashUnit ?? DEFAULT_CASH_UNIT)}
+                : formatAmount(resolveCashUnit(activeGame.cashUnit, currency))}
             </Text>
           </TouchableOpacity>
         </View>
@@ -1013,7 +1024,7 @@ export default function ActiveGameScreen() {
               <Ionicons name="warning" size={48} color="#E0A800" style={styles.completionModalIcon} />
               <Text style={styles.modalTitle}>Rounding zeroes out a balance</Text>
               <Text style={styles.completionModalConfirmText}>
-                At {formatAmount(activeGame.cashUnit ?? DEFAULT_CASH_UNIT)} rounding, {zeroOutNames.join(', ')} will settle nothing. Continue?
+                At {formatAmount(resolveCashUnit(activeGame.cashUnit, currency))} rounding, {zeroOutNames.join(', ')} will settle nothing. Continue?
               </Text>
               <View style={styles.modalButtons}>
                 <ModalButton
@@ -1059,7 +1070,7 @@ export default function ActiveGameScreen() {
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <Text style={styles.modalTitle}>Preferred payment</Text>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginVertical: 12 }}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginVertical: 12, backgroundColor: 'transparent' }}>
                 {PAYMENT_METHODS.map(m => (
                   <TouchableOpacity key={m.key} onPress={() => setPaymentMethod(m.key)}
                     style={[styles.methodChip, paymentMethod === m.key && styles.methodChipActive]}>

@@ -351,7 +351,7 @@ export async function fetchGamesFromFirestore(uid: string): Promise<Game[]> {
 }
 
 /** Convert a Firestore document (with Timestamps) back to a typed Game. */
-function deserializeFirestoreGame(data: Record<string, any>): Game {
+export function deserializeFirestoreGame(data: Record<string, any>): Game {
   const toDate = (v: any): Date => (v?.toDate ? v.toDate() : new Date(v));
   const toOptDate = (v: any): Date | undefined => (v ? toDate(v) : undefined);
 
@@ -364,6 +364,7 @@ function deserializeFirestoreGame(data: Record<string, any>): Game {
       id: p.id,
       name: p.name,
       completedAt: toOptDate(p.completedAt),
+      preferredPayment: p.preferredPayment,
     })),
     transactions: (data.transactions ?? []).map((t: any) => ({
       ...t,
@@ -371,6 +372,8 @@ function deserializeFirestoreGame(data: Record<string, any>): Game {
     })),
     createdAt: toDate(data.createdAt),
     syncedAt: toOptDate(data.syncedAt),
+    cashUnit: data.cashUnit,
+    currency: data.currency,
   };
 }
 

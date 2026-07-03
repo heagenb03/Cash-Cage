@@ -29,3 +29,22 @@ export function getCashUnitOptions(currency: CurrencyCode): number[] {
   const universal = notes[0] > 1 ? [1] : [];
   return [EXACT_CASH_UNIT, ...universal, ...notes];
 }
+
+/** Default rounding unit for a currency: its smallest note preset ($5, ¥1000, …). */
+export function getDefaultCashUnit(currency: CurrencyCode): number {
+  const notes = NOTE_PRESETS[currency] ?? NOTE_PRESETS.USD;
+  return notes[0];
+}
+
+/**
+ * Resolve a stored cash unit against the current currency. A unit picked under
+ * one currency (e.g. $5) is meaningless in another (JPY has no ¥5 note), so
+ * anything that isn't a valid option for `currency` falls back to that
+ * currency's default. Exact (0) and 1 are valid everywhere.
+ */
+export function resolveCashUnit(unit: number | undefined, currency: CurrencyCode): number {
+  if (unit !== undefined && getCashUnitOptions(currency).includes(unit)) {
+    return unit;
+  }
+  return getDefaultCashUnit(currency);
+}

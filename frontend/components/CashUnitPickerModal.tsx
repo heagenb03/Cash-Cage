@@ -8,7 +8,7 @@ import { CurrencyCode } from '@/constants/Currencies';
 import {
   getCashUnitOptions,
   EXACT_CASH_UNIT,
-  DEFAULT_CASH_UNIT,
+  resolveCashUnit,
 } from '@/constants/CashUnits';
 
 interface Props {
@@ -28,7 +28,7 @@ export default function CashUnitPickerModal({
 }: Props) {
   const { formatAmount } = useCurrency();
   const options = getCashUnitOptions(currency);
-  const selected = currentUnit ?? DEFAULT_CASH_UNIT;
+  const selected = resolveCashUnit(currentUnit, currency);
 
   const labelFor = (u: number) =>
     u === EXACT_CASH_UNIT ? 'Exact (no rounding)' : formatAmount(u);
