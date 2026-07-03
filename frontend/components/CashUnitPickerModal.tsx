@@ -51,7 +51,14 @@ export default function CashUnitPickerModal({
                   }}
                   activeOpacity={0.7}
                 >
-                  <Text style={styles.label}>{labelFor(item)}</Text>
+                  <View style={styles.rowText}>
+                    <Text style={styles.label}>{labelFor(item)}</Text>
+                    {item !== EXACT_CASH_UNIT && (
+                      <Text style={styles.subLabel}>
+                        ±{formatAmount(item / 2)} per player
+                      </Text>
+                    )}
+                  </View>
                   {item === selected && (
                     <Ionicons name="checkmark" size={20} color="#B072BB" />
                   )}
@@ -106,6 +113,15 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '600',
     color: '#FFFFFF',
+  },
+  rowText: {
+    backgroundColor: 'transparent',
+  },
+  subLabel: {
+    fontSize: 12,
+    fontWeight: '400',
+    color: 'rgba(255,255,255,0.4)',
+    marginTop: 2,
   },
   divider: {
     height: 1,
