@@ -8,7 +8,7 @@ import { useGame } from '@/contexts/GameContext';
 import { useRouter } from 'expo-router';
 import { GameService } from '@/services/gameService';
 import { getSettlements } from '@/services/settlementService';
-import { Player, PlayerBalance, Validation, PaymentMethod } from '@/types/game';
+import { Player, PlayerBalance, Validation, PreferredPayment } from '@/types/game';
 import { getNetBalanceColor, formatNetBalanceDisplay } from '@/utils/formatUtils';
 import { incrementProfileStats } from '@/services/firebaseService';
 import { isValidNumericInput } from '@/utils/validationUtils';
@@ -20,11 +20,11 @@ import Button from '@/components/Button';
 import ModalButton from '@/components/ModalButton';
 import PaywallModal from '@/components/PaywallModal';
 import CashUnitPickerModal from '@/components/CashUnitPickerModal';
+import PaymentEditorModal from '@/components/PaymentEditorModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useReduceMotion } from '@/hooks/useReduceMotion';
 import { EXACT_CASH_UNIT, resolveCashUnit } from '@/constants/CashUnits';
-import { PAYMENT_METHODS } from '@/constants/PaymentMethods';
 import { computeRoundingDistortion } from '@/utils/roundingUtils';
 
 function HudSectionHeader({ label, onAction, actionIcon }: { label: string; onAction?: () => void; actionIcon?: string }) {
@@ -207,8 +207,6 @@ export default function ActiveGameScreen() {
   // Payment editor state
   const [showPaymentEditor, setShowPaymentEditor] = useState(false);
   const [paymentPlayer, setPaymentPlayer] = useState<Player | null>(null);
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
-  const [paymentHandle, setPaymentHandle] = useState('');
 
   const handleCreateNewGame = async () => {
     try {
@@ -222,14 +220,11 @@ export default function ActiveGameScreen() {
 
   const openPaymentEditor = (player: Player) => {
     setPaymentPlayer(player);
-    setPaymentMethod(player.preferredPayment?.method ?? 'cash');
-    setPaymentHandle(player.preferredPayment?.handle ?? '');
     setShowPaymentEditor(true);
   };
 
-  const handleSavePayment = async () => {
+  const handleSavePayment = async (pref: PreferredPayment) => {
     if (!paymentPlayer || !activeGame) return;
-    const pref = { method: paymentMethod, handle: paymentHandle.trim() || undefined };
     const idx = activeGame.players.findIndex(p => p.id === paymentPlayer.id);
     if (idx !== -1) activeGame.players[idx] = { ...activeGame.players[idx], preferredPayment: pref };
     await updateGame(activeGame);
@@ -1064,36 +1059,12 @@ export default function ActiveGameScreen() {
       />
 
       {/* Payment Editor Modal */}
-      <Modal visible={showPaymentEditor} animationType="fade" transparent
-             onRequestClose={() => setShowPaymentEditor(false)}>
-        <GestureHandlerRootView style={{ flex: 1 }}>
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Preferred payment</Text>
-              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginVertical: 12, backgroundColor: 'transparent' }}>
-                {PAYMENT_METHODS.map(m => (
-                  <TouchableOpacity key={m.key} onPress={() => setPaymentMethod(m.key)}
-                    style={[styles.methodChip, paymentMethod === m.key && styles.methodChipActive]}>
-                    <Text style={styles.methodChipText}>{m.label}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              <TextInput
-                value={paymentHandle}
-                onChangeText={setPaymentHandle}
-                placeholder={PAYMENT_METHODS.find(m => m.key === paymentMethod)?.handlePlaceholder}
-                placeholderTextColor="rgba(255,255,255,0.3)"
-                autoCapitalize="none"
-                style={styles.input}
-              />
-              <View style={styles.modalButtons}>
-                <ModalButton variant="cancel" title="Cancel" onPress={() => setShowPaymentEditor(false)} />
-                <ModalButton variant="confirm" title="Save" onPress={handleSavePayment} />
-              </View>
-            </View>
-          </View>
-        </GestureHandlerRootView>
-      </Modal>
+      <PaymentEditorModal
+        visible={showPaymentEditor}
+        player={paymentPlayer}
+        onSave={handleSavePayment}
+        onClose={() => { setShowPaymentEditor(false); setPaymentPlayer(null); }}
+      />
 
       {/* Solving overlay — uses an absolute View instead of a native <Modal>
            so that react-native-screens can properly detach it when this screen
@@ -1494,20 +1465,5 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#B072BB',
     fontWeight: '500',
-  },
-  methodChip: {
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: '#2A2A2A',
-    backgroundColor: '#0A0A0A',
-  },
-  methodChipActive: {
-    borderColor: '#B072BB',
-  },
-  methodChipText: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.8)',
   },
 });
