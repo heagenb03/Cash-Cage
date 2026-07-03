@@ -25,7 +25,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useReduceMotion } from '@/hooks/useReduceMotion';
 import { EXACT_CASH_UNIT, resolveCashUnit } from '@/constants/CashUnits';
-import { computeRoundingDistortion } from '@/utils/roundingUtils';
+import { computeRoundingDistortion, PlayerDistortion } from '@/utils/roundingUtils';
 
 function HudSectionHeader({ label, onAction, actionIcon }: { label: string; onAction?: () => void; actionIcon?: string }) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
@@ -201,8 +201,8 @@ export default function ActiveGameScreen() {
   const [validationResult, setValidationResult] = useState<Validation | null>(null);
   const [showSolvingModal, setShowSolvingModal] = useState(false);
   const [showCashUnitPicker, setShowCashUnitPicker] = useState(false);
-  const [showZeroOutModal, setShowZeroOutModal] = useState(false);
-  const [zeroOutNames, setZeroOutNames] = useState<string[]>([]);
+  const [showDistortionModal, setShowDistortionModal] = useState(false);
+  const [distortions, setDistortions] = useState<PlayerDistortion[]>([]);
 
   // Payment editor state
   const [showPaymentEditor, setShowPaymentEditor] = useState(false);
@@ -425,7 +425,7 @@ export default function ActiveGameScreen() {
       GameService.completeGame(activeGame);
       await updateGame(activeGame);
       setShowCompletionModal(false);
-      setShowZeroOutModal(false);
+      setShowDistortionModal(false);
       setShowSolvingModal(true);
 
       const balances = GameService.calculateBalances(activeGame);
@@ -466,11 +466,14 @@ export default function ActiveGameScreen() {
 
   const handleConfirmCompletion = async () => {
     const balances = GameService.calculateBalances(activeGame);
-    const { zeroOuts } = computeRoundingDistortion(balances, resolveCashUnit(activeGame.cashUnit, currency));
-    if (zeroOuts.length > 0) {
-      setZeroOutNames(zeroOuts.map(z => z.playerName));
+    const { significantDistortions } = computeRoundingDistortion(
+      balances,
+      resolveCashUnit(activeGame.cashUnit, currency),
+    );
+    if (significantDistortions.length > 0) {
+      setDistortions(significantDistortions);
       setShowCompletionModal(false);
-      setShowZeroOutModal(true);
+      setShowDistortionModal(true);
       return;
     }
     await finalizeCompletion();
@@ -1006,26 +1009,36 @@ export default function ActiveGameScreen() {
         </GestureHandlerRootView>
       </Modal>
 
-      {/* Zero-out Confirm Modal */}
+      {/* Rounding-distortion Confirm Modal */}
       <Modal
-        visible={showZeroOutModal}
+        visible={showDistortionModal}
         animationType="fade"
         transparent={true}
-        onRequestClose={() => setShowZeroOutModal(false)}
+        onRequestClose={() => setShowDistortionModal(false)}
       >
         <GestureHandlerRootView style={{flex: 1}}>
           <View style={styles.modalOverlay}>
             <View style={styles.modalContent}>
               <Ionicons name="warning" size={48} color="#E0A800" style={styles.completionModalIcon} />
-              <Text style={styles.modalTitle}>Rounding zeroes out a balance</Text>
+              <Text style={styles.modalTitle}>Rounding distorts a settlement</Text>
               <Text style={styles.completionModalConfirmText}>
-                At {formatAmount(resolveCashUnit(activeGame.cashUnit, currency))} rounding, {zeroOutNames.join(', ')} will settle nothing. Continue?
+                At {formatAmount(resolveCashUnit(activeGame.cashUnit, currency))} rounding:
+              </Text>
+              {distortions.map((d, i) => (
+                <Text key={`${d.playerName}-${i}`} style={styles.completionModalConfirmText}>
+                  {d.tier === 'zeroOut'
+                    ? `${d.playerName}'s ${formatAmount(Math.abs(d.original))} balance rounds to ${formatAmount(0)} — settles nothing`
+                    : `${d.playerName}'s ${formatAmount(Math.abs(d.original))} balance rounds to ${formatAmount(Math.abs(d.rounded))}`}
+                </Text>
+              ))}
+              <Text style={styles.completionModalConfirmText}>
+                Pick a smaller cash-rounding unit to reduce this.
               </Text>
               <View style={styles.modalButtons}>
                 <ModalButton
                   variant="cancel"
                   title="Back"
-                  onPress={() => { setShowZeroOutModal(false); setShowCompletionModal(true); }}
+                  onPress={() => { setShowDistortionModal(false); setShowCompletionModal(true); }}
                 />
                 <ModalButton
                   variant="destructive"
