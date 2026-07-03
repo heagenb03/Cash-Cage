@@ -51,7 +51,9 @@ export default function SavedPlayersScreen() {
 
   const [players, setPlayers] = useState<SavedPlayer[]>([]);
   const reload = useCallback(() => {
-    getSavedPlayers().then(setPlayers);
+    getSavedPlayers()
+      .then(setPlayers)
+      .catch(() => Alert.alert('Error', 'Could not load saved players.'));
   }, []);
   useEffect(() => {
     reload();
@@ -68,6 +70,7 @@ export default function SavedPlayersScreen() {
 
   const [showAdd, setShowAdd] = useState(false);
   const [addRows, setAddRows] = useState<AddRow[]>([{ name: '' }]);
+  const [adding, setAdding] = useState(false);
 
   const [showPaywall, setShowPaywall] = useState(false);
   const requirePro = useCallback(
@@ -97,10 +100,15 @@ export default function SavedPlayersScreen() {
       exitSelectMode();
       return;
     }
-    deleteSavedPlayers(names).then(() => {
-      exitSelectMode();
-      reload();
-    });
+    deleteSavedPlayers(names)
+      .then(() => {
+        exitSelectMode();
+        reload();
+      })
+      .catch(() => {
+        exitSelectMode();
+        Alert.alert('Error', 'Could not delete the selected players.');
+      });
   }, [players, selected, exitSelectMode, reload]);
 
   const openAdd = useCallback(() => {
@@ -111,6 +119,7 @@ export default function SavedPlayersScreen() {
     setAddRows(rows => rows.map((r, idx) => (idx === i ? { ...r, name } : r)));
   const addAnotherRow = () => setAddRows(rows => [...rows, { name: '' }]);
   const handleAddAll = useCallback(async () => {
+    if (adding) return;
     const entries = addRows
       .map(r => ({ name: r.name.trim(), preferredPayment: r.preferredPayment }))
       .filter(r => r.name.length > 0);
@@ -118,15 +127,23 @@ export default function SavedPlayersScreen() {
       setShowAdd(false);
       return;
     }
-    const { added, updated, skippedFull } = await addSavedPlayers(entries, { limit: cap });
-    setShowAdd(false);
-    reload();
-    const parts: string[] = [];
-    if (added) parts.push(`${added} added`);
-    if (updated) parts.push(`${updated} updated`);
-    if (skippedFull) parts.push(`${skippedFull} skipped (list full)`);
-    Alert.alert('Saved Players', parts.join(' · ') || 'No changes.');
-  }, [addRows, cap, reload]);
+    setAdding(true);
+    try {
+      const { added, updated, skippedFull } = await addSavedPlayers(entries, { limit: cap });
+      setShowAdd(false);
+      reload();
+      const parts: string[] = [];
+      if (added) parts.push(`${added} added`);
+      if (updated) parts.push(`${updated} updated`);
+      if (skippedFull) parts.push(`${skippedFull} skipped (list full)`);
+      Alert.alert('Saved Players', parts.join(' · ') || 'No changes.');
+    } catch {
+      setShowAdd(false);
+      Alert.alert('Error', 'Could not add players. Please try again.');
+    } finally {
+      setAdding(false);
+    }
+  }, [adding, addRows, cap, reload]);
 
   // Shared PaymentEditorModal target → synthetic Player (its player prop is init-only).
   // useMemo keyed on paymentTarget gives a STABLE reference: PaymentEditorModal re-seeds
@@ -199,7 +216,11 @@ export default function SavedPlayersScreen() {
         renderRightActions={() => (
           <TouchableOpacity
             style={styles.deleteAction}
-            onPress={() => deleteSavedPlayer(p.name).then(reload)}
+            onPress={() =>
+              deleteSavedPlayer(p.name)
+                .then(reload)
+                .catch(() => Alert.alert('Error', 'Could not delete this player.'))
+            }
             activeOpacity={0.8}
           >
             <Ionicons name="trash" size={22} color="rgba(192,70,87,0.85)" />
@@ -306,7 +327,7 @@ export default function SavedPlayersScreen() {
                 </TouchableOpacity>
                 <View style={styles.modalButtons}>
                   <ModalButton variant="cancel" title="Cancel" onPress={() => setShowAdd(false)} />
-                  <ModalButton variant="confirm" title="Add" onPress={handleAddAll} />
+                  <ModalButton variant="confirm" title="Add" onPress={handleAddAll} disabled={adding} />
                 </View>
               </View>
             </View>

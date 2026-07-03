@@ -121,3 +121,13 @@ describe('savedPlayersService cap semantics', () => {
     expect(PRO_SAVED_CAP).toBe(200);
   });
 });
+
+describe('savedPlayersService concurrency', () => {
+  it('serializes concurrent writes without dropping one', async () => {
+    await Promise.all([
+      addSavedPlayers([{ name: 'A' }], { limit: 200 }),
+      addSavedPlayers([{ name: 'B' }], { limit: 200 }),
+    ]);
+    expect((await getSavedPlayers()).length).toBe(2);
+  });
+});

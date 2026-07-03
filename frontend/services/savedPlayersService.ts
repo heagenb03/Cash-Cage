@@ -28,6 +28,29 @@ async function writeAll(players: SavedPlayer[]): Promise<void> {
   await AsyncStorage.setItem(KEY, JSON.stringify(players));
 }
 
+/**
+ * Module-level promise queue serializing every mutating read-modify-write op.
+ * Without this, concurrent/un-awaited calls (bulk add/delete, a double-tap) can
+ * race: both read the same pre-mutation snapshot, and the second writeAll()
+ * clobbers the first (last-write-wins), silently dropping a change.
+ *
+ * `enqueue` chains each op's body after the previous op settles (success OR
+ * failure) so a rejection never poisons the chain for later ops, while still
+ * returning each op's own result/error to its caller.
+ */
+let writeChain: Promise<void> = Promise.resolve();
+function enqueue<T>(fn: () => Promise<T>): Promise<T> {
+  const result = writeChain.then(fn);
+  // Swallow the outcome for chaining purposes only (a rejection must not
+  // poison later queued ops); callers still get the real result/rejection
+  // via `result`.
+  writeChain = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  return result;
+}
+
 export async function getSavedPlayers(): Promise<SavedPlayer[]> {
   const raw = await AsyncStorage.getItem(KEY);
   if (!raw) return [];
@@ -61,16 +84,18 @@ export async function savePlayer(
   preferredPayment?: PreferredPayment,
   limit: number = PRO_SAVED_CAP,
 ): Promise<void> {
-  const current = await getSavedPlayers();
-  const lower = name.toLowerCase();
-  const existing = current.find(p => p.name.toLowerCase() === lower);
-  if (!existing && current.length >= limit) return; // list full — do not add a new name
-  const merged: SavedPlayer = {
-    name,
-    preferredPayment: preferredPayment ?? existing?.preferredPayment,
-  };
-  const deduped = [merged, ...current.filter(p => p.name.toLowerCase() !== lower)];
-  await writeAll(deduped);
+  return enqueue(async () => {
+    const current = await getSavedPlayers();
+    const lower = name.toLowerCase();
+    const existing = current.find(p => p.name.toLowerCase() === lower);
+    if (!existing && current.length >= limit) return; // list full — do not add a new name
+    const merged: SavedPlayer = {
+      name,
+      preferredPayment: preferredPayment ?? existing?.preferredPayment,
+    };
+    const deduped = [merged, ...current.filter(p => p.name.toLowerCase() !== lower)];
+    await writeAll(deduped);
+  });
 }
 
 /** Backward-compatible wrapper for callers that only have a name. */
@@ -80,16 +105,20 @@ export async function savePlayerName(name: string, limit: number = PRO_SAVED_CAP
 
 /** Remove one saved player (case-insensitive). */
 export async function deleteSavedPlayer(name: string): Promise<void> {
-  const lower = name.toLowerCase();
-  const current = await getSavedPlayers();
-  await writeAll(current.filter(p => p.name.toLowerCase() !== lower));
+  return enqueue(async () => {
+    const lower = name.toLowerCase();
+    const current = await getSavedPlayers();
+    await writeAll(current.filter(p => p.name.toLowerCase() !== lower));
+  });
 }
 
 /** Remove several saved players at once (case-insensitive). */
 export async function deleteSavedPlayers(names: string[]): Promise<void> {
-  const lowerSet = new Set(names.map(n => n.toLowerCase()));
-  const current = await getSavedPlayers();
-  await writeAll(current.filter(p => !lowerSet.has(p.name.toLowerCase())));
+  return enqueue(async () => {
+    const lowerSet = new Set(names.map(n => n.toLowerCase()));
+    const current = await getSavedPlayers();
+    await writeAll(current.filter(p => !lowerSet.has(p.name.toLowerCase())));
+  });
 }
 
 /**
@@ -101,29 +130,31 @@ export async function addSavedPlayers(
   entries: SavedPlayer[],
   opts: { limit: number },
 ): Promise<{ added: number; updated: number; skippedFull: number }> {
-  const result = await getSavedPlayers();
-  let added = 0;
-  let updated = 0;
-  let skippedFull = 0;
-  for (const entry of entries) {
-    const name = entry.name.trim();
-    if (!name) continue;
-    const lower = name.toLowerCase();
-    const idx = result.findIndex(p => p.name.toLowerCase() === lower);
-    if (idx !== -1) {
-      if (entry.preferredPayment) {
-        result[idx] = { name: result[idx].name, preferredPayment: entry.preferredPayment };
-        updated++;
+  return enqueue(async () => {
+    const result = await getSavedPlayers();
+    let added = 0;
+    let updated = 0;
+    let skippedFull = 0;
+    for (const entry of entries) {
+      const name = entry.name.trim();
+      if (!name) continue;
+      const lower = name.toLowerCase();
+      const idx = result.findIndex(p => p.name.toLowerCase() === lower);
+      if (idx !== -1) {
+        if (entry.preferredPayment) {
+          result[idx] = { name: result[idx].name, preferredPayment: entry.preferredPayment };
+          updated++;
+        }
+        continue;
       }
-      continue;
+      if (result.length >= opts.limit) {
+        skippedFull++;
+        continue;
+      }
+      result.unshift(entry.preferredPayment ? { name, preferredPayment: entry.preferredPayment } : { name });
+      added++;
     }
-    if (result.length >= opts.limit) {
-      skippedFull++;
-      continue;
-    }
-    result.unshift(entry.preferredPayment ? { name, preferredPayment: entry.preferredPayment } : { name });
-    added++;
-  }
-  await writeAll(result);
-  return { added, updated, skippedFull };
+    await writeAll(result);
+    return { added, updated, skippedFull };
+  });
 }
