@@ -5,6 +5,31 @@ export function isDeepLinkable(method: PaymentMethod): boolean {
   return getPaymentMethodMeta(method).deepLinkable;
 }
 
+/** Canonical affix for a method's handle ('@', '$', 'paypal.me/'), or '' if none. */
+export function getAffix(method: PaymentMethod): string {
+  return getPaymentMethodMeta(method).affix;
+}
+
+/**
+ * Bare handle for storage/comparison: strips a leading affix (case-insensitive)
+ * and trims. Idempotent — already-bare input is returned unchanged, and a
+ * non-affix method (zelle/applecash/other/cash) never has its '@' stripped.
+ */
+export function normalizeHandle(method: PaymentMethod, raw: string | undefined): string {
+  const trimmed = (raw ?? '').trim();
+  if (!trimmed) return '';
+  const affix = getAffix(method);
+  if (affix && trimmed.toLowerCase().startsWith(affix.toLowerCase())) {
+    return trimmed.slice(affix.length).trim();
+  }
+  return trimmed;
+}
+
+/** Display/copy string: the affix followed by the bare handle (no double-prefix). */
+export function formatHandleForDisplay(method: PaymentMethod, handle: string | undefined): string {
+  return getAffix(method) + normalizeHandle(method, handle);
+}
+
 /**
  * Prefilled payment URI for the supported apps, or null when the method is not
  * deep-linkable or the handle is empty. `amount` is in the game's currency; note

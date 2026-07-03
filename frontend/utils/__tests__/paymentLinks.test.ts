@@ -1,4 +1,10 @@
-import { buildPaymentUri, isDeepLinkable } from '@/utils/paymentLinks';
+import {
+  buildPaymentUri,
+  isDeepLinkable,
+  getAffix,
+  normalizeHandle,
+  formatHandleForDisplay,
+} from '@/utils/paymentLinks';
 import { getPaymentMethodMeta } from '@/constants/PaymentMethods';
 
 describe('isDeepLinkable', () => {
@@ -40,5 +46,52 @@ describe('getPaymentMethodMeta', () => {
   it('returns a label for each method', () => {
     expect(getPaymentMethodMeta('cashapp').label).toBe('Cash App');
     expect(getPaymentMethodMeta('applecash').deepLinkable).toBe(false);
+  });
+});
+
+describe('getAffix', () => {
+  it('returns the canonical affix per method', () => {
+    expect(getAffix('venmo')).toBe('@');
+    expect(getAffix('cashapp')).toBe('$');
+    expect(getAffix('paypal')).toBe('paypal.me/');
+    expect(getAffix('zelle')).toBe('');
+    expect(getAffix('cash')).toBe('');
+    expect(getAffix('other')).toBe('');
+  });
+});
+
+describe('normalizeHandle', () => {
+  it('strips a leading affix and trims', () => {
+    expect(normalizeHandle('venmo', '@heagen')).toBe('heagen');
+    expect(normalizeHandle('venmo', '  @heagen ')).toBe('heagen');
+    expect(normalizeHandle('cashapp', '$tag')).toBe('tag');
+    expect(normalizeHandle('paypal', 'paypal.me/heagen')).toBe('heagen');
+  });
+  it('leaves an already-bare handle unchanged', () => {
+    expect(normalizeHandle('venmo', 'heagen')).toBe('heagen');
+  });
+  it('does not treat a non-affix method\'s @ as an affix', () => {
+    expect(normalizeHandle('zelle', 'a@b.com')).toBe('a@b.com');
+    expect(normalizeHandle('other', 'catch me next week')).toBe('catch me next week');
+  });
+  it('returns empty string for empty/undefined input', () => {
+    expect(normalizeHandle('venmo', '')).toBe('');
+    expect(normalizeHandle('venmo', undefined)).toBe('');
+  });
+});
+
+describe('formatHandleForDisplay', () => {
+  it('prepends the affix to a bare handle', () => {
+    expect(formatHandleForDisplay('venmo', 'heagen')).toBe('@heagen');
+    expect(formatHandleForDisplay('cashapp', 'tag')).toBe('$tag');
+    expect(formatHandleForDisplay('paypal', 'heagen')).toBe('paypal.me/heagen');
+  });
+  it('does not double-prefix legacy data that already has the affix', () => {
+    expect(formatHandleForDisplay('venmo', '@heagen')).toBe('@heagen');
+    expect(formatHandleForDisplay('cashapp', '$tag')).toBe('$tag');
+  });
+  it('returns non-affix handles unchanged', () => {
+    expect(formatHandleForDisplay('zelle', 'a@b.com')).toBe('a@b.com');
+    expect(formatHandleForDisplay('other', 'Splitwise')).toBe('Splitwise');
   });
 });
