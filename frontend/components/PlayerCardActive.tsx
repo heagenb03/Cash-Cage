@@ -8,6 +8,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { Player, PlayerBalance } from '@/types/game';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { getPaymentMethodMeta } from '@/constants/PaymentMethods';
+import { formatHandleForDisplay } from '@/utils/paymentLinks';
 
 interface PlayerCardActiveProps {
   player: Player;
@@ -117,7 +118,7 @@ const PlayerCardActive: React.FC<PlayerCardActiveProps> = ({
               {player.preferredPayment ? (
                 <Text style={styles.paymentBadgeText} numberOfLines={1}>
                   {getPaymentMethodMeta(player.preferredPayment.method).label}
-                  {player.preferredPayment.handle ? ` · ${player.preferredPayment.handle}` : ''}
+                  {player.preferredPayment.handle ? ` · ${formatHandleForDisplay(player.preferredPayment.method, player.preferredPayment.handle)}` : ''}
                 </Text>
               ) : (
                 <Text style={styles.paymentBadgeAdd}>+ Payment</Text>
