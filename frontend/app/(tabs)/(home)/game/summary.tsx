@@ -21,7 +21,7 @@ import { resolveCashUnit } from '@/constants/CashUnits';
 import * as Clipboard from 'expo-clipboard';
 import { PreferredPayment } from '@/types/game';
 import { getPaymentMethodMeta } from '@/constants/PaymentMethods';
-import { buildPaymentUri } from '@/utils/paymentLinks';
+import { buildPaymentUri, formatHandleForDisplay } from '@/utils/paymentLinks';
 
 // HUD Section Header Component
 function HudSectionHeader({ label }: { label: string }) {
@@ -204,7 +204,7 @@ function SettlementCard({ groupedSettlement, reduceMotion, recipientPayment }: S
   }, [recipientPayment]);
 
   const handleCopyHandle = useCallback(() => {
-    if (recipientPayment?.handle) Clipboard.setStringAsync(recipientPayment.handle).catch(() => {});
+    if (recipientPayment?.handle) Clipboard.setStringAsync(formatHandleForDisplay(recipientPayment.method, recipientPayment.handle)).catch(() => {});
   }, [recipientPayment]);
 
   return (
@@ -229,7 +229,7 @@ function SettlementCard({ groupedSettlement, reduceMotion, recipientPayment }: S
               {recipientPayment && (
                 <Text style={styles.payeeBadge} numberOfLines={1}>
                   {getPaymentMethodMeta(recipientPayment.method).label}
-                  {recipientPayment.handle ? ` · ${recipientPayment.handle}` : ''}
+                  {recipientPayment.handle ? ` · ${formatHandleForDisplay(recipientPayment.method, recipientPayment.handle)}` : ''}
                 </Text>
               )}
             </View>
