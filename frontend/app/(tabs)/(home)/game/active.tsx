@@ -12,7 +12,7 @@ import { Player, PlayerBalance, Validation, PreferredPayment } from '@/types/gam
 import { getNetBalanceColor, formatNetBalanceDisplay } from '@/utils/formatUtils';
 import { incrementProfileStats } from '@/services/firebaseService';
 import { isValidNumericInput } from '@/utils/validationUtils';
-import { getSavedPlayerNames, savePlayerName, getSavedPlayer, savePlayer } from '@/services/savedPlayersService';
+import { getSavedPlayerNames, savePlayerName, getSavedPlayer, savePlayer, FREE_SAVED_CAP, PRO_SAVED_CAP } from '@/services/savedPlayersService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import PlayerCardActive from '@/components/PlayerCardActive';
 import PlayerCardCompleted from '@/components/PlayerCardCompleted';
@@ -228,7 +228,7 @@ export default function ActiveGameScreen() {
     const idx = activeGame.players.findIndex(p => p.id === paymentPlayer.id);
     if (idx !== -1) activeGame.players[idx] = { ...activeGame.players[idx], preferredPayment: pref };
     await updateGame(activeGame);
-    savePlayer(paymentPlayer.name, pref).catch(() => {});
+    savePlayer(paymentPlayer.name, pref, isPro ? PRO_SAVED_CAP : FREE_SAVED_CAP).catch(() => {});
     setShowPaymentEditor(false);
     setPaymentPlayer(null);
   };
@@ -329,7 +329,7 @@ export default function ActiveGameScreen() {
     }
 
     await updateGame(activeGame);
-    savePlayerName(newPlayerName.trim()).catch(() => {});
+    savePlayerName(newPlayerName.trim(), isPro ? PRO_SAVED_CAP : FREE_SAVED_CAP).catch(() => {});
     setNewPlayerName('');
     setNewPlayerBuyIn('');
     setPlayerSuggestions([]);
