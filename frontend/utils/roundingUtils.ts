@@ -3,16 +3,25 @@ import { PlayerBalance } from '@/types/game';
 /** Threshold below which a balance is "negligible" — mirrors the app's imbalance tolerance. */
 const REAL_OBLIGATION_THRESHOLD = 2.5;
 
+/** Absolute floor: distortion below this ($) is never material. Matches imbalance tolerance. */
+export const MATERIAL_DELTA_FLOOR = 2.5;
+/** Relative gate: distortion below this fraction of the true balance is never material. */
+export const MATERIAL_DISTORTION_RATIO = 0.2;
+
+export type DistortionTier = 'zeroOut' | 'material';
+
 export interface PlayerDistortion {
   playerName: string;
   original: number;
   rounded: number;
   delta: number;
+  tier?: DistortionTier; // present only on entries in significantDistortions
 }
 
 export interface RoundingDistortion {
   perPlayer: PlayerDistortion[];
   zeroOuts: PlayerDistortion[];
+  significantDistortions: PlayerDistortion[];
   maxDelta: number;
 }
 
@@ -52,7 +61,17 @@ export function computeRoundingDistortion(
   const zeroOuts = perPlayer.filter(
     p => Math.abs(p.original) > REAL_OBLIGATION_THRESHOLD && p.rounded === 0,
   );
+
+  const significantDistortions: PlayerDistortion[] = perPlayer
+    .filter(
+      p =>
+        Math.abs(p.original) > REAL_OBLIGATION_THRESHOLD &&
+        p.delta > MATERIAL_DELTA_FLOOR &&
+        p.delta >= MATERIAL_DISTORTION_RATIO * Math.abs(p.original),
+    )
+    .map(p => ({ ...p, tier: (p.rounded === 0 ? 'zeroOut' : 'material') as DistortionTier }));
+
   const maxDelta = perPlayer.reduce((m, p) => Math.max(m, p.delta), 0);
 
-  return { perPlayer, zeroOuts, maxDelta };
+  return { perPlayer, zeroOuts, significantDistortions, maxDelta };
 }

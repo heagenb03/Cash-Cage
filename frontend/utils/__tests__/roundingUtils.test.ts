@@ -58,3 +58,39 @@ describe('roundBalancesToUnit', () => {
     expect(input[0].netBalance).toBe(-53); // not mutated
   });
 });
+
+describe('computeRoundingDistortion — significantDistortions', () => {
+  it('flags material (non-zero) distortion: $31 -> $40 at unit 20', () => {
+    const d = computeRoundingDistortion([bal('A', -31), bal('B', 31)], 20);
+    expect(d.significantDistortions.map(s => s.playerName).sort()).toEqual(['A', 'B']);
+    expect(d.significantDistortions.every(s => s.tier === 'material')).toBe(true);
+    expect(d.zeroOuts).toHaveLength(0); // unchanged: neither rounds to 0
+  });
+
+  it('stays empty at the default $5 unit (absolute floor): $8 -> $10', () => {
+    const d = computeRoundingDistortion([bal('A', 8), bal('B', -8)], 5);
+    // delta 2 is below the 2.5 floor even though ratio 25% >= 20%
+    expect(d.significantDistortions).toHaveLength(0);
+  });
+
+  it('stays empty on high-stakes coarse games (relative gate): $173 -> $180 at unit 20', () => {
+    const d = computeRoundingDistortion([bal('A', 173), bal('B', -173)], 20);
+    // delta 7 clears the floor but ratio ~4% is below 20%
+    expect(d.significantDistortions).toHaveLength(0);
+  });
+
+  it('includes zero-outs tagged tier "zeroOut" and keeps zeroOuts unchanged', () => {
+    const d = computeRoundingDistortion([bal('A', -60), bal('B', -9), bal('C', 69)], 20);
+    const zo = d.significantDistortions.filter(s => s.tier === 'zeroOut');
+    expect(zo.map(s => s.playerName)).toEqual(['B']);        // -9 -> 0
+    expect(d.zeroOuts.map(z => z.playerName)).toEqual(['B']); // unchanged
+    // C: 69 -> 60 is delta 9 but ratio 13% < 20%, so NOT flagged
+    expect(d.significantDistortions.map(s => s.playerName)).toEqual(['B']);
+  });
+
+  it('normalizes -0 to 0 on the rounded value', () => {
+    const d = computeRoundingDistortion([bal('A', -9)], 20);
+    expect(Object.is(d.perPlayer[0].rounded, -0)).toBe(false);
+    expect(d.perPlayer[0].rounded).toBe(0);
+  });
+});
