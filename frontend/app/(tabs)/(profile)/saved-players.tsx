@@ -19,11 +19,11 @@ import PaymentEditorModal, { PaymentEditorContent } from '@/components/PaymentEd
 import PaywallModal from '@/components/PaywallModal';
 import { useAuth } from '@/contexts/AuthContext';
 import {
-  getSavedPlayers,
   savePlayer,
   deleteSavedPlayer,
   deleteSavedPlayers,
   addSavedPlayers,
+  loadSavedPlayers,
   FREE_SAVED_CAP,
   PRO_SAVED_CAP,
   SavedPlayer,
@@ -46,15 +46,17 @@ function badgeText(p: SavedPlayer): string | null {
 }
 
 export default function SavedPlayersScreen() {
-  const { isPro, trialExpired } = useAuth();
+  const { user, isPro, trialExpired } = useAuth();
+  const uid = user?.uid ?? null;
   const cap = isPro ? PRO_SAVED_CAP : FREE_SAVED_CAP;
 
   const [players, setPlayers] = useState<SavedPlayer[]>([]);
   const reload = useCallback(() => {
-    getSavedPlayers()
+    if (!uid) return;
+    loadSavedPlayers(uid, setPlayers)
       .then(setPlayers)
       .catch(() => Alert.alert('Error', 'Could not load saved players.'));
-  }, []);
+  }, [uid]);
   useEffect(() => {
     reload();
   }, [reload]);
@@ -95,12 +97,13 @@ export default function SavedPlayersScreen() {
     setSelected(new Set());
   }, []);
   const handleBulkDelete = useCallback(() => {
+    if (!uid) return;
     const names = players.filter(p => selected.has(p.name.toLowerCase())).map(p => p.name);
     if (names.length === 0) {
       exitSelectMode();
       return;
     }
-    deleteSavedPlayers(names)
+    deleteSavedPlayers(uid, names)
       .then(() => {
         exitSelectMode();
         reload();
@@ -109,7 +112,7 @@ export default function SavedPlayersScreen() {
         exitSelectMode();
         Alert.alert('Error', 'Could not delete the selected players.');
       });
-  }, [players, selected, exitSelectMode, reload]);
+  }, [uid, players, selected, exitSelectMode, reload]);
 
   const openAdd = useCallback(() => {
     setAddRows([{ name: '' }]);
@@ -129,7 +132,8 @@ export default function SavedPlayersScreen() {
     }
     setAdding(true);
     try {
-      const { added, updated, skippedFull } = await addSavedPlayers(entries, { limit: cap });
+      if (!uid) return;
+      const { added, updated, skippedFull } = await addSavedPlayers(uid, entries, { limit: cap });
       setShowAdd(false);
       reload();
       const parts: string[] = [];
@@ -143,7 +147,7 @@ export default function SavedPlayersScreen() {
     } finally {
       setAdding(false);
     }
-  }, [adding, addRows, cap, reload]);
+  }, [uid, adding, addRows, cap, reload]);
 
   // Shared PaymentEditorModal target → synthetic Player (its player prop is init-only).
   // useMemo keyed on paymentTarget gives a STABLE reference: PaymentEditorModal re-seeds
@@ -169,7 +173,7 @@ export default function SavedPlayersScreen() {
     (pref: PreferredPayment) => {
       if (!paymentTarget) return;
       if (paymentTarget.kind === 'edit') {
-        savePlayer(paymentTarget.player.name, pref, cap).then(() => {
+        if (uid) savePlayer(uid, paymentTarget.player.name, pref, cap).then(() => {
           setPaymentTarget(null);
           reload();
         });
@@ -179,7 +183,7 @@ export default function SavedPlayersScreen() {
         setPaymentTarget(null);
       }
     },
-    [paymentTarget, cap, reload],
+    [uid, paymentTarget, cap, reload],
   );
 
   const renderRow = (p: SavedPlayer) => {
@@ -217,7 +221,7 @@ export default function SavedPlayersScreen() {
           <TouchableOpacity
             style={styles.deleteAction}
             onPress={() =>
-              deleteSavedPlayer(p.name)
+              (uid ? deleteSavedPlayer(uid, p.name) : Promise.resolve())
                 .then(reload)
                 .catch(() => Alert.alert('Error', 'Could not delete this player.'))
             }

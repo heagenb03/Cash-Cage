@@ -12,7 +12,7 @@ import { Player, PlayerBalance, Validation, PreferredPayment } from '@/types/gam
 import { getNetBalanceColor, formatNetBalanceDisplay } from '@/utils/formatUtils';
 import { incrementProfileStats } from '@/services/firebaseService';
 import { isValidNumericInput } from '@/utils/validationUtils';
-import { getSavedPlayerNames, savePlayerName, getSavedPlayer, savePlayer, FREE_SAVED_CAP, PRO_SAVED_CAP } from '@/services/savedPlayersService';
+import { savePlayerName, getSavedPlayer, savePlayer, loadSavedPlayers, SavedPlayer, FREE_SAVED_CAP, PRO_SAVED_CAP } from '@/services/savedPlayersService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import PlayerCardActive from '@/components/PlayerCardActive';
 import PlayerCardCompleted from '@/components/PlayerCardCompleted';
@@ -154,6 +154,13 @@ export default function ActiveGameScreen() {
   const { formatAmount, meta, currency } = useCurrency();
   const router = useRouter();
 
+  const uid = user?.uid ?? null;
+  const refreshSavedNames = useCallback(() => {
+    if (!uid) return;
+    const apply = (list: SavedPlayer[]) => setSavedPlayers(list.map(p => p.name));
+    loadSavedPlayers(uid, apply).then(apply).catch(() => {});
+  }, [uid]);
+
   // Helper function to highlight critical values in error/warning messages
   const highlightCriticalValues = (message: string): React.ReactNode => {
     // Pattern matches: $XX.XX, player names (if any), numeric values
@@ -228,7 +235,7 @@ export default function ActiveGameScreen() {
     const idx = activeGame.players.findIndex(p => p.id === paymentPlayer.id);
     if (idx !== -1) activeGame.players[idx] = { ...activeGame.players[idx], preferredPayment: pref };
     await updateGame(activeGame);
-    savePlayer(paymentPlayer.name, pref, isPro ? PRO_SAVED_CAP : FREE_SAVED_CAP).catch(() => {});
+    if (uid) savePlayer(uid, paymentPlayer.name, pref, isPro ? PRO_SAVED_CAP : FREE_SAVED_CAP).catch(() => {});
     setShowPaymentEditor(false);
     setPaymentPlayer(null);
   };
@@ -274,7 +281,7 @@ export default function ActiveGameScreen() {
     setSelectedPlayer(player);
     setRenamedPlayerName(player.name);
     setRenameSuggestions([]);
-    getSavedPlayerNames().then(setSavedPlayers);
+    refreshSavedNames();
     setShowRenameModal(true);
   }, []);
 
@@ -317,7 +324,7 @@ export default function ActiveGameScreen() {
 
     // Surface a remembered payment for this name (visible on the card badge;
     // the handle is shown again prominently at payment time — see summary).
-    const saved = await getSavedPlayer(newPlayerName.trim());
+    const saved = uid ? await getSavedPlayer(uid, newPlayerName.trim()) : undefined;
     if (saved?.preferredPayment) {
       const i = activeGame.players.findIndex(p => p.id === player.id);
       if (i !== -1) activeGame.players[i] = { ...activeGame.players[i], preferredPayment: saved.preferredPayment };
@@ -329,7 +336,7 @@ export default function ActiveGameScreen() {
     }
 
     await updateGame(activeGame);
-    savePlayerName(newPlayerName.trim(), isPro ? PRO_SAVED_CAP : FREE_SAVED_CAP).catch(() => {});
+    if (uid) savePlayerName(uid, newPlayerName.trim(), isPro ? PRO_SAVED_CAP : FREE_SAVED_CAP).catch(() => {});
     setNewPlayerName('');
     setNewPlayerBuyIn('');
     setPlayerSuggestions([]);
@@ -560,7 +567,7 @@ export default function ActiveGameScreen() {
       // Re-resolve preferred payment for the new name so a renamed player doesn't
       // keep the previous person's payment info. Mirrors the Add Player autofill:
       // apply the new name's saved payment, or clear the badge if it has none.
-      const saved = await getSavedPlayer(trimmedName);
+      const saved = uid ? await getSavedPlayer(uid, trimmedName) : undefined;
       const i = activeGame!.players.findIndex(p => p.id === selectedPlayer.id);
       if (i !== -1) {
         const { preferredPayment, ...rest } = activeGame!.players[i];
@@ -631,7 +638,7 @@ export default function ActiveGameScreen() {
               if (!isPro && activeGame.players.length >= 12) {
                 setShowPaywall(true);
               } else {
-                getSavedPlayerNames().then(setSavedPlayers);
+                refreshSavedNames();
                 setShowAddPlayer(true);
               }
             }}
