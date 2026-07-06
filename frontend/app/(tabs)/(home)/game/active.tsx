@@ -614,7 +614,7 @@ export default function ActiveGameScreen() {
             onPress={() => setShowCashUnitPicker(true)}
             activeOpacity={0.7}
           >
-            <Text style={styles.cashUnitLabel}>Cash rounding</Text>
+            <Text style={styles.cashUnitLabel}>Rounding: </Text>
             <Text style={styles.cashUnitValue}>
               {resolveCashUnit(activeGame.cashUnit, currency) === EXACT_CASH_UNIT
                 ? 'Exact'
@@ -1027,12 +1027,12 @@ export default function ActiveGameScreen() {
               {distortions.map((d, i) => (
                 <Text key={`${d.playerName}-${i}`} style={styles.completionModalConfirmText}>
                   {d.tier === 'zeroOut'
-                    ? `${d.playerName}'s ${formatAmount(Math.abs(d.original))} balance rounds to ${formatAmount(0)} — settles nothing`
+                    ? `${d.playerName}'s ${formatAmount(Math.abs(d.original))} balance rounds to ${formatAmount(0)}. Settles nothing`
                     : `${d.playerName}'s ${formatAmount(Math.abs(d.original))} balance rounds to ${formatAmount(Math.abs(d.rounded))}`}
                 </Text>
               ))}
               <Text style={styles.completionModalConfirmText}>
-                Pick a smaller cash-rounding unit to reduce this.
+                Pick a smaller rounding unit to reduce this.
               </Text>
               <View style={styles.modalButtons}>
                 <ModalButton

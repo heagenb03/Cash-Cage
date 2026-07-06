@@ -14,17 +14,48 @@ interface PaymentEditorModalProps {
   onClose: () => void;
 }
 
-const PaymentEditorModal: React.FC<PaymentEditorModalProps> = ({ visible, player, onSave, onClose }) => {
-  const [method, setMethod] = useState<PaymentMethod>('cash');
-  const [handle, setHandle] = useState('');
+interface PaymentEditorContentProps {
+  player: Player | null;
+  onSave: (pref: PreferredPayment) => void;
+  onClose: () => void;
+  /**
+   * Whether the editor is being presented. Drives the re-seed effect.
+   * Defaults to true for callers (e.g. the in-place overlay inside another
+   * modal) that mount this component only while it is shown.
+   */
+  visible?: boolean;
+}
 
-  // Re-seed local state from the player's saved preference each time the modal opens.
-  // normalizeHandle strips any legacy affix so the field shows the bare handle.
+/**
+ * The editor's UI without a `<Modal>` wrapper. Rendered as an absolute-fill
+ * overlay so it can be presented either inside `PaymentEditorModal`'s own
+ * native modal OR directly inside another already-open modal (iOS can only
+ * present one native modal at a time, so a second `<Modal>` would be silently
+ * dropped — see the Add-players flow in saved-players.tsx).
+ *
+ * A GestureHandlerRootView ancestor must be provided by the caller (the modal
+ * wrapper or the host modal) so the gesture-based ModalButtons work.
+ */
+export const PaymentEditorContent: React.FC<PaymentEditorContentProps> = ({
+  player,
+  onSave,
+  onClose,
+  visible = true,
+}) => {
+  const initialMethod = player?.preferredPayment?.method ?? 'cash';
+  const [method, setMethod] = useState<PaymentMethod>(initialMethod);
+  const [handle, setHandle] = useState(() =>
+    normalizeHandle(initialMethod, player?.preferredPayment?.handle ?? ''),
+  );
+
+  // Re-seed local state from the player's saved preference each time the editor
+  // opens. normalizeHandle strips any legacy affix so the field shows the bare
+  // handle. (useState initializers above cover the mount-fresh-each-open case.)
   useEffect(() => {
     if (!visible) return;
-    const initialMethod = player?.preferredPayment?.method ?? 'cash';
-    setMethod(initialMethod);
-    setHandle(normalizeHandle(initialMethod, player?.preferredPayment?.handle ?? ''));
+    const seedMethod = player?.preferredPayment?.method ?? 'cash';
+    setMethod(seedMethod);
+    setHandle(normalizeHandle(seedMethod, player?.preferredPayment?.handle ?? ''));
   }, [visible, player]);
 
   const meta = getPaymentMethodMeta(method);
@@ -38,62 +69,68 @@ const PaymentEditorModal: React.FC<PaymentEditorModalProps> = ({ visible, player
   };
 
   return (
+    <View style={styles.overlay}>
+      <View style={styles.content}>
+        <Text style={styles.title}>Preferred payment</Text>
+
+        <View style={styles.grid}>
+          {PAYMENT_METHODS.map((m) => {
+            const selected = method === m.key;
+            const fullWidth = m.key === 'other';
+            return (
+              <TouchableOpacity
+                key={m.key}
+                onPress={() => setMethod(m.key)}
+                activeOpacity={0.8}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                style={[
+                  styles.tile,
+                  fullWidth ? styles.tileFull : styles.tileHalf,
+                  selected && styles.tileSelected,
+                ]}
+              >
+                <Text style={[styles.tileText, selected && styles.tileTextSelected]}>
+                  {m.label}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
+        {meta.takesHandle && (
+          <View style={styles.handleRow}>
+            {meta.affix ? (
+              <View style={styles.affixBox}>
+                <Text style={styles.affixText}>{meta.affix}</Text>
+              </View>
+            ) : null}
+            <TextInput
+              value={handle}
+              onChangeText={setHandle}
+              placeholder={meta.handlePlaceholder}
+              placeholderTextColor="rgba(255,255,255,0.3)"
+              autoCapitalize="none"
+              autoCorrect={false}
+              style={[styles.input, meta.affix ? styles.inputWithAffix : styles.inputPlain]}
+            />
+          </View>
+        )}
+
+        <View style={[modalLayoutStyles.modalButtons, styles.buttons]}>
+          <ModalButton variant="cancel" title="Cancel" onPress={onClose} />
+          <ModalButton variant="confirm" title="Save" onPress={handleSave} />
+        </View>
+      </View>
+    </View>
+  );
+};
+
+const PaymentEditorModal: React.FC<PaymentEditorModalProps> = ({ visible, player, onSave, onClose }) => {
+  return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <View style={styles.overlay}>
-          <View style={styles.content}>
-            <Text style={styles.title}>Preferred payment</Text>
-
-            <View style={styles.grid}>
-              {PAYMENT_METHODS.map((m) => {
-                const selected = method === m.key;
-                const fullWidth = m.key === 'other';
-                return (
-                  <TouchableOpacity
-                    key={m.key}
-                    onPress={() => setMethod(m.key)}
-                    activeOpacity={0.8}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected }}
-                    style={[
-                      styles.tile,
-                      fullWidth ? styles.tileFull : styles.tileHalf,
-                      selected && styles.tileSelected,
-                    ]}
-                  >
-                    <Text style={[styles.tileText, selected && styles.tileTextSelected]}>
-                      {m.label}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-
-            {meta.takesHandle && (
-              <View style={styles.handleRow}>
-                {meta.affix ? (
-                  <View style={styles.affixBox}>
-                    <Text style={styles.affixText}>{meta.affix}</Text>
-                  </View>
-                ) : null}
-                <TextInput
-                  value={handle}
-                  onChangeText={setHandle}
-                  placeholder={meta.handlePlaceholder}
-                  placeholderTextColor="rgba(255,255,255,0.3)"
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  style={[styles.input, meta.affix ? styles.inputWithAffix : styles.inputPlain]}
-                />
-              </View>
-            )}
-
-            <View style={[modalLayoutStyles.modalButtons, styles.buttons]}>
-              <ModalButton variant="cancel" title="Cancel" onPress={onClose} />
-              <ModalButton variant="confirm" title="Save" onPress={handleSave} />
-            </View>
-          </View>
-        </View>
+        <PaymentEditorContent visible={visible} player={player} onSave={onSave} onClose={onClose} />
       </GestureHandlerRootView>
     </Modal>
   );
@@ -101,7 +138,7 @@ const PaymentEditorModal: React.FC<PaymentEditorModalProps> = ({ visible, player
 
 const styles = StyleSheet.create({
   overlay: {
-    flex: 1,
+    ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'rgba(0, 0, 0, 0.8)',

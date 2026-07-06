@@ -15,7 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import ModalButton from '@/components/ModalButton';
-import PaymentEditorModal from '@/components/PaymentEditorModal';
+import PaymentEditorModal, { PaymentEditorContent } from '@/components/PaymentEditorModal';
 import PaywallModal from '@/components/PaywallModal';
 import { useAuth } from '@/contexts/AuthContext';
 import {
@@ -288,6 +288,7 @@ export default function SavedPlayersScreen() {
             title={`Delete (${selected.size})`}
             onPress={handleBulkDelete}
             disabled={selected.size === 0}
+            fullWidth
           />
         </View>
       )}
@@ -332,11 +333,23 @@ export default function SavedPlayersScreen() {
               </View>
             </View>
           </KeyboardAvoidingView>
+          {/* Payment editor for a row is rendered IN PLACE here (not as its own
+              <Modal>) because iOS can only present one native modal at a time — a
+              second <Modal> opened over this one is silently dropped. */}
+          {paymentTarget?.kind === 'row' && (
+            <PaymentEditorContent
+              player={paymentPlayer}
+              onSave={handlePaymentSave}
+              onClose={() => setPaymentTarget(null)}
+            />
+          )}
         </GestureHandlerRootView>
       </Modal>
 
+      {/* Edit path (tapping a saved player) has no other modal open, so it uses
+          its own native modal. The 'row' path is handled in-place above. */}
       <PaymentEditorModal
-        visible={paymentTarget !== null}
+        visible={paymentTarget?.kind === 'edit'}
         player={paymentPlayer}
         onSave={handlePaymentSave}
         onClose={() => setPaymentTarget(null)}

@@ -38,7 +38,7 @@ export default function CashUnitPickerModal({
       <GestureHandlerRootView style={{ flex: 1 }}>
         <View style={styles.overlay}>
           <View style={styles.sheet}>
-            <Text style={styles.title}>Cash Rounding</Text>
+            <Text style={styles.title}>Rounding</Text>
             <FlatList
               data={options}
               keyExtractor={(item) => item.toString()}
