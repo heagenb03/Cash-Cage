@@ -4,28 +4,8 @@ import {
   saveGameToFirestore,
   deleteGameFromFirestore,
   fetchGamesFromFirestore,
+  isFirestoreOfflineError,
 } from '@/services/firebaseService';
-
-// ---------------------------------------------------------------------------
-// Offline error detection
-// ---------------------------------------------------------------------------
-
-/**
- * Returns true when the error is a known Firestore "device is offline" error.
- * These are expected when the user has no internet connection and should be
- * handled silently — the app is offline-first so no data is lost.
- */
-function isFirestoreOfflineError(err: unknown): boolean {
-  if (err && typeof err === 'object') {
-    const code = (err as any).code;
-    const message = (err as any).message ?? '';
-    if (code === 'unavailable') return true;
-    if (typeof message === 'string' && message.includes('Could not reach Cloud Firestore backend')) {
-      return true;
-    }
-  }
-  return false;
-}
 
 // ---------------------------------------------------------------------------
 // SyncService — offline-first dual-write with background Firestore sync.

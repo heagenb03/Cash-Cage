@@ -40,7 +40,11 @@ jest.mock('firebase/functions', () => ({
   httpsCallable: jest.fn(),
 }));
 
-import { deserializeFirestoreGame } from '@/services/firebaseService';
+import {
+  deserializeFirestoreGame,
+  fetchSavedPlayersFromFirestore,
+} from '@/services/firebaseService';
+import { getDoc } from 'firebase/firestore';
 
 describe('deserializeFirestoreGame', () => {
   const baseDoc = {
@@ -96,5 +100,29 @@ describe('deserializeFirestoreGame', () => {
   it('leaves preferredPayment undefined when absent on the player', () => {
     const game = deserializeFirestoreGame(baseDoc);
     expect(game.players[0].preferredPayment).toBeUndefined();
+  });
+});
+
+describe('fetchSavedPlayersFromFirestore', () => {
+  it('returns the players array when the document exists', async () => {
+    (getDoc as jest.Mock).mockResolvedValueOnce({
+      exists: () => true,
+      data: () => ({ players: [{ name: 'Alice', updatedAt: 5 }] }),
+    });
+    const players = await fetchSavedPlayersFromFirestore('userA');
+    expect(players).toEqual([{ name: 'Alice', updatedAt: 5 }]);
+  });
+
+  it('returns [] when the document is missing', async () => {
+    (getDoc as jest.Mock).mockResolvedValueOnce({ exists: () => false });
+    expect(await fetchSavedPlayersFromFirestore('userA')).toEqual([]);
+  });
+
+  it('returns [] when players is not an array', async () => {
+    (getDoc as jest.Mock).mockResolvedValueOnce({
+      exists: () => true,
+      data: () => ({}),
+    });
+    expect(await fetchSavedPlayersFromFirestore('userA')).toEqual([]);
   });
 });

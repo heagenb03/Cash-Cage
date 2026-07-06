@@ -36,6 +36,7 @@ import {
   runTransaction,
 } from 'firebase/firestore';
 import { Game } from '@/types/game';
+import type { SavedPlayer } from '@/services/savedPlayersService';
 import { getFunctions, httpsCallable } from 'firebase/functions';
 import { TRIAL_DURATION_DAYS } from '@/utils/trialUtils';
 
@@ -391,4 +392,46 @@ export function deserializeFirestoreGame(data: Record<string, any>): Game {
 export async function callDeleteUserData(): Promise<void> {
   const deleteUserData = httpsCallable(firebaseFunctions, 'deleteUserData');
   await deleteUserData({});
+}
+
+// ---------------------------------------------------------------------------
+// Offline error detection (shared by the games + saved-players sync layers)
+// ---------------------------------------------------------------------------
+
+/**
+ * Returns true when the error is a known Firestore "device is offline" error.
+ * Expected when the user has no connection; the app is offline-first so these
+ * are swallowed to a debug log rather than surfaced.
+ */
+export function isFirestoreOfflineError(err: unknown): boolean {
+  if (err && typeof err === 'object') {
+    const code = (err as any).code;
+    const message = (err as any).message ?? '';
+    if (code === 'unavailable') return true;
+    if (typeof message === 'string' && message.includes('Could not reach Cloud Firestore backend')) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// ---------------------------------------------------------------------------
+// Saved Players Sync — single doc at /users/{uid}/savedPlayers/list
+// ---------------------------------------------------------------------------
+
+const SAVED_PLAYERS_DOC = 'list';
+
+/** Write the full saved-players list to /users/{uid}/savedPlayers/list. */
+export async function saveSavedPlayersToFirestore(uid: string, players: SavedPlayer[]): Promise<void> {
+  const ref = doc(db, 'users', uid, 'savedPlayers', SAVED_PLAYERS_DOC);
+  await setDoc(ref, { players: stripUndefined(players), syncedAt: serverTimestamp() });
+}
+
+/** Fetch the saved-players list (empty array when the doc is missing). */
+export async function fetchSavedPlayersFromFirestore(uid: string): Promise<SavedPlayer[]> {
+  const ref = doc(db, 'users', uid, 'savedPlayers', SAVED_PLAYERS_DOC);
+  const snap = await getDoc(ref);
+  if (!snap.exists()) return [];
+  const data = snap.data();
+  return Array.isArray(data.players) ? (data.players as SavedPlayer[]) : [];
 }
