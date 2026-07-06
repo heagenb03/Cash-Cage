@@ -39,6 +39,15 @@ service cloud.firestore {
           && request.resource.data.players is list
           && request.resource.data.players.size() <= 20;
       }
+
+      match /savedPlayers/{docId} {
+        allow read, delete: if request.auth != null && request.auth.uid == uid;
+        // SECURITY: size cap (PRO ceiling) guards against storage abuse.
+        allow create, update: if request.auth != null
+          && request.auth.uid == uid
+          && request.resource.data.players is list
+          && request.resource.data.players.size() <= 200;
+      }
     }
   }
 }
