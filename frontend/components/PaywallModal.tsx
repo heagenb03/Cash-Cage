@@ -6,6 +6,7 @@ import {
   ScrollView,
   ActivityIndicator,
   Linking,
+  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
@@ -62,6 +63,21 @@ const FEATURES = [
 
 const PRIVACY_POLICY_URL = 'https://heagenb03.github.io/cashcage-legal/privacy-policy.html';
 const TERMS_URL = 'https://heagenb03.github.io/cashcage-legal/terms-of-service.html';
+
+// ---------------------------------------------------------------------------
+// SectionLabel
+// ---------------------------------------------------------------------------
+
+/** HUD micro-label between hairline rules — the app's section-header grammar. */
+function SectionLabel({ label }: { label: string }) {
+  return (
+    <View style={styles.sectionLabelRow}>
+      <View style={styles.sectionLine} />
+      <Text style={styles.sectionLabelText}>{label}</Text>
+      <View style={styles.sectionLine} />
+    </View>
+  );
+}
 
 // ---------------------------------------------------------------------------
 // PaywallModal
@@ -214,11 +230,12 @@ export default function PaywallModal({ visible, onClose, triggerMessage, trialEx
                 <Text style={styles.triggerMessage}>{triggerMessage}</Text>
               )}
 
-              {/* Feature list */}
+              {/* Unlocks — un-carded ledger rows */}
+              <SectionLabel label="Unlocks" />
               <View style={styles.featureList}>
                 {FEATURES.map((feature) => (
                   <View key={feature} style={styles.featureRow}>
-                    <Ionicons name="checkmark-circle" size={18} color="#B072BB" style={styles.checkIcon} />
+                    <Text style={styles.featurePlus}>+</Text>
                     <Text style={styles.featureText}>{feature}</Text>
                   </View>
                 ))}
@@ -427,27 +444,53 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
 
-  // Features
+  // Section labels (HUD grammar)
+  sectionLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 12,
+    backgroundColor: 'transparent',
+  },
+  sectionLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(176,114,187,0.2)',
+  },
+  sectionLabelText: {
+    fontSize: 11,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+    letterSpacing: 3,
+    color: '#B072BB',
+    backgroundColor: 'transparent',
+  },
+
+  // Features (un-carded)
   featureList: {
-    backgroundColor: '#1A1A1A',
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(176,114,187,0.15)',
     gap: 10,
+    marginBottom: 20,
+    backgroundColor: 'transparent',
   },
   featureRow: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: 'transparent',
   },
-  checkIcon: {
+  featurePlus: {
+    fontSize: 15,
+    color: 'rgba(176,114,187,0.7)',
     marginRight: 10,
+    backgroundColor: 'transparent',
+    ...Platform.select({
+      ios: { fontFamily: 'SpaceMono' },
+      android: { fontFamily: 'SpaceMono' },
+      default: { fontFamily: 'monospace' },
+    }),
   },
   featureText: {
     fontSize: 15,
-    color: '#FFFFFF',
+    color: 'rgba(255,255,255,0.85)',
     backgroundColor: 'transparent',
   },
 
