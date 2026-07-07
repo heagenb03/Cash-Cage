@@ -1,0 +1,55 @@
+/* Inter, vendored from @fontsource (paths relative to templates/) */
+@font-face { font-family: Inter; font-weight: 500; src: url('../node_modules/@fontsource/inter/files/inter-latin-500-normal.woff2') format('woff2'); }
+@font-face { font-family: Inter; font-weight: 700; src: url('../node_modules/@fontsource/inter/files/inter-latin-700-normal.woff2') format('woff2'); }
+@font-face { font-family: Inter; font-weight: 800; src: url('../node_modules/@fontsource/inter/files/inter-latin-800-normal.woff2') format('woff2'); }
+
+:root {
+  --bg-top: #170318; --bg-mid: #3d0f4d; --bg-glow: #6b2478;
+  --kicker: #a89fae; --headline: #f4eef6;
+  --headline-grad-a: #e9d5f0; --headline-grad-b: #a855c8;
+  --frame: #4a4a4e; --screen-bg: #000;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body { width: 100%; height: 100%; overflow: hidden; }
+body { font-family: Inter, sans-serif; background: linear-gradient(180deg, var(--bg-top) 0%, var(--bg-mid) 55%, var(--bg-glow) 78%, #2a0a33 100%); }
+
+/* Card-suit watermark: inline SVG data URI, tiled, very low opacity */
+.suits {
+  position: absolute; inset: 0; opacity: 0.04; pointer-events: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='560' height='560'><text x='40' y='120' font-size='120' fill='white'>♠</text><text x='320' y='260' font-size='150' fill='white'>♥</text><text x='90' y='430' font-size='135' fill='white'>♦</text><text x='360' y='520' font-size='120' fill='white'>♣</text></svg>");
+  background-size: 560px 560px;
+}
+
+.caption { position: relative; text-align: center; padding: 5% 6% 0; }
+.kicker { color: var(--kicker); font-weight: 500; font-size: 58px; letter-spacing: 0.01em; }
+.headline { color: var(--headline); font-weight: 800; font-size: 108px; line-height: 1.12; margin-top: 12px; }
+.headline .grad {
+  background: linear-gradient(100deg, var(--headline-grad-a), var(--headline-grad-b));
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+/* iPad canvas is squatter — smaller type, same hierarchy */
+body.ipad .kicker { font-size: 52px; }
+body.ipad .headline { font-size: 96px; }
+
+.stage { position: absolute; left: 0; right: 0; bottom: 0; top: 26%; perspective: 2600px; }
+.device {
+  position: absolute; left: 50%; top: 8%;
+  background: var(--screen-bg);
+  border: 17px solid var(--frame); border-radius: 78px;
+  box-shadow: 0 0 0 3px #221f24, 0 70px 140px rgba(0,0,0,.55), inset 0 0 4px rgba(255,255,255,.25);
+  overflow: hidden;
+}
+.device.iphone { width: 76%; aspect-ratio: 1179 / 2556; }
+.device.ipad   { width: 62%; aspect-ratio: 2048 / 2732; border-radius: 56px; }
+.device.tilt   { transform: translateX(-50%) rotateX(6deg) rotateY(-10deg) rotateZ(6deg); }
+.device.flat   { transform: translateX(-50%); }
+.device .island { position: absolute; top: 22px; left: 50%; transform: translateX(-50%); width: 24%; height: 62px; border-radius: 34px; background: #000; z-index: 2; box-shadow: 0 0 0 2px #0a0a0a; }
+.device.ipad .island { display: none; }
+.capture { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+/* Popped-out UI cards: crops of the capture, floated above the device */
+.card {
+  position: absolute; border-radius: 28px; overflow: hidden;
+  background-color: #1A1A1A; background-repeat: no-repeat;
+  box-shadow: 0 40px 90px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.06);
+}

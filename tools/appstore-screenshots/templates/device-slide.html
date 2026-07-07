@@ -1,0 +1,53 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<link rel="stylesheet" href="base.css">
+</head>
+<body>
+<script>const SLIDE = /*__SLIDE_JSON__*/null;</script>
+<div class="suits"></div>
+<header class="caption">
+  <p class="kicker"></p>
+  <h1 class="headline"></h1>
+</header>
+<section class="stage">
+  <div class="device">
+    <div class="island"></div>
+    <img class="capture" alt="">
+  </div>
+</section>
+<script>
+  document.body.classList.add(SLIDE.device);
+  document.querySelector('.kicker').textContent = SLIDE.kicker;
+  const h = document.querySelector('.headline');
+  h.innerHTML = SLIDE.headline
+    .map((line, i) => {
+      const cls = i === SLIDE.headline.length - 1 ? ' class="grad"' : '';
+      const esc = line.replace(/&/g, '&amp;').replace(/</g, '&lt;');
+      return `<span${cls}>${esc}</span>`;
+    })
+    .join('<br>');
+
+  const device = document.querySelector('.device');
+  device.classList.add(SLIDE.device, SLIDE.tilt ? 'tilt' : 'flat');
+  document.querySelector('.capture').src = SLIDE.capture;
+
+  const stage = document.querySelector('.stage');
+  for (const c of SLIDE.cards ?? []) {
+    const el = document.createElement('div');
+    el.className = 'card';
+    el.style.left = c.left + 'px';
+    el.style.top = c.top + 'px';
+    el.style.width = c.w * c.scale + 'px';
+    el.style.height = c.h * c.scale + 'px';
+    el.style.backgroundImage = `url("${SLIDE.capture}")`;
+    el.style.backgroundPosition = `-${c.x * c.scale}px -${c.y * c.scale}px`;
+    // background-size scales the WHOLE capture so the crop window lands right
+    el.style.backgroundSize = `${1179 * c.scale}px auto`;
+    if (c.captureWidth) el.style.backgroundSize = `${c.captureWidth * c.scale}px auto`;
+    stage.appendChild(el);
+  }
+</script>
+</body>
+</html>
