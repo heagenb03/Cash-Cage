@@ -63,3 +63,27 @@ test('device-slide renders at iPhone and iPad sizes', async () => {
     await browser.close();
   }
 });
+
+test('full config renders 10 slides at correct sizes (placeholder captures)', async () => {
+  const { DEVICES, SLIDES } = await import('../slides.config.mjs');
+  assert.equal(SLIDES.length, 5);
+  const browser = await puppeteer.launch();
+  try {
+    const cap = path.join(here, 'fixtures', 'placeholder-capture.png');
+    for (const [deviceId, device] of Object.entries(DEVICES)) {
+      for (const slide of SLIDES) {
+        const out = path.join(here, 'out', device.dir, `slide-${slide.n}.png`);
+        await renderSlide(browser, {
+          template: path.join(here, '..', 'templates', slide.template),
+          // capture LAST so the placeholder wins over perDevice's real (absent) paths
+          data: { ...slide, device: deviceId, ...(slide.perDevice?.[deviceId] ?? {}), capture: '../test/fixtures/placeholder-capture.png' },
+          width: device.width, height: device.height, outPath: out,
+        });
+        const buf = await readFile(out);
+        assert.deepEqual(pngSize(buf), { width: device.width, height: device.height });
+      }
+    }
+  } finally {
+    await browser.close();
+  }
+});
