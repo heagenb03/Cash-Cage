@@ -243,7 +243,10 @@ export async function loadSavedPlayers(
         if (signal?.aborted) return;
         const merged = await enqueue(async () => {
           const cur = await readLocal(uid);
-          const m = unionMerge(cur, remote);
+          // Clamp to PRO_SAVED_CAP so the merged list never exceeds the Firestore
+          // security rule's `players.size() <= 200` ceiling (keep in sync with that rule).
+          // unionMerge already sorts by updatedAt desc, so this keeps the most-recently-touched names.
+          const m = unionMerge(cur, remote).slice(0, PRO_SAVED_CAP);
           await writeLocal(uid, m);
           return m;
         });

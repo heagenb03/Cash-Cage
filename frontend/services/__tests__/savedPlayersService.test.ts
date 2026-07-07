@@ -213,4 +213,31 @@ describe('loadSavedPlayers', () => {
     // merged result was written back to local
     expect((await getSavedPlayerNames(A)).sort()).toEqual(['Alice', 'Bob', 'Carol']);
   });
+
+  it('clamps a union exceeding PRO_SAVED_CAP to 200, keeping the most-recently-touched names', async () => {
+    // Seed 200 distinct local names with ascending updatedAt (Local1 oldest ... Local200 newest-of-locals).
+    const localEntries: SavedPlayer[] = Array.from({ length: PRO_SAVED_CAP }, (_, i) => ({
+      name: `Local${i + 1}`,
+      updatedAt: i + 1,
+    }));
+    await AsyncStorage.setItem(`saved_player_names:${A}`, JSON.stringify(localEntries));
+
+    // Remote contributes 10 more distinct names, all newer than every local entry.
+    const remoteEntries: SavedPlayer[] = Array.from({ length: 10 }, (_, i) => ({
+      name: `Remote${i + 1}`,
+      updatedAt: 100000 + i,
+    }));
+    (fetchSavedPlayersFromFirestore as jest.Mock).mockResolvedValueOnce(remoteEntries);
+
+    const merged = await new Promise<SavedPlayer[]>((resolve, reject) => {
+      loadSavedPlayers(A, resolve).catch(reject);
+    });
+
+    // Union would otherwise be 210 (200 local + 10 remote, no overlaps) — must clamp to the cap.
+    expect(merged.length).toBe(PRO_SAVED_CAP);
+    // The newest remote name survived the clamp.
+    expect(merged.some(p => p.name === 'Remote10')).toBe(true);
+    // The oldest local name (lowest updatedAt) was dropped by the clamp.
+    expect(merged.some(p => p.name === 'Local1')).toBe(false);
+  });
 });
