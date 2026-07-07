@@ -187,16 +187,18 @@ export default function PaywallModal({ visible, onClose, triggerMessage, trialEx
       <GestureHandlerRootView style={{ flex: 1 }}>
         <View style={styles.overlay}>
           <View style={styles.sheet}>
+            <View style={styles.sheetAccent} />
             {/* Dismiss button */}
             <TouchableOpacity style={styles.dismissButton} onPress={onClose} accessibilityLabel="Close paywall">
               <Ionicons name="close" size={22} color="rgba(255,255,255,0.5)" />
             </TouchableOpacity>
 
             <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
-              {/* Header */}
+              {/* Header — HUD grammar: hairline rules flanking the title */}
               <View style={styles.headerRow}>
-                <Ionicons name="star" size={24} color="#B072BB" style={styles.starIcon} />
+                <View style={styles.headerLine} />
                 <Text style={styles.title}>CASH CAGE PRO</Text>
+                <View style={styles.headerLine} />
               </View>
 
               {trialExpired && (
@@ -358,13 +360,17 @@ const styles = StyleSheet.create({
   },
   sheet: {
     backgroundColor: '#0A0A0A',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
     borderWidth: 1,
-    borderColor: 'rgba(176,114,187,0.3)',
-    paddingTop: 8,
+    borderColor: '#242424',
+    overflow: 'hidden',
     paddingBottom: 40,
     maxHeight: '90%',
+  },
+  sheetAccent: {
+    height: 1,
+    backgroundColor: 'rgba(176,114,187,0.15)',
   },
   dismissButton: {
     alignSelf: 'flex-end',
@@ -378,15 +384,17 @@ const styles = StyleSheet.create({
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 12,
+    gap: 12,
+    marginBottom: 16,
     backgroundColor: 'transparent',
   },
-  starIcon: {
-    marginRight: 8,
+  headerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: 'rgba(176,114,187,0.2)',
   },
   title: {
-    fontSize: 22,
+    fontSize: 14,
     fontWeight: 'bold',
     color: '#B072BB',
     letterSpacing: 3,
@@ -395,13 +403,13 @@ const styles = StyleSheet.create({
   trialExpiredBanner: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(255,181,71,0.1)',
-    borderRadius: 10,
+    backgroundColor: 'rgba(255,181,71,0.08)',
+    borderRadius: 8,
     padding: 12,
     marginBottom: 16,
     gap: 8,
     borderWidth: 1,
-    borderColor: 'rgba(255,181,71,0.2)',
+    borderColor: 'rgba(255,181,71,0.15)',
   },
   trialExpiredText: {
     flex: 1,
@@ -511,7 +519,7 @@ const styles = StyleSheet.create({
   // Error
   errorText: {
     fontSize: 13,
-    color: '#C04657',
+    color: '#FF3B5C',
     textAlign: 'center',
     marginBottom: 12,
     backgroundColor: 'transparent',
