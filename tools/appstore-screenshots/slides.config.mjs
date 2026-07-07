@@ -14,6 +14,7 @@ Settlements:
 • Maria (Venmo @maria-ho): $300.00 from Johnny, $80.00 from Wolfgang
 • Phil (Cash App $philivey): $220.00 from Wolfgang
 
+
 Settled with Cash Cage
 https://apps.apple.com/app/id6759301097`;
 
