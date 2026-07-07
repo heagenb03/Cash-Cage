@@ -1,0 +1,13 @@
+{
+  "name": "appstore-screenshots",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "render": "node render.mjs",
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@fontsource/inter": "^5.0.0",
+    "puppeteer": "^23.0.0"
+  }
+}
