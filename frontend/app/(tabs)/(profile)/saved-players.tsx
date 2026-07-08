@@ -17,13 +17,16 @@ import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import ModalButton from '@/components/ModalButton';
 import PaymentEditorModal, { PaymentEditorContent } from '@/components/PaymentEditorModal';
 import PaywallModal from '@/components/PaywallModal';
+import SavedPlayerCard from '@/components/SavedPlayerCard';
 import { useAuth } from '@/contexts/AuthContext';
+import { useReduceMotion } from '@/hooks/useReduceMotion';
 import {
   savePlayer,
   deleteSavedPlayer,
   deleteSavedPlayers,
   addSavedPlayers,
   loadSavedPlayers,
+  renameSavedPlayer,
   savedCapFor,
   canAddMoreSavedPlayers,
   FREE_SAVED_CAP,
@@ -54,6 +57,7 @@ export default function SavedPlayersScreen() {
   const { user, isPro, trialExpired } = useAuth();
   const uid = user?.uid ?? null;
   const cap = savedCapFor(isPro);
+  const reduceMotion = useReduceMotion();
 
   const [players, setPlayers] = useState<SavedPlayer[]>([]);
   const reload = useCallback(() => {
@@ -71,6 +75,9 @@ export default function SavedPlayersScreen() {
   );
 
   const [paymentTarget, setPaymentTarget] = useState<PaymentTarget>(null);
+  const [renameTarget, setRenameTarget] = useState<SavedPlayer | null>(null);
+  const [renameName, setRenameName] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<SavedPlayer | null>(null);
 
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -122,6 +129,44 @@ export default function SavedPlayersScreen() {
         Alert.alert('Error', 'Could not delete the selected players.');
       });
   }, [uid, players, selected, exitSelectMode, reload]);
+
+  const openRename = useCallback((p: SavedPlayer) => {
+    setRenameTarget(p);
+    setRenameName(p.name);
+  }, []);
+
+  const handleRename = useCallback(async () => {
+    if (!uid || !renameTarget) return;
+    const trimmed = renameName.trim();
+    if (!trimmed) {
+      Alert.alert('Error', 'Player name cannot be empty.');
+      return;
+    }
+    if (trimmed === renameTarget.name) {
+      setRenameTarget(null);
+      return;
+    }
+    const res = await renameSavedPlayer(uid, renameTarget.name, trimmed);
+    if (!res.ok) {
+      if (res.reason === 'conflict') {
+        Alert.alert('Name Taken', `A saved player named "${trimmed}" already exists.`);
+      } else {
+        Alert.alert('Error', 'Could not rename this player.');
+      }
+      return;
+    }
+    setRenameTarget(null);
+    reload();
+  }, [uid, renameTarget, renameName, reload]);
+
+  const handleConfirmDelete = useCallback(() => {
+    if (!uid || !deleteTarget) return;
+    const name = deleteTarget.name;
+    setDeleteTarget(null);
+    deleteSavedPlayer(uid, name)
+      .then(reload)
+      .catch(() => Alert.alert('Error', 'Could not delete this player.'));
+  }, [uid, deleteTarget, reload]);
 
   const openAdd = useCallback(() => {
     setAddRows([{ name: '' }]);
@@ -247,34 +292,14 @@ export default function SavedPlayersScreen() {
     }
 
     return (
-      <Swipeable
+      <SavedPlayerCard
         key={p.name}
-        renderRightActions={() => (
-          <TouchableOpacity
-            style={styles.deleteAction}
-            onPress={() =>
-              (uid ? deleteSavedPlayer(uid, p.name) : Promise.resolve())
-                .then(reload)
-                .catch(() => Alert.alert('Error', 'Could not delete this player.'))
-            }
-            activeOpacity={0.8}
-          >
-            <Ionicons name="trash" size={22} color="rgba(192,70,87,0.85)" />
-          </TouchableOpacity>
-        )}
-        overshootRight={false}
-        rightThreshold={40}
-        friction={2}
-      >
-        <TouchableOpacity
-          style={styles.row}
-          onPress={() => setPaymentTarget({ kind: 'edit', player: p })}
-          activeOpacity={0.7}
-        >
-          {textBlock}
-          <Ionicons name="chevron-forward" size={18} color="#666" />
-        </TouchableOpacity>
-      </Swipeable>
+        player={p}
+        onRename={openRename}
+        onEditPayment={pl => setPaymentTarget({ kind: 'edit', player: pl })}
+        onDelete={pl => setDeleteTarget(pl)}
+        reduceMotion={reduceMotion}
+      />
     );
   };
 
@@ -414,6 +439,63 @@ export default function SavedPlayersScreen() {
         triggerMessage={paywallMessage}
         trialExpired={trialExpired}
       />
+
+      <Modal
+        visible={renameTarget !== null}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setRenameTarget(null)}
+      >
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>Rename Player</Text>
+                <TextInput
+                  style={styles.renameInput}
+                  value={renameName}
+                  onChangeText={setRenameName}
+                  placeholder="New name"
+                  placeholderTextColor="rgba(255,255,255,0.3)"
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                  autoFocus
+                  returnKeyType="done"
+                  onSubmitEditing={handleRename}
+                />
+                <View style={styles.modalButtons}>
+                  <ModalButton variant="cancel" title="Cancel" onPress={() => setRenameTarget(null)} />
+                  <ModalButton variant="confirm" title="Save" onPress={handleRename} />
+                </View>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </GestureHandlerRootView>
+      </Modal>
+
+      <Modal
+        visible={deleteTarget !== null}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setDeleteTarget(null)}
+      >
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Ionicons name="warning" size={48} color="#C04657" style={styles.warningIcon} />
+              <Text style={styles.modalTitle}>Delete Player?</Text>
+              <Text style={styles.deleteWarningText}>
+                This will remove {deleteTarget?.name} from your saved players.
+                {'\n\n'}This action cannot be undone.
+              </Text>
+              <View style={styles.modalButtons}>
+                <ModalButton variant="cancel" title="Cancel" onPress={() => setDeleteTarget(null)} />
+                <ModalButton variant="destructive" title="Delete" onPress={handleConfirmDelete} />
+              </View>
+            </View>
+          </View>
+        </GestureHandlerRootView>
+      </Modal>
     </GestureHandlerRootView>
   );
 }
@@ -520,4 +602,25 @@ const styles = StyleSheet.create({
   addAnother: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'center', marginTop: 4, marginBottom: 16 },
   addAnotherText: { fontSize: 14, color: '#B072BB', fontWeight: '600' },
   modalButtons: { flexDirection: 'row', gap: 10 },
+  renameInput: {
+    width: '100%',
+    backgroundColor: '#0A0A0A',
+    borderWidth: 1,
+    borderColor: 'rgba(176,114,187,0.3)',
+    borderRadius: 10,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    fontSize: 16,
+    color: '#FFFFFF',
+    marginBottom: 16,
+  },
+  warningIcon: { alignSelf: 'center', marginBottom: 12 },
+  deleteWarningText: {
+    fontSize: 15,
+    color: '#FFFFFF',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 20,
+    opacity: 0.8,
+  },
 });
