@@ -186,6 +186,39 @@ export async function deleteSavedPlayer(uid: string, name: string): Promise<void
   });
 }
 
+/**
+ * Rename a saved player (case-insensitive lookup of oldName). Preserves the entry's
+ * preferredPayment and bumps updatedAt. Returns { ok: false, reason: 'not-found' } when
+ * oldName has no entry, or { ok: false, reason: 'conflict' } when newName already belongs
+ * to a DIFFERENT entry. A case-only self-rename (e.g. 'bob' -> 'Bob') is allowed. Caller
+ * must trim and reject empty newName. NOTE: the collision guard is temporary data-safety
+ * for the name-keyed store; it becomes obsolete under the future id-based identity model.
+ */
+export async function renameSavedPlayer(
+  uid: string,
+  oldName: string,
+  newName: string,
+): Promise<{ ok: true } | { ok: false; reason: 'not-found' | 'conflict' }> {
+  return enqueue(async () => {
+    const trimmed = newName.trim();
+    const oldLower = oldName.toLowerCase();
+    const newLower = trimmed.toLowerCase();
+    const current = await readLocal(uid);
+    const idx = current.findIndex(p => p.name.toLowerCase() === oldLower);
+    if (idx === -1) return { ok: false, reason: 'not-found' };
+    if (newLower !== oldLower && current.some(p => p.name.toLowerCase() === newLower)) {
+      return { ok: false, reason: 'conflict' };
+    }
+    const entry = current[idx];
+    const renamed: SavedPlayer = { name: trimmed, updatedAt: Date.now() };
+    if (entry.preferredPayment) renamed.preferredPayment = entry.preferredPayment;
+    const next = current.map((p, i) => (i === idx ? renamed : p));
+    await writeLocal(uid, next);
+    pushRemote(uid, next);
+    return { ok: true };
+  });
+}
+
 /** Remove several saved players at once (case-insensitive). */
 export async function deleteSavedPlayers(uid: string, names: string[]): Promise<void> {
   return enqueue(async () => {

@@ -18,6 +18,7 @@ import {
   addSavedPlayers,
   loadSavedPlayers,
   unionMerge,
+  renameSavedPlayer,
   SavedPlayer,
   FREE_SAVED_CAP,
   PRO_SAVED_CAP,
@@ -285,5 +286,42 @@ describe('loadSavedPlayers', () => {
     expect(merged.some(p => p.name === 'Remote10')).toBe(true);
     // The oldest local name (lowest updatedAt) was dropped by the clamp.
     expect(merged.some(p => p.name === 'Local1')).toBe(false);
+  });
+});
+
+describe('renameSavedPlayer', () => {
+  it('renames an entry, preserving payment and bumping updatedAt', async () => {
+    await savePlayer(A, 'Bob', { method: 'venmo', handle: '@bob' });
+    const before = (await getSavedPlayer(A, 'Bob'))!.updatedAt!;
+    const res = await renameSavedPlayer(A, 'Bob', 'Bobby');
+    expect(res).toEqual({ ok: true });
+    expect(await getSavedPlayer(A, 'Bob')).toBeUndefined();
+    const renamed = await getSavedPlayer(A, 'Bobby');
+    expect(renamed?.preferredPayment).toEqual({ method: 'venmo', handle: '@bob' });
+    expect(renamed?.updatedAt).toBeGreaterThanOrEqual(before);
+  });
+
+  it('rejects a rename that collides with a different existing entry', async () => {
+    await savePlayer(A, 'Bob');
+    await savePlayer(A, 'Jordan');
+    const res = await renameSavedPlayer(A, 'Bob', 'jordan');
+    expect(res).toEqual({ ok: false, reason: 'conflict' });
+    expect((await getSavedPlayerNames(A)).sort()).toEqual(['Bob', 'Jordan']);
+  });
+
+  it('allows a case-only self-rename', async () => {
+    await savePlayer(A, 'bob', { method: 'venmo', handle: '@b' });
+    const res = await renameSavedPlayer(A, 'bob', 'Bob');
+    expect(res).toEqual({ ok: true });
+    const p = await getSavedPlayer(A, 'Bob');
+    expect(p?.name).toBe('Bob');
+    expect(p?.preferredPayment?.handle).toBe('@b');
+    expect((await getSavedPlayers(A)).length).toBe(1);
+  });
+
+  it('returns not-found when the old name has no entry', async () => {
+    const res = await renameSavedPlayer(A, 'Ghost', 'Casper');
+    expect(res).toEqual({ ok: false, reason: 'not-found' });
+    expect(await getSavedPlayers(A)).toEqual([]);
   });
 });
