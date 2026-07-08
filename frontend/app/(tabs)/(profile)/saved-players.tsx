@@ -24,6 +24,8 @@ import {
   deleteSavedPlayers,
   addSavedPlayers,
   loadSavedPlayers,
+  savedCapFor,
+  canAddMoreSavedPlayers,
   FREE_SAVED_CAP,
   PRO_SAVED_CAP,
   SavedPlayer,
@@ -45,10 +47,13 @@ function badgeText(p: SavedPlayer): string | null {
   return handle ? `${label} · ${formatHandleForDisplay(method, handle)}` : label;
 }
 
+const BULK_PAYWALL_MESSAGE = 'Upgrade to Pro to bulk-manage your saved players.';
+const CAP_PAYWALL_MESSAGE = `You've saved ${FREE_SAVED_CAP} players — the free limit. Upgrade to Pro to save up to ${PRO_SAVED_CAP}.`;
+
 export default function SavedPlayersScreen() {
   const { user, isPro, trialExpired } = useAuth();
   const uid = user?.uid ?? null;
-  const cap = isPro ? PRO_SAVED_CAP : FREE_SAVED_CAP;
+  const cap = savedCapFor(isPro);
 
   const [players, setPlayers] = useState<SavedPlayer[]>([]);
   const reload = useCallback(() => {
@@ -75,10 +80,14 @@ export default function SavedPlayersScreen() {
   const [adding, setAdding] = useState(false);
 
   const [showPaywall, setShowPaywall] = useState(false);
+  const [paywallMessage, setPaywallMessage] = useState(BULK_PAYWALL_MESSAGE);
   const requirePro = useCallback(
     (action: () => void) => {
       if (isPro) action();
-      else setShowPaywall(true);
+      else {
+        setPaywallMessage(BULK_PAYWALL_MESSAGE);
+        setShowPaywall(true);
+      }
     },
     [isPro],
   );
@@ -118,6 +127,19 @@ export default function SavedPlayersScreen() {
     setAddRows([{ name: '' }]);
     setShowAdd(true);
   }, []);
+  const handleAddPress = useCallback(() => {
+    if (canAddMoreSavedPlayers(players.length, isPro)) {
+      openAdd();
+    } else if (isPro) {
+      Alert.alert(
+        'Saved Players Full',
+        `You've reached the ${PRO_SAVED_CAP}-player limit. Delete some players to add more.`,
+      );
+    } else {
+      setPaywallMessage(CAP_PAYWALL_MESSAGE);
+      setShowPaywall(true);
+    }
+  }, [players.length, isPro, openAdd]);
   const updateRowName = (i: number, name: string) =>
     setAddRows(rows => rows.map((r, idx) => (idx === i ? { ...r, name } : r)));
   const addAnotherRow = () => setAddRows(rows => [...rows, { name: '' }]);
@@ -140,14 +162,24 @@ export default function SavedPlayersScreen() {
       if (added) parts.push(`${added} added`);
       if (updated) parts.push(`${updated} updated`);
       if (skippedFull) parts.push(`${skippedFull} skipped (list full)`);
-      Alert.alert('Saved Players', parts.join(' · ') || 'No changes.');
+      Alert.alert('Saved Players', parts.join(' · ') || 'No changes.', [
+        {
+          text: 'OK',
+          onPress: () => {
+            if (skippedFull > 0 && !isPro) {
+              setPaywallMessage(CAP_PAYWALL_MESSAGE);
+              setShowPaywall(true);
+            }
+          },
+        },
+      ]);
     } catch {
       setShowAdd(false);
       Alert.alert('Error', 'Could not add players. Please try again.');
     } finally {
       setAdding(false);
     }
-  }, [uid, adding, addRows, cap, reload]);
+  }, [uid, adding, addRows, cap, reload, isPro]);
 
   // Shared PaymentEditorModal target → synthetic Player (its player prop is init-only).
   // useMemo keyed on paymentTarget gives a STABLE reference: PaymentEditorModal re-seeds
@@ -264,7 +296,7 @@ export default function SavedPlayersScreen() {
         <View style={[styles.topSide, styles.topSideRight]}>
           {!selectMode && (
             <TouchableOpacity
-              onPress={() => requirePro(openAdd)}
+              onPress={handleAddPress}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
               <Ionicons name="add" size={26} color="#B072BB" />
@@ -272,6 +304,23 @@ export default function SavedPlayersScreen() {
           )}
         </View>
       </View>
+
+      {!isPro && !canAddMoreSavedPlayers(players.length, isPro) ? (
+        <TouchableOpacity
+          onPress={() => {
+            setPaywallMessage(CAP_PAYWALL_MESSAGE);
+            setShowPaywall(true);
+          }}
+        >
+          <Text style={[styles.capCounter, styles.capCounterFull]}>
+            {players.length} / {cap} · Upgrade for {PRO_SAVED_CAP}
+          </Text>
+        </TouchableOpacity>
+      ) : (
+        <Text style={styles.capCounter}>
+          {players.length} / {cap} saved
+        </Text>
+      )}
 
       <ScrollView contentContainerStyle={styles.scrollContent}>
         {sorted.length === 0 ? (
@@ -362,7 +411,7 @@ export default function SavedPlayersScreen() {
       <PaywallModal
         visible={showPaywall}
         onClose={() => setShowPaywall(false)}
-        triggerMessage="Upgrade to Pro to bulk-add and manage your saved players."
+        triggerMessage={paywallMessage}
         trialExpired={trialExpired}
       />
     </GestureHandlerRootView>
@@ -383,6 +432,15 @@ const styles = StyleSheet.create({
   topSideRight: { alignItems: 'flex-end' },
   topAction: { fontSize: 15, color: '#B072BB', fontWeight: '600' },
   title: { fontSize: 18, fontWeight: 'bold', color: '#FFFFFF', letterSpacing: 1 },
+  capCounter: {
+    fontSize: 11,
+    color: 'rgba(255,255,255,0.35)',
+    textAlign: 'center',
+    fontFamily: 'SpaceMono',
+    letterSpacing: 1,
+    paddingBottom: 4,
+  },
+  capCounterFull: { color: '#B072BB' },
   scrollContent: { padding: 20, paddingTop: 8, paddingBottom: 40, gap: 10 },
   row: {
     flexDirection: 'row',
