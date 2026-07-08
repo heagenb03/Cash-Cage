@@ -123,6 +123,7 @@ export async function createUserDocument(
       totalGamesPlayed: 0,
       totalMoneyTracked: 0,
       totalPlayersHosted: 0,
+      biggestPot: 0,
       proSince: null,
       trialEndsAt: new Date(Date.now() + TRIAL_DURATION_DAYS * 24 * 60 * 60 * 1000),
       currency: 'USD',
@@ -267,16 +268,24 @@ export async function deleteCurrentUser(): Promise<void> {
 // Profile Stats
 // ---------------------------------------------------------------------------
 
-/** Atomically increment profile stat counters on the user document. */
+/** Atomically increment profile stat counters and raise biggestPot on the user document. */
 export async function incrementProfileStats(
   uid: string,
-  stats: { gamesPlayed: number; moneyTracked: number; playersHosted: number },
+  stats: { gamesPlayed: number; moneyTracked: number; playersHosted: number; gamePot: number },
 ): Promise<void> {
   const userRef = doc(db, 'users', uid);
-  await updateDoc(userRef, {
-    totalGamesPlayed: increment(stats.gamesPlayed),
-    totalMoneyTracked: increment(stats.moneyTracked),
-    totalPlayersHosted: increment(stats.playersHosted),
+  await runTransaction(db, async (transaction) => {
+    const snapshot = await transaction.get(userRef);
+    const currentBiggest =
+      snapshot.exists() && typeof snapshot.data().biggestPot === 'number'
+        ? (snapshot.data().biggestPot as number)
+        : 0;
+    transaction.update(userRef, {
+      totalGamesPlayed: increment(stats.gamesPlayed),
+      totalMoneyTracked: increment(stats.moneyTracked),
+      totalPlayersHosted: increment(stats.playersHosted),
+      biggestPot: Math.max(currentBiggest, stats.gamePot),
+    });
   });
 }
 

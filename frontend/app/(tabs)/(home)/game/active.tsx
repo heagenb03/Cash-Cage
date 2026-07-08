@@ -475,6 +475,7 @@ export default function ActiveGameScreen() {
             gamesPlayed: 1,
             moneyTracked: Math.round(totalPot * 100) / 100,
             playersHosted: playerCount,
+            gamePot: Math.round(totalPot * 100) / 100,
           }).catch(err => console.warn('Profile stats increment failed:', err));
         }
       }

@@ -43,8 +43,9 @@ jest.mock('firebase/functions', () => ({
 import {
   deserializeFirestoreGame,
   fetchSavedPlayersFromFirestore,
+  incrementProfileStats,
 } from '@/services/firebaseService';
-import { getDoc } from 'firebase/firestore';
+import { getDoc, runTransaction, increment } from 'firebase/firestore';
 
 describe('deserializeFirestoreGame', () => {
   const baseDoc = {
@@ -124,5 +125,53 @@ describe('fetchSavedPlayersFromFirestore', () => {
       data: () => ({}),
     });
     expect(await fetchSavedPlayersFromFirestore('userA')).toEqual([]);
+  });
+});
+
+describe('incrementProfileStats — biggestPot', () => {
+  beforeEach(() => {
+    (increment as jest.Mock).mockImplementation((n: number) => ({ __increment: n }));
+  });
+
+  function runWith(existingBiggest: unknown, gamePot: number) {
+    const update = jest.fn();
+    (runTransaction as jest.Mock).mockImplementationOnce(async (_db, cb) => {
+      await cb({
+        get: async () => ({
+          exists: () => true,
+          data: () => (existingBiggest === undefined ? {} : { biggestPot: existingBiggest }),
+        }),
+        update,
+      });
+    });
+    return { update, gamePot };
+  }
+
+  it('raises biggestPot when the new pot is larger', async () => {
+    const { update } = runWith(500, 1200);
+    await incrementProfileStats('u1', { gamesPlayed: 1, moneyTracked: 200, playersHosted: 4, gamePot: 1200 });
+    expect(update).toHaveBeenCalledWith(undefined, expect.objectContaining({ biggestPot: 1200 }));
+  });
+
+  it('holds biggestPot when the new pot is smaller', async () => {
+    const { update } = runWith(1500, 300);
+    await incrementProfileStats('u1', { gamesPlayed: 1, moneyTracked: 300, playersHosted: 3, gamePot: 300 });
+    expect(update).toHaveBeenCalledWith(undefined, expect.objectContaining({ biggestPot: 1500 }));
+  });
+
+  it('initializes biggestPot from 0 when the field is absent', async () => {
+    const { update } = runWith(undefined, 800);
+    await incrementProfileStats('u1', { gamesPlayed: 1, moneyTracked: 800, playersHosted: 5, gamePot: 800 });
+    expect(update).toHaveBeenCalledWith(undefined, expect.objectContaining({ biggestPot: 800 }));
+  });
+
+  it('still increments the three counters', async () => {
+    const { update } = runWith(0, 100);
+    await incrementProfileStats('u1', { gamesPlayed: 1, moneyTracked: 100, playersHosted: 2, gamePot: 100 });
+    expect(update).toHaveBeenCalledWith(undefined, expect.objectContaining({
+      totalGamesPlayed: { __increment: 1 },
+      totalMoneyTracked: { __increment: 100 },
+      totalPlayersHosted: { __increment: 2 },
+    }));
   });
 });
