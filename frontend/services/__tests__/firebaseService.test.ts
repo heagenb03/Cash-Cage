@@ -45,7 +45,7 @@ import {
   fetchSavedPlayersFromFirestore,
   incrementProfileStats,
 } from '@/services/firebaseService';
-import { getDoc, runTransaction, increment } from 'firebase/firestore';
+import { getDoc, runTransaction, increment, updateDoc } from 'firebase/firestore';
 
 describe('deserializeFirestoreGame', () => {
   const baseDoc = {
@@ -131,8 +131,12 @@ describe('fetchSavedPlayersFromFirestore', () => {
 describe('incrementProfileStats — biggestPot', () => {
   beforeEach(() => {
     (increment as jest.Mock).mockImplementation((n: number) => ({ __increment: n }));
+    (updateDoc as jest.Mock).mockClear();
+    (updateDoc as jest.Mock).mockResolvedValue(undefined);
   });
 
+  // Counters are now written via a separate offline-durable `updateDoc` call
+  // that runs before the biggestPot transaction — see incrementProfileStats.
   function runWith(existingBiggest: unknown, gamePot: number) {
     const update = jest.fn();
     (runTransaction as jest.Mock).mockImplementationOnce(async (_db, cb) => {
@@ -150,28 +154,44 @@ describe('incrementProfileStats — biggestPot', () => {
   it('raises biggestPot when the new pot is larger', async () => {
     const { update } = runWith(500, 1200);
     await incrementProfileStats('u1', { gamesPlayed: 1, moneyTracked: 200, playersHosted: 4, gamePot: 1200 });
-    expect(update).toHaveBeenCalledWith(undefined, expect.objectContaining({ biggestPot: 1200 }));
+    expect(update.mock.calls[0][1]).toEqual(expect.objectContaining({ biggestPot: 1200 }));
   });
 
   it('holds biggestPot when the new pot is smaller', async () => {
     const { update } = runWith(1500, 300);
     await incrementProfileStats('u1', { gamesPlayed: 1, moneyTracked: 300, playersHosted: 3, gamePot: 300 });
-    expect(update).toHaveBeenCalledWith(undefined, expect.objectContaining({ biggestPot: 1500 }));
+    expect(update.mock.calls[0][1]).toEqual(expect.objectContaining({ biggestPot: 1500 }));
   });
 
   it('initializes biggestPot from 0 when the field is absent', async () => {
     const { update } = runWith(undefined, 800);
     await incrementProfileStats('u1', { gamesPlayed: 1, moneyTracked: 800, playersHosted: 5, gamePot: 800 });
-    expect(update).toHaveBeenCalledWith(undefined, expect.objectContaining({ biggestPot: 800 }));
+    expect(update.mock.calls[0][1]).toEqual(expect.objectContaining({ biggestPot: 800 }));
   });
 
-  it('still increments the three counters', async () => {
-    const { update } = runWith(0, 100);
+  it('still increments the three counters via updateDoc', async () => {
+    runWith(0, 100);
     await incrementProfileStats('u1', { gamesPlayed: 1, moneyTracked: 100, playersHosted: 2, gamePot: 100 });
-    expect(update).toHaveBeenCalledWith(undefined, expect.objectContaining({
+    expect((updateDoc as jest.Mock).mock.calls[0][1]).toEqual(expect.objectContaining({
       totalGamesPlayed: { __increment: 1 },
       totalMoneyTracked: { __increment: 100 },
       totalPlayersHosted: { __increment: 2 },
+    }));
+  });
+
+  it('preserves the three counters when the biggestPot transaction rejects offline (durability regression guard)', async () => {
+    (runTransaction as jest.Mock).mockRejectedValueOnce(new Error('offline'));
+
+    await expect(
+      incrementProfileStats('u1', { gamesPlayed: 1, moneyTracked: 150, playersHosted: 3, gamePot: 900 }),
+    ).rejects.toThrow('offline');
+
+    // The counters must have been written via updateDoc BEFORE the
+    // transaction rejected — that's the whole point of the split.
+    expect((updateDoc as jest.Mock).mock.calls[0][1]).toEqual(expect.objectContaining({
+      totalGamesPlayed: { __increment: 1 },
+      totalMoneyTracked: { __increment: 150 },
+      totalPlayersHosted: { __increment: 3 },
     }));
   });
 });

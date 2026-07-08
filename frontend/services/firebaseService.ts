@@ -268,24 +268,40 @@ export async function deleteCurrentUser(): Promise<void> {
 // Profile Stats
 // ---------------------------------------------------------------------------
 
-/** Atomically increment profile stat counters and raise biggestPot on the user document. */
+/**
+ * Increment profile stat counters and raise biggestPot on the user document.
+ *
+ * Split into two writes on purpose: the three counters use offline-durable
+ * `updateDoc(...increment())` writes, which Firestore serves from cache and
+ * queues in the offline write buffer. `biggestPot` needs a read-modify-write
+ * for `max` (no offline-safe FieldValue sentinel exists for that), so it is
+ * isolated in its own `runTransaction` call — transactions require a live
+ * server round-trip and are NOT queued offline. The counters are written
+ * first so they persist even if the game completes offline and the
+ * biggestPot transaction rejects.
+ */
 export async function incrementProfileStats(
   uid: string,
   stats: { gamesPlayed: number; moneyTracked: number; playersHosted: number; gamePot: number },
 ): Promise<void> {
   const userRef = doc(db, 'users', uid);
+
+  // Offline-durable: cached locally and queued for sync if there's no connection.
+  await updateDoc(userRef, {
+    totalGamesPlayed: increment(stats.gamesPlayed),
+    totalMoneyTracked: increment(stats.moneyTracked),
+    totalPlayersHosted: increment(stats.playersHosted),
+  });
+
+  // Online-only: requires a live read-modify-write, so it runs after and
+  // separately from the counters so its failure doesn't lose them.
   await runTransaction(db, async (transaction) => {
     const snapshot = await transaction.get(userRef);
     const currentBiggest =
-      snapshot.exists() && typeof snapshot.data().biggestPot === 'number'
-        ? (snapshot.data().biggestPot as number)
+      typeof snapshot.data()?.biggestPot === 'number'
+        ? (snapshot.data()!.biggestPot as number)
         : 0;
-    transaction.update(userRef, {
-      totalGamesPlayed: increment(stats.gamesPlayed),
-      totalMoneyTracked: increment(stats.moneyTracked),
-      totalPlayersHosted: increment(stats.playersHosted),
-      biggestPot: Math.max(currentBiggest, stats.gamePot),
-    });
+    transaction.update(userRef, { biggestPot: Math.max(currentBiggest, stats.gamePot) });
   });
 }
 
