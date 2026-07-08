@@ -34,8 +34,10 @@ interface UserDocument {
   totalGamesPlayed?: number;
   totalMoneyTracked?: number;
   totalPlayersHosted?: number;
+  biggestPot?: number;
   proSince?: Date | null;
   trialEndsAt?: Date | null;
+  createdAt?: Date | null;
   currency?: string;
 }
 
@@ -82,6 +84,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           ...data,
           proSince: data.proSince?.toDate?.() ?? data.proSince ?? null,
           trialEndsAt: data.trialEndsAt?.toDate?.() ?? data.trialEndsAt ?? null,
+          createdAt: data.createdAt?.toDate?.() ?? data.createdAt ?? null,
         } as UserDocument);
       } else {
         setUserDoc(null);
