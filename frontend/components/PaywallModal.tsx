@@ -267,9 +267,9 @@ export default function PaywallModal({ visible, onClose, triggerMessage, trialEx
                           style={styles.planRow}
                           onPress={() => setSelectedPeriod(row.key)}
                           activeOpacity={0.8}
-                          accessibilityRole="button"
-                          accessibilityState={{ selected }}
-                          accessibilityLabel={`${row.period} plan, ${getDisplayPrice(row.key)}`}
+                          accessibilityRole="radio"
+                          accessibilityState={{ checked: selected }}
+                          accessibilityLabel={`${row.period} plan, ${getDisplayPrice(row.key)}, ${row.detail}${row.bestValue ? ', Best Value' : ''}`}
                         >
                           {selected && <View style={styles.planSelectedBar} />}
                           <View style={styles.planRowLeft}>
