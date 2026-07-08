@@ -17,6 +17,19 @@ function keyFor(uid: string): string {
 export const FREE_SAVED_CAP = 15;
 export const PRO_SAVED_CAP = 200;
 
+/** The effective saved-players cap for a tier. */
+export function savedCapFor(isPro: boolean): number {
+  return isPro ? PRO_SAVED_CAP : FREE_SAVED_CAP;
+}
+
+/**
+ * Whether a NEW saved player can still be added at this count. Gate on count vs
+ * the tier cap — never on tier alone: free users may add until their cap is full.
+ */
+export function canAddMoreSavedPlayers(count: number, isPro: boolean): boolean {
+  return count < savedCapFor(isPro);
+}
+
 export interface SavedPlayer {
   name: string;
   preferredPayment?: PreferredPayment;

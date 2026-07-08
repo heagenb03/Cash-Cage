@@ -21,6 +21,8 @@ import {
   SavedPlayer,
   FREE_SAVED_CAP,
   PRO_SAVED_CAP,
+  savedCapFor,
+  canAddMoreSavedPlayers,
 } from '@/services/savedPlayersService';
 import { fetchSavedPlayersFromFirestore } from '@/services/firebaseService';
 
@@ -39,6 +41,29 @@ describe('account isolation (the bug)', () => {
     await savePlayer(A, 'Alice');
     expect(await getSavedPlayerNames(B)).toEqual([]);
     expect(await getSavedPlayerNames(A)).toEqual(['Alice']);
+  });
+});
+
+describe('manager-screen add gating (cap-based, not tier-based)', () => {
+  it('resolves the free cap for non-pro and the pro cap for pro', () => {
+    expect(savedCapFor(false)).toBe(FREE_SAVED_CAP);
+    expect(savedCapFor(true)).toBe(PRO_SAVED_CAP);
+  });
+
+  it('lets a free user add while under the cap — even with zero saved players', () => {
+    expect(canAddMoreSavedPlayers(0, false)).toBe(true);
+    expect(canAddMoreSavedPlayers(FREE_SAVED_CAP - 1, false)).toBe(true);
+  });
+
+  it('blocks a free user at or over the cap', () => {
+    expect(canAddMoreSavedPlayers(FREE_SAVED_CAP, false)).toBe(false);
+    expect(canAddMoreSavedPlayers(FREE_SAVED_CAP + 5, false)).toBe(false);
+  });
+
+  it('bounds a pro user only by the pro cap', () => {
+    expect(canAddMoreSavedPlayers(FREE_SAVED_CAP, true)).toBe(true);
+    expect(canAddMoreSavedPlayers(PRO_SAVED_CAP - 1, true)).toBe(true);
+    expect(canAddMoreSavedPlayers(PRO_SAVED_CAP, true)).toBe(false);
   });
 });
 
