@@ -780,7 +780,7 @@ export default function ActiveGameScreen() {
                   disabled={isPro}
                   onPress={() => {
                     // iOS shows one native modal at a time: close this one, then open the paywall
-                    // (same direct close-then-open pattern as the completion → solving flow).
+                    // (same direct close-then-open pattern as the distortion → completion modal swap).
                     setShowAddPlayer(false);
                     setPaywallMessage(SAVED_CAP_PAYWALL_MESSAGE);
                     setShowPaywall(true);
