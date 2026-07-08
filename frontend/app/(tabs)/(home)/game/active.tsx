@@ -12,7 +12,7 @@ import { Player, PlayerBalance, Validation, PreferredPayment } from '@/types/gam
 import { getNetBalanceColor, formatNetBalanceDisplay } from '@/utils/formatUtils';
 import { incrementProfileStats } from '@/services/firebaseService';
 import { isValidNumericInput } from '@/utils/validationUtils';
-import { savePlayerName, getSavedPlayer, savePlayer, loadSavedPlayers, SavedPlayer, FREE_SAVED_CAP, PRO_SAVED_CAP } from '@/services/savedPlayersService';
+import { savePlayerName, getSavedPlayer, savePlayer, loadSavedPlayers, SavedPlayer, FREE_SAVED_CAP, PRO_SAVED_CAP, savedCapFor, canAddMoreSavedPlayers } from '@/services/savedPlayersService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import PlayerCardActive from '@/components/PlayerCardActive';
 import PlayerCardCompleted from '@/components/PlayerCardCompleted';
@@ -148,6 +148,9 @@ function SolvingOverlay() {
   );
 }
 
+const PLAYERS_PAYWALL_MESSAGE = 'Upgrade to Pro for unlimited players per game.';
+const SAVED_CAP_PAYWALL_MESSAGE = `You've saved ${FREE_SAVED_CAP} players — the free limit. Upgrade to Pro to save up to ${PRO_SAVED_CAP}.`;
+
 export default function ActiveGameScreen() {
   const { activeGame, updateGame, setActiveGame, createGame } = useGame();
   const { user, isPro } = useAuth();
@@ -198,6 +201,8 @@ export default function ActiveGameScreen() {
   const [showRenameModal, setShowRenameModal] = useState(false);
   const [renamedPlayerName, setRenamedPlayerName] = useState('');
   const [showPaywall, setShowPaywall] = useState(false);
+  const [paywallMessage, setPaywallMessage] = useState(PLAYERS_PAYWALL_MESSAGE);
+  const [savePlayerToggle, setSavePlayerToggle] = useState(true);
   const [savedPlayers, setSavedPlayers] = useState<string[]>([]);
   const [playerSuggestions, setPlayerSuggestions] = useState<string[]>([]);
   const [renameSuggestions, setRenameSuggestions] = useState<string[]>([]);
@@ -235,7 +240,9 @@ export default function ActiveGameScreen() {
     const idx = activeGame.players.findIndex(p => p.id === paymentPlayer.id);
     if (idx !== -1) activeGame.players[idx] = { ...activeGame.players[idx], preferredPayment: pref };
     await updateGame(activeGame);
-    if (uid) savePlayer(uid, paymentPlayer.name, pref, isPro ? PRO_SAVED_CAP : FREE_SAVED_CAP).catch(() => {});
+    // Update-only: setting a payment in-game must never create/resurrect a saved
+    // entry (it would silently bypass the opt-out toggle and silently fail at cap).
+    if (uid) savePlayer(uid, paymentPlayer.name, pref, savedCapFor(isPro), { updateOnly: true }).catch(() => {});
     setShowPaymentEditor(false);
     setPaymentPlayer(null);
   };
@@ -302,6 +309,12 @@ export default function ActiveGameScreen() {
   const activePlayers = activeGame.players.filter(p => !p.completedAt);
   const completedPlayers = activeGame.players.filter(p => p.completedAt);
 
+  // Save-toggle state for the Add Player modal (spec: the cap is never silent).
+  const typedNameLower = newPlayerName.trim().toLowerCase();
+  const nameAlreadySaved =
+    typedNameLower.length > 0 && savedPlayers.some(n => n.toLowerCase() === typedNameLower);
+  const savedListFull = !canAddMoreSavedPlayers(savedPlayers.length, isPro);
+
   const handleAddPlayer = async () => {
     if (!newPlayerName.trim()) {
       Alert.alert('Error', 'Please enter a player name');
@@ -336,7 +349,11 @@ export default function ActiveGameScreen() {
     }
 
     await updateGame(activeGame);
-    if (uid) savePlayerName(uid, newPlayerName.trim(), isPro ? PRO_SAVED_CAP : FREE_SAVED_CAP).catch(() => {});
+    // Already-saved names always refresh (recency/updatedAt). New names save only
+    // when the user left the toggle ON and there is room — no silent cap skips.
+    if (uid && (nameAlreadySaved || (savePlayerToggle && !savedListFull))) {
+      savePlayerName(uid, newPlayerName.trim(), savedCapFor(isPro)).catch(() => {});
+    }
     setNewPlayerName('');
     setNewPlayerBuyIn('');
     setPlayerSuggestions([]);
@@ -636,9 +653,11 @@ export default function ActiveGameScreen() {
             label="Players"
             onAction={() => {
               if (!isPro && activeGame.players.length >= 12) {
+                setPaywallMessage(PLAYERS_PAYWALL_MESSAGE);
                 setShowPaywall(true);
               } else {
                 refreshSavedNames();
+                setSavePlayerToggle(true); // toggle defaults ON each time the modal opens
                 setShowAddPlayer(true);
               }
             }}
@@ -754,6 +773,34 @@ export default function ActiveGameScreen() {
               returnKeyType="done"
               onSubmitEditing={handleAddPlayer}
             />
+            {!nameAlreadySaved &&
+              (savedListFull ? (
+                <TouchableOpacity
+                  style={styles.saveToggleRow}
+                  disabled={isPro}
+                  onPress={() => {
+                    // iOS shows one native modal at a time: close this one, then open the paywall
+                    // (same direct close-then-open pattern as the completion → solving flow).
+                    setShowAddPlayer(false);
+                    setPaywallMessage(SAVED_CAP_PAYWALL_MESSAGE);
+                    setShowPaywall(true);
+                  }}
+                >
+                  <Ionicons name="lock-closed" size={14} color="#B072BB" />
+                  <Text style={styles.saveToggleFullText}>
+                    Saved players full · {savedPlayers.length}/{savedCapFor(isPro)}
+                  </Text>
+                </TouchableOpacity>
+              ) : (
+                <TouchableOpacity style={styles.saveToggleRow} onPress={() => setSavePlayerToggle(v => !v)}>
+                  <Ionicons
+                    name={savePlayerToggle ? 'checkbox' : 'square-outline'}
+                    size={18}
+                    color={savePlayerToggle ? '#B072BB' : '#666'}
+                  />
+                  <Text style={styles.saveToggleText}>Save player</Text>
+                </TouchableOpacity>
+              ))}
             <View style={styles.modalButtons}>
               <ModalButton
                 variant="cancel"
@@ -1062,7 +1109,7 @@ export default function ActiveGameScreen() {
       <PaywallModal
         visible={showPaywall}
         onClose={() => setShowPaywall(false)}
-        triggerMessage="Upgrade to Pro for unlimited players per game."
+        triggerMessage={paywallMessage}
       />
 
       {/* Cash Unit Picker Modal */}
@@ -1284,6 +1331,14 @@ const styles = StyleSheet.create({
     width: '100%',
     backgroundColor: 'transparent',
   },
+  saveToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 16,
+  },
+  saveToggleText: { fontSize: 14, color: 'rgba(255,255,255,0.8)' },
+  saveToggleFullText: { fontSize: 13, color: '#B072BB', fontFamily: 'SpaceMono' },
   validationBox: {
     flexDirection: 'row',
     backgroundColor: '#2A0A0A',
