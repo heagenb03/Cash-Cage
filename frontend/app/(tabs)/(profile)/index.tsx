@@ -1,8 +1,7 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import {
   StyleSheet,
   ScrollView,
-  Image,
   Platform,
   TouchableOpacity,
 } from 'react-native';
@@ -28,18 +27,26 @@ export default function AccountScreen() {
 
   const [showPaywall, setShowPaywall] = useState(false);
 
-  // Derive initials from display name for avatar fallback
-  const getInitials = useCallback((): string => {
-    const name = userDoc?.displayName ?? user?.displayName ?? '';
-    if (!name) return '?';
-    const parts = name.trim().split(/\s+/);
-    if (parts.length === 1) return parts[0][0].toUpperCase();
-    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-  }, [userDoc, user]);
-
   const displayName = userDoc?.displayName || user?.displayName || 'Anonymous';
   const email = userDoc?.email || user?.email || '';
-  const photoURL = userDoc?.photoURL || user?.photoURL || null;
+  const isFree = !isPro && !isTrialing;
+
+  // Stat values — all all-time-accurate (counters + derived from counters).
+  const gamesPlayed = userDoc?.totalGamesPlayed ?? 0;
+  const moneyTracked = userDoc?.totalMoneyTracked ?? 0;
+  const playersHosted = userDoc?.totalPlayersHosted ?? 0;
+  const biggestPot = userDoc?.biggestPot ?? 0;
+  const avgPot = gamesPlayed > 0 ? moneyTracked / gamesPlayed : 0;
+  const hostingSince = userDoc?.createdAt ? formatMonthYear(userDoc.createdAt, meta.locale) : '—';
+
+  const stats: { label: string; value: string }[] = [
+    { label: 'GAMES', value: formatStatNumber(gamesPlayed) },
+    { label: 'TRACKED', value: formatAmountCompact(moneyTracked) },
+    { label: 'PLAYERS', value: formatStatNumber(playersHosted) },
+    { label: 'BIGGEST POT', value: biggestPot > 0 ? formatAmountCompact(biggestPot) : '—' },
+    { label: 'AVG POT', value: gamesPlayed > 0 ? formatAmountCompact(avgPot) : '—' },
+    { label: 'HOSTING SINCE', value: hostingSince },
+  ];
 
   return (
     <View style={styles.container}>
@@ -53,31 +60,26 @@ export default function AccountScreen() {
           onSettingsPress={() => router.push('/(tabs)/(profile)/settings' as any)}
         />
 
-        {/* Centered profile row */}
-        <View style={styles.profileRow}>
-          {photoURL ? (
-            <Image
-              source={{ uri: photoURL }}
-              style={styles.miniAvatar}
-              accessibilityLabel="Profile photo"
-            />
-          ) : (
-            <View style={styles.miniAvatarInitials}>
-              <Text style={styles.miniInitialsText}>{getInitials()}</Text>
+        {/* Identity hero — text only, no avatar */}
+        <View style={styles.hero}>
+          <Text style={styles.heroName}>{displayName}</Text>
+          {!!email && <Text style={styles.heroEmail}>{email}</Text>}
+          {(isPro || isTrialing) && (
+            <View style={styles.tierPill}>
+              <Ionicons name="star" size={12} color="#B072BB" />
+              <Text style={styles.tierPillText}>{isTrialing ? 'TRIAL' : 'PRO'}</Text>
             </View>
           )}
-          <Text style={styles.profileName}>{displayName}</Text>
-          {!!email && <Text style={styles.profileEmail}>{email}</Text>}
         </View>
 
-        {/* Upgrade CTA — only shown for free users (not trialing, not Pro) */}
-        {!isPro && (
-          <View style={styles.upgradeCard}>
-            <View style={styles.upgradeHeader}>
-              <Ionicons name="star" size={20} color="#B072BB" style={styles.upgradeIcon} />
-              <Text style={styles.upgradeTitle}>CASH CAGE PRO</Text>
+        {/* Membership card — free */}
+        {isFree && (
+          <View style={styles.membershipCardUpgrade}>
+            <View style={styles.membershipHeader}>
+              <Ionicons name="star" size={20} color="#B072BB" style={styles.membershipIcon} />
+              <Text style={styles.membershipTitle}>CASH CAGE PRO</Text>
             </View>
-            <Text style={styles.upgradeFeatures}>
+            <Text style={styles.membershipFeatures}>
               Unlimited game history · Unlimited players · All devices
             </Text>
             <Button
@@ -91,57 +93,39 @@ export default function AccountScreen() {
           </View>
         )}
 
-        {/* Trial badge — shown during active trial */}
+        {/* Membership card — active trial */}
         {isTrialing && (
-          <View style={styles.trialCard}>
-            <View style={styles.trialHeader}>
+          <View style={styles.membershipCardTrial}>
+            <View style={styles.membershipHeader}>
               <Ionicons name="star" size={16} color="#B072BB" />
-              <Text style={styles.trialBadgeText}>PRO TRIAL</Text>
+              <Text style={styles.membershipBadgeText}>PRO TRIAL</Text>
             </View>
-            <Text style={styles.trialCountdown}>{getTrialLabel(trialDaysRemaining)}</Text>
+            <Text style={styles.membershipCountdown}>{getTrialLabel(trialDaysRemaining)}</Text>
             <TouchableOpacity onPress={() => setShowPaywall(true)} activeOpacity={0.7}>
-              <Text style={styles.trialUpgradeLink}>Upgrade to keep Pro</Text>
+              <Text style={styles.membershipLink}>Upgrade to keep Pro</Text>
             </TouchableOpacity>
           </View>
         )}
 
-        {/* Pro member badge — only shown for paid Pro users */}
+        {/* Membership card — paid Pro */}
         {isPro && !isTrialing && (
-          <View style={styles.proSinceCard}>
+          <View style={styles.membershipCardRow}>
             <Ionicons name="star" size={16} color="#B072BB" />
-            <Text style={styles.proSinceText}>
+            <Text style={styles.membershipRowText}>
               Pro member{userDoc?.proSince ? ` since ${formatMonthYear(userDoc.proSince, meta.locale)}` : ''}
             </Text>
           </View>
         )}
 
-        {/* Stats section header */}
-        <View style={styles.statsHeader}>
-          <HudSectionHeader
-            label="Stats"
-            centered={true}
-          />
-        </View>
-
-        {/* Stats HUD strip */}
-        <View style={styles.statsStrip}>
-          <View style={styles.statsStripAccent} />
-          <View style={styles.statsStripContent}>
-            <View style={styles.statCell}>
-              <Text style={styles.statLabel}>GAMES</Text>
-              <Text style={styles.statValue}>{formatStatNumber(userDoc?.totalGamesPlayed ?? 0)}</Text>
+        {/* Stats */}
+        <HudSectionHeader label="Stats" centered={true} />
+        <View style={styles.statsGrid}>
+          {stats.map((s) => (
+            <View key={s.label} style={styles.statTile}>
+              <Text style={styles.statLabel}>{s.label}</Text>
+              <Text style={styles.statValue}>{s.value}</Text>
             </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statCell}>
-              <Text style={styles.statLabel}>TRACKED</Text>
-              <Text style={styles.statValue}>{formatAmountCompact(userDoc?.totalMoneyTracked ?? 0)}</Text>
-            </View>
-            <View style={styles.statDivider} />
-            <View style={styles.statCell}>
-              <Text style={styles.statLabel}>PLAYERS</Text>
-              <Text style={styles.statValue}>{formatStatNumber(userDoc?.totalPlayersHosted ?? 0)}</Text>
-            </View>
-          </View>
+          ))}
         </View>
 
       </ScrollView>
@@ -172,141 +156,65 @@ const styles = StyleSheet.create({
     paddingBottom: 40,
   },
 
-  // Centered profile row
-  profileRow: {
+  // Identity hero
+  hero: {
     alignItems: 'center',
-    paddingVertical: 16,
+    paddingVertical: 20,
     marginBottom: 20,
     backgroundColor: 'transparent',
   },
-  miniAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    marginBottom: 8,
-  },
-  miniAvatarInitials: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#49264F',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 8,
-  },
-  miniInitialsText: {
-    fontSize: 14,
+  heroName: {
+    fontSize: 22,
     fontWeight: '700',
     color: '#FFFFFF',
     backgroundColor: 'transparent',
   },
-  profileName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.9)',
+  heroEmail: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.45)',
+    marginTop: 4,
     backgroundColor: 'transparent',
   },
-  profileEmail: {
+  tierPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginTop: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(176,114,187,0.4)',
+    backgroundColor: 'rgba(176,114,187,0.08)',
+  },
+  tierPillText: {
     fontSize: 11,
-    color: 'rgba(255,255,255,0.4)',
-    marginTop: 2,
-    backgroundColor: 'transparent',
-  },
-
-  // Stats section
-  statsHeader: {
-    marginTop: 20,
-  },
-
-  // Stats HUD strip
-  statsStrip: {
-    backgroundColor: '#161616',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#242424',
-    borderTopColor: 'rgba(176,114,187,0.2)',
-    overflow: 'hidden',
-    marginBottom: 20,
-  },
-  statsStripAccent: {
-    height: 1,
-    backgroundColor: 'rgba(176,114,187,0.15)',
-  },
-  statsStripContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 8,
-    backgroundColor: 'transparent',
-  },
-  statCell: {
-    flex: 1,
-    alignItems: 'center',
-    backgroundColor: 'transparent',
-  },
-  statLabel: {
-    fontSize: 9,
     fontWeight: '700',
-    color: 'rgba(176,114,187,0.65)',
-    letterSpacing: 1.5,
-    marginBottom: 4,
-    backgroundColor: 'transparent',
-  },
-  statValue: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: 'rgba(255,255,255,0.9)',
-    backgroundColor: 'transparent',
-    ...Platform.select({
-      ios: { fontFamily: 'SpaceMono' },
-      android: { fontFamily: 'SpaceMono' },
-      default: { fontFamily: 'monospace' },
-    }),
-  },
-  statDivider: {
-    width: 1,
-    height: 28,
-    backgroundColor: '#2A2A2A',
-  },
-
-  // Trial badge
-  trialCard: {
-    backgroundColor: '#1A1A1A',
-    borderRadius: 12,
-    padding: 14,
-    alignItems: 'center',
-    gap: 6,
-    borderWidth: 1,
-    borderColor: 'rgba(176,114,187,0.3)',
-  },
-  trialHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'transparent',
-  },
-  trialBadgeText: {
-    fontSize: 12,
-    fontWeight: 'bold',
     color: '#B072BB',
     letterSpacing: 2,
     backgroundColor: 'transparent',
   },
-  trialCountdown: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.6)',
-    backgroundColor: 'transparent',
-  },
-  trialUpgradeLink: {
-    fontSize: 12,
-    color: '#B072BB',
-    textDecorationLine: 'underline',
-    backgroundColor: 'transparent',
-  },
 
-  // Pro member badge
-  proSinceCard: {
+  // Membership cards (unified radius 12, #1A1A1A, purple border)
+  membershipCardUpgrade: {
+    backgroundColor: '#1A1A1A',
+    borderRadius: 12,
+    padding: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(176,114,187,0.4)',
+    marginBottom: 20,
+  },
+  membershipCardTrial: {
+    backgroundColor: '#1A1A1A',
+    borderRadius: 12,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: 'rgba(176,114,187,0.3)',
+    alignItems: 'center',
+    gap: 6,
+    marginBottom: 20,
+  },
+  membershipCardRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -316,45 +224,93 @@ const styles = StyleSheet.create({
     gap: 8,
     borderWidth: 1,
     borderColor: 'rgba(176,114,187,0.2)',
+    marginBottom: 20,
   },
-  proSinceText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: 'rgba(255,255,255,0.6)',
-    backgroundColor: 'transparent',
-  },
-
-  // Upgrade CTA card
-  upgradeCard: {
-    backgroundColor: '#1A1A1A',
-    borderRadius: 16,
-    padding: 20,
-    borderWidth: 1,
-    borderColor: 'rgba(176,114,187,0.4)',
-  },
-  upgradeHeader: {
+  membershipHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 10,
     backgroundColor: 'transparent',
   },
-  upgradeIcon: {
+  membershipIcon: {
     marginRight: 8,
   },
-  upgradeTitle: {
+  membershipTitle: {
     fontSize: 16,
     fontWeight: 'bold',
     color: '#B072BB',
     letterSpacing: 2,
     backgroundColor: 'transparent',
   },
-  upgradeFeatures: {
+  membershipBadgeText: {
+    fontSize: 12,
+    fontWeight: 'bold',
+    color: '#B072BB',
+    letterSpacing: 2,
+    backgroundColor: 'transparent',
+  },
+  membershipFeatures: {
     fontSize: 12,
     color: 'rgba(255,255,255,0.5)',
     textAlign: 'center',
     marginBottom: 16,
     lineHeight: 18,
     backgroundColor: 'transparent',
+  },
+  membershipCountdown: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.6)',
+    backgroundColor: 'transparent',
+  },
+  membershipLink: {
+    fontSize: 12,
+    color: '#B072BB',
+    textDecorationLine: 'underline',
+    backgroundColor: 'transparent',
+  },
+  membershipRowText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: 'rgba(255,255,255,0.6)',
+    backgroundColor: 'transparent',
+  },
+
+  // Stats grid (2 columns)
+  statsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    backgroundColor: 'transparent',
+  },
+  statTile: {
+    width: '48%',
+    backgroundColor: '#1A1A1A',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#2A2A2A',
+    paddingVertical: 16,
+    paddingHorizontal: 14,
+    marginBottom: 12,
+  },
+  statLabel: {
+    fontSize: 9,
+    fontWeight: '700',
+    color: 'rgba(176,114,187,0.65)',
+    letterSpacing: 1.5,
+    marginBottom: 6,
+    backgroundColor: 'transparent',
+  },
+  statValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: 'rgba(255,255,255,0.92)',
+    backgroundColor: 'transparent',
+    ...Platform.select({
+      ios: { fontFamily: 'SpaceMono' },
+      android: { fontFamily: 'SpaceMono' },
+      default: { fontFamily: 'monospace' },
+    }),
   },
 });
