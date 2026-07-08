@@ -145,18 +145,21 @@ export async function getSavedPlayer(uid: string, name: string): Promise<SavedPl
  * Persist a saved player. Updating an existing entry (case-insensitive) is always
  * allowed and moves it to the front. A brand-new entry is only added while the list
  * is under `limit`; at/over the limit the new name is dropped. Existing entries are
- * never truncated.
+ * never truncated. With opts.updateOnly, a missing entry is a no-op — the in-game payment
+ * editor must never create or resurrect entries.
  */
 export async function savePlayer(
   uid: string,
   name: string,
   preferredPayment?: PreferredPayment,
   limit: number = PRO_SAVED_CAP,
+  opts?: { updateOnly?: boolean },
 ): Promise<void> {
   return enqueue(async () => {
     const current = await readLocal(uid);
     const lower = name.toLowerCase();
     const existing = current.find(p => p.name.toLowerCase() === lower);
+    if (!existing && opts?.updateOnly) return; // update-only: never create an entry
     if (!existing && current.length >= limit) return; // list full — do not add a new name
     const merged: SavedPlayer = { name, updatedAt: Date.now() };
     const pay = preferredPayment ?? existing?.preferredPayment;

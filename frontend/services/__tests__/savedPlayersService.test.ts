@@ -194,6 +194,27 @@ describe('cap semantics', () => {
   });
 });
 
+describe('savePlayer updateOnly (in-game payment editor path)', () => {
+  it('updates an existing entry\'s payment', async () => {
+    await savePlayer(A, 'Alice');
+    await savePlayer(A, 'Alice', { method: 'venmo', handle: '@alice' }, PRO_SAVED_CAP, { updateOnly: true });
+    expect((await getSavedPlayer(A, 'Alice'))?.preferredPayment?.handle).toBe('@alice');
+  });
+
+  it('never creates a new entry, even under the cap', async () => {
+    await savePlayer(A, 'Ghost', { method: 'venmo', handle: '@g' }, PRO_SAVED_CAP, { updateOnly: true });
+    expect(await getSavedPlayer(A, 'Ghost')).toBeUndefined();
+    expect(await getSavedPlayers(A)).toEqual([]);
+  });
+
+  it('still updates an existing entry when the list is at the limit', async () => {
+    await addSavedPlayers(A, [{ name: 'A' }, { name: 'B' }], { limit: 2 });
+    await savePlayer(A, 'A', { method: 'cashapp', handle: 'a' }, 2, { updateOnly: true });
+    expect((await getSavedPlayer(A, 'A'))?.preferredPayment).toEqual({ method: 'cashapp', handle: 'a' });
+    expect((await getSavedPlayers(A)).length).toBe(2);
+  });
+});
+
 describe('concurrency', () => {
   it('serializes concurrent writes without dropping one', async () => {
     await Promise.all([
