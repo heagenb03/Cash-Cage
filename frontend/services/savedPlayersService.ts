@@ -234,6 +234,12 @@ export async function updateSavedPlayer(
     const current = await readLocal(uid);
     const idx = current.findIndex(p => p.id === id);
     if (idx === -1) return false;
+    const nextName = patch.name?.trim();
+    if (nextName) {
+      const lower = nextName.toLowerCase();
+      // Saved names must stay distinct — reject a rename onto a DIFFERENT entry's name.
+      if (current.some(p => p.id !== id && p.name.toLowerCase() === lower)) return false;
+    }
     const prev = current[idx];
     const updated: SavedPlayer = {
       id: prev.id,
@@ -313,15 +319,22 @@ export async function deleteSavedPlayer(uid: string, name: string): Promise<void
   });
 }
 
+export type RenameResult = { ok: true } | { ok: false; reason: 'empty' | 'notfound' | 'duplicate' };
+
 /**
- * Rename a saved player by id. Preserves the entry's id + preferredPayment and bumps
- * updatedAt. Duplicate display names are allowed by design (id is the identity), so there
- * is no collision reject. Returns false when the id has no entry. Caller trims/rejects empty.
+ * Rename a saved player by id. Names must stay distinct (id is the identity), so a rename
+ * onto a DIFFERENT saved entry's name is rejected with reason 'duplicate'. A case-only
+ * self-rename is allowed. Preserves id + payment; bumps updatedAt via updateSavedPlayer.
  */
-export async function renameSavedPlayer(uid: string, id: string, newName: string): Promise<boolean> {
+export async function renameSavedPlayer(uid: string, id: string, newName: string): Promise<RenameResult> {
   const trimmed = newName.trim();
-  if (!trimmed) return false;
-  return updateSavedPlayer(uid, id, { name: trimmed });
+  if (!trimmed) return { ok: false, reason: 'empty' };
+  const list = await getSavedPlayers(uid);
+  const lower = trimmed.toLowerCase();
+  if (list.some(p => p.id !== id && p.name.toLowerCase() === lower)) return { ok: false, reason: 'duplicate' };
+  if (!list.some(p => p.id === id)) return { ok: false, reason: 'notfound' };
+  const ok = await updateSavedPlayer(uid, id, { name: trimmed });
+  return ok ? { ok: true } : { ok: false, reason: 'notfound' };
 }
 
 /** Remove several saved players at once (case-insensitive). */

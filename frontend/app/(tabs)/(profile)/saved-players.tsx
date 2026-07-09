@@ -154,10 +154,17 @@ export default function SavedPlayersScreen() {
     }
     setRenaming(true);
     try {
-      const ok = await renameSavedPlayer(uid, renameTarget.id, trimmed);
-      if (!ok) {
-        Alert.alert('Error', 'Could not rename this player.');
-        return;
+      const res = await renameSavedPlayer(uid, renameTarget.id, trimmed);
+      if (!res.ok) {
+        if (res.reason === 'duplicate') {
+          Alert.alert(
+            'Name already used',
+            `You already have a saved player named "${trimmed}". Add a last initial (e.g. "${trimmed} R") so you can tell them apart.`,
+          );
+        } else {
+          Alert.alert('Error', 'Could not rename this player.');
+        }
+        return; // keep the rename modal open so the user can edit the name
       }
       setRenameTarget(null);
       reload();

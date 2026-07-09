@@ -436,6 +436,21 @@ describe('id-addressed CRUD', () => {
     expect((await getSavedPlayers(A)).length).toBe(1);
   });
 
+  it('updateSavedPlayer rejects a name already used by a different entry', async () => {
+    const a = await createSavedPlayer(A, 'Alice');
+    const b = await createSavedPlayer(A, 'Bob');
+    if (!a.ok || !b.ok) throw new Error('setup');
+    expect(await updateSavedPlayer(A, b.id, { name: 'alice' })).toBe(false);
+    expect((await getSavedPlayerById(A, b.id))?.name).toBe('Bob');
+  });
+
+  it('updateSavedPlayer allows a case-only self-rename', async () => {
+    const a = await createSavedPlayer(A, 'alice');
+    if (!a.ok) throw new Error('setup');
+    expect(await updateSavedPlayer(A, a.id, { name: 'Alice' })).toBe(true);
+    expect((await getSavedPlayerById(A, a.id))?.name).toBe('Alice');
+  });
+
   it('deletes by id, leaving a same-name twin intact', async () => {
     // Legacy / cross-device data can hold two same-name entries with distinct ids; seed directly.
     await AsyncStorage.setItem(
@@ -465,25 +480,33 @@ describe('renameSavedPlayer (id-based)', () => {
     const res = await createSavedPlayer(A, 'Bob', { method: 'venmo', handle: '@bob' });
     if (!res.ok) throw new Error('setup');
     const before = (await getSavedPlayerById(A, res.id))!.updatedAt!;
-    expect(await renameSavedPlayer(A, res.id, 'Bobby')).toBe(true);
+    expect(await renameSavedPlayer(A, res.id, 'Bobby')).toEqual({ ok: true });
     const p = await getSavedPlayerById(A, res.id);
     expect(p?.name).toBe('Bobby');
     expect(p?.preferredPayment).toEqual({ method: 'venmo', handle: '@bob' });
     expect(p?.updatedAt).toBeGreaterThanOrEqual(before);
   });
 
-  it('allows renaming to a name that already exists (duplicates are allowed)', async () => {
+  it('rejects renaming to a name another saved player already uses', async () => {
     await createSavedPlayer(A, 'Jordan');
     const bob = await createSavedPlayer(A, 'Bob');
     if (!bob.ok) throw new Error('setup');
-    expect(await renameSavedPlayer(A, bob.id, 'Jordan')).toBe(true);
-    expect((await getSavedPlayersByName(A, 'Jordan')).length).toBe(2);
+    expect(await renameSavedPlayer(A, bob.id, 'jordan')).toEqual({ ok: false, reason: 'duplicate' });
+    expect((await getSavedPlayersByName(A, 'Jordan')).length).toBe(1);
+    expect((await getSavedPlayerById(A, bob.id))?.name).toBe('Bob');
   });
 
-  it('returns false for an empty new name or an unknown id', async () => {
+  it('allows a case-only self-rename', async () => {
+    const bob = await createSavedPlayer(A, 'bob');
+    if (!bob.ok) throw new Error('setup');
+    expect(await renameSavedPlayer(A, bob.id, 'Bob')).toEqual({ ok: true });
+    expect((await getSavedPlayerById(A, bob.id))?.name).toBe('Bob');
+  });
+
+  it('returns the right reason for an empty new name or an unknown id', async () => {
     const res = await createSavedPlayer(A, 'Bob');
     if (!res.ok) throw new Error('setup');
-    expect(await renameSavedPlayer(A, res.id, '   ')).toBe(false);
-    expect(await renameSavedPlayer(A, 'sp_missing', 'X')).toBe(false);
+    expect(await renameSavedPlayer(A, res.id, '   ')).toEqual({ ok: false, reason: 'empty' });
+    expect(await renameSavedPlayer(A, 'sp_missing', 'X')).toEqual({ ok: false, reason: 'notfound' });
   });
 });
