@@ -214,6 +214,10 @@ export default function ActiveGameScreen() {
   // When an Add matches 2+ saved people and none was picked, hold the candidates for the
   // in-place disambiguation overlay (rendered inside the already-open Add modal).
   const [disambiguation, setDisambiguation] = useState<SavedPlayer[] | null>(null);
+  // Distinct-name prompt for creating a second saved person who shares a first name.
+  const [newPersonPrompt, setNewPersonPrompt] = useState<string | null>(null); // original (colliding) name
+  const [newPersonName, setNewPersonName] = useState('');
+  const newPersonRef = useRef(false);
   // Synchronous re-entry guard for commitAddPlayer (state-based `disabled` has a race window).
   const addingPlayerRef = useRef(false);
 
@@ -341,12 +345,16 @@ export default function ActiveGameScreen() {
   const nameAlreadySaved =
     typedNameLower.length > 0 && savedPlayers.some(p => p.name.toLowerCase() === typedNameLower);
   const savedListFull = !canAddMoreSavedPlayers(savedPlayers.length, isPro);
+  const newPersonTrimmed = newPersonName.trim();
+  const newPersonIsDistinct =
+    newPersonTrimmed.length > 0 &&
+    !savedPlayers.some(p => p.name.toLowerCase() === newPersonTrimmed.toLowerCase());
 
-  const commitAddPlayer = async (bound: SavedPlayer | null) => {
+  const commitAddPlayer = async (bound: SavedPlayer | null, nameOverride?: string) => {
     if (addingPlayerRef.current) return;
     addingPlayerRef.current = true;
     try {
-      const name = newPlayerName.trim();
+      const name = (nameOverride ?? newPlayerName).trim();
       const player = GameService.addPlayer(activeGame, name);
 
       // Resolve which saved entry (if any) this player is bound to, and its payment.
@@ -389,6 +397,34 @@ export default function ActiveGameScreen() {
       setShowAddPlayer(false);
     } finally {
       addingPlayerRef.current = false;
+    }
+  };
+
+  // Tapped the "+ New person named X" row. Toggle on + room → prompt for a distinct name and
+  // create a saved entry; otherwise add a game-only duplicate (allowed), unbound.
+  const handleAddNewPerson = () => {
+    const name = newPlayerName.trim();
+    if (!name) return;
+    setPlayerSuggestions([]);
+    setSelectedSavedId(null);
+    if (savePlayerToggle && !savedListFull) {
+      setNewPersonName(name);
+      setNewPersonPrompt(name);
+    } else {
+      commitAddPlayer(null); // game-only duplicate (toggle off or list full)
+    }
+  };
+
+  const handleCommitNewPerson = async () => {
+    if (newPersonRef.current) return;
+    newPersonRef.current = true;
+    try {
+      const name = newPersonName.trim();
+      if (!name) return;
+      setNewPersonPrompt(null);
+      await commitAddPlayer(null, name); // distinct name → createSavedPlayer succeeds + binds
+    } finally {
+      newPersonRef.current = false;
     }
   };
 
@@ -801,32 +837,61 @@ export default function ActiveGameScreen() {
       <AppModal
         visible={showAddPlayer}
         title="Add Player"
-        onClose={() => { setDisambiguation(null); setSelectedSavedId(null); setShowAddPlayer(false); }}
+        onClose={() => { setDisambiguation(null); setNewPersonPrompt(null); setSelectedSavedId(null); setShowAddPlayer(false); }}
         contentStyle={appModalStyles.centeredContent}
         overlay={
-          disambiguation && (
-            <AppModalCard
-              title={`Which ${newPlayerName.trim()}?`}
-              onClose={() => setDisambiguation(null)}
-            >
-              <Text style={styles.disambigSub}>You have more than one saved player with this name.</Text>
-              {disambiguation.map(p => {
-                const b = savedBadge(p);
-                return (
-                  <TouchableOpacity key={p.id} style={styles.disambigRow} onPress={() => commitAddPlayer(p)}>
-                    <Text style={styles.disambigName}>{p.name}</Text>
-                    <Text style={styles.disambigBadge} numberOfLines={1}>{b ?? 'No payment set'}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-              <TouchableOpacity style={styles.disambigRow} onPress={() => commitAddPlayer(null)}>
-                <Text style={styles.disambigNewText}>+ Add as a new person</Text>
-              </TouchableOpacity>
-              <View style={styles.modalButtons}>
-                <ModalButton variant="cancel" title="Cancel" onPress={() => setDisambiguation(null)} />
-              </View>
-            </AppModalCard>
-          )
+          <>
+            {disambiguation && (
+              <AppModalCard
+                title={`Which ${newPlayerName.trim()}?`}
+                onClose={() => setDisambiguation(null)}
+              >
+                <Text style={styles.disambigSub}>You have more than one saved player with this name.</Text>
+                {disambiguation.map(p => {
+                  const b = savedBadge(p);
+                  return (
+                    <TouchableOpacity key={p.id} style={styles.disambigRow} onPress={() => commitAddPlayer(p)}>
+                      <Text style={styles.disambigName}>{p.name}</Text>
+                      <Text style={styles.disambigBadge} numberOfLines={1}>{b ?? 'No payment set'}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+                <TouchableOpacity style={styles.disambigRow} onPress={() => commitAddPlayer(null)}>
+                  <Text style={styles.disambigNewText}>+ Add as a new person</Text>
+                </TouchableOpacity>
+                <View style={styles.modalButtons}>
+                  <ModalButton variant="cancel" title="Cancel" onPress={() => setDisambiguation(null)} />
+                </View>
+              </AppModalCard>
+            )}
+            {newPersonPrompt !== null && (
+              <AppModalCard title="New person" onClose={() => setNewPersonPrompt(null)}>
+                <Text style={styles.disambigSub}>
+                  You already have a saved player named "{newPersonPrompt}". Add a last initial so you can tell them apart.
+                </Text>
+                <TextInput
+                  style={styles.input}
+                  value={newPersonName}
+                  onChangeText={setNewPersonName}
+                  placeholder="Name"
+                  placeholderTextColor="#666"
+                  autoFocus
+                  autoCapitalize="words"
+                  returnKeyType="done"
+                  onSubmitEditing={() => { if (newPersonIsDistinct) handleCommitNewPerson(); }}
+                />
+                <View style={styles.modalButtons}>
+                  <ModalButton variant="cancel" title="Cancel" onPress={() => setNewPersonPrompt(null)} />
+                  <ModalButton
+                    variant="confirm"
+                    title="Add"
+                    disabled={!newPersonIsDistinct}
+                    onPress={handleCommitNewPerson}
+                  />
+                </View>
+              </AppModalCard>
+            )}
+          </>
         }
       >
             <TextInput
@@ -862,6 +927,11 @@ export default function ActiveGameScreen() {
                 })}
               </View>
             )}
+            {nameAlreadySaved && (
+              <TouchableOpacity style={styles.newPersonRow} onPress={handleAddNewPerson}>
+                <Text style={styles.newPersonText}>+ New person named "{newPlayerName.trim()}"</Text>
+              </TouchableOpacity>
+            )}
             <TextInput
               style={styles.input}
               value={newPlayerBuyIn}
@@ -872,7 +942,7 @@ export default function ActiveGameScreen() {
               returnKeyType="done"
               onSubmitEditing={handleAddPlayer}
             />
-            {!nameAlreadySaved &&
+            {typedNameLower.length > 0 &&
               (savedListFull ? (
                 <TouchableOpacity
                   style={styles.saveToggleRow}
@@ -910,6 +980,7 @@ export default function ActiveGameScreen() {
                   setPlayerSuggestions([]);
                   setSelectedSavedId(null);
                   setDisambiguation(null);
+                  setNewPersonPrompt(null);
                   setShowAddPlayer(false);
                 }}
               />
@@ -1566,6 +1637,20 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   suggestionBadge: { fontSize: 11, color: 'rgba(176,114,187,0.9)', fontFamily: 'SpaceMono', marginLeft: 12, flexShrink: 1, textAlign: 'right' },
+  newPersonRow: {
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    marginBottom: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#49264F',
+    backgroundColor: '#161616',
+  },
+  newPersonText: {
+    color: '#B072BB',
+    fontSize: 15,
+    fontWeight: '600',
+  },
   disambigSub: { fontSize: 13, color: 'rgba(255,255,255,0.5)', textAlign: 'center', marginBottom: 12 },
   disambigRow: { paddingVertical: 12, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1, borderColor: '#242424', backgroundColor: '#161616', marginBottom: 8 },
   disambigName: { fontSize: 16, color: '#FFFFFF', fontWeight: '600' },
