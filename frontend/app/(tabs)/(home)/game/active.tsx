@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
-import { StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Modal, Animated } from 'react-native';
-import { GestureHandlerRootView, Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, Animated } from 'react-native';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import { runOnJS } from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { Text, View } from '@/components/Themed';
@@ -21,6 +21,7 @@ import ModalButton from '@/components/ModalButton';
 import PaywallModal from '@/components/PaywallModal';
 import CashUnitPickerModal from '@/components/CashUnitPickerModal';
 import PaymentEditorModal from '@/components/PaymentEditorModal';
+import AppModal, { AppModalCard, appModalStyles } from '@/components/AppModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useReduceMotion } from '@/hooks/useReduceMotion';
@@ -797,16 +798,37 @@ export default function ActiveGameScreen() {
       )}
 
       {/* Add Player Modal */}
-      <Modal
+      <AppModal
         visible={showAddPlayer}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => { setDisambiguation(null); setSelectedSavedId(null); setShowAddPlayer(false); }}
+        title="Add Player"
+        onClose={() => { setDisambiguation(null); setSelectedSavedId(null); setShowAddPlayer(false); }}
+        contentStyle={appModalStyles.centeredContent}
+        overlay={
+          disambiguation && (
+            <AppModalCard
+              title={`Which ${newPlayerName.trim()}?`}
+              onClose={() => setDisambiguation(null)}
+            >
+              <Text style={styles.disambigSub}>You have more than one saved player with this name.</Text>
+              {disambiguation.map(p => {
+                const b = savedBadge(p);
+                return (
+                  <TouchableOpacity key={p.id} style={styles.disambigRow} onPress={() => commitAddPlayer(p)}>
+                    <Text style={styles.disambigName}>{p.name}</Text>
+                    <Text style={styles.disambigBadge} numberOfLines={1}>{b ?? 'No payment set'}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+              <TouchableOpacity style={styles.disambigRow} onPress={() => commitAddPlayer(null)}>
+                <Text style={styles.disambigNewText}>+ Add as a new person</Text>
+              </TouchableOpacity>
+              <View style={styles.modalButtons}>
+                <ModalButton variant="cancel" title="Cancel" onPress={() => setDisambiguation(null)} />
+              </View>
+            </AppModalCard>
+          )
+        }
       >
-        <GestureHandlerRootView style={{flex: 1}}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Add Player</Text>
             <TextInput
               style={[styles.input, playerSuggestions.length > 0 && styles.inputWithSuggestions]}
               value={newPlayerName}
@@ -897,93 +919,54 @@ export default function ActiveGameScreen() {
                 onPress={handleAddPlayer}
               />
             </View>
-          </View>
-        </View>
-        {disambiguation && (
-          <View style={styles.disambigOverlay}>
-            <View style={styles.modalContent}>
-              <Text style={styles.modalTitle}>Which {newPlayerName.trim()}?</Text>
-              <Text style={styles.disambigSub}>You have more than one saved player with this name.</Text>
-              {disambiguation.map(p => {
-                const b = savedBadge(p);
-                return (
-                  <TouchableOpacity key={p.id} style={styles.disambigRow} onPress={() => commitAddPlayer(p)}>
-                    <Text style={styles.disambigName}>{p.name}</Text>
-                    <Text style={styles.disambigBadge} numberOfLines={1}>{b ?? 'No payment set'}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-              <TouchableOpacity style={styles.disambigRow} onPress={() => commitAddPlayer(null)}>
-                <Text style={styles.disambigNewText}>+ Add as a new person</Text>
-              </TouchableOpacity>
-              <View style={styles.modalButtons}>
-                <ModalButton variant="cancel" title="Cancel" onPress={() => setDisambiguation(null)} />
-              </View>
-            </View>
-          </View>
-        )}
-        </GestureHandlerRootView>
-      </Modal>
+      </AppModal>
 
       {/* Add Transaction Modal */}
-      <Modal
+      <AppModal
         visible={showAddTransaction}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowAddTransaction(false)}
+        title={`${transactionType === 'buyin' ? 'Buy-in' : 'Cash Out'} - ${selectedPlayer?.name}`}
+        onClose={() => setShowAddTransaction(false)}
+        contentStyle={appModalStyles.centeredContent}
       >
-        <GestureHandlerRootView style={{flex: 1}}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>
-              {transactionType === 'buyin' ? 'Buy-in' : 'Cash Out'} - {selectedPlayer?.name}
-            </Text>
-            <TextInput
-              style={styles.input}
-              value={transactionAmount}
-              onChangeText={setTransactionAmount}
-              placeholder="Amount"
-              placeholderTextColor="#666"
-              keyboardType="decimal-pad"
-              autoFocus
-            />
-            <View style={styles.modalButtons}>
-              <ModalButton
-                variant="cancel"
-                title="Cancel"
-                onPress={() => {
-                  setTransactionAmount('');
-                  setShowAddTransaction(false);
-                  setSelectedPlayer(null);
-                }}
-              />
-              <ModalButton
-                variant="confirm"
-                title="Confirm"
-                onPress={handleAddTransaction}
-              />
-            </View>
-          </View>
+        <TextInput
+          style={styles.input}
+          value={transactionAmount}
+          onChangeText={setTransactionAmount}
+          placeholder="Amount"
+          placeholderTextColor="#666"
+          keyboardType="decimal-pad"
+          autoFocus
+        />
+        <View style={styles.modalButtons}>
+          <ModalButton
+            variant="cancel"
+            title="Cancel"
+            onPress={() => {
+              setTransactionAmount('');
+              setShowAddTransaction(false);
+              setSelectedPlayer(null);
+            }}
+          />
+          <ModalButton
+            variant="confirm"
+            title="Confirm"
+            onPress={handleAddTransaction}
+          />
         </View>
-        </GestureHandlerRootView>
-      </Modal>
+      </AppModal>
 
       {/* Rename Player Modal */}
-      <Modal
+      <AppModal
         visible={showRenameModal}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => {
+        title="Rename Player"
+        onClose={() => {
           setShowRenameModal(false);
           setSelectedPlayer(null);
           setRenamedPlayerName('');
           setRenameSuggestions([]);
         }}
+        contentStyle={appModalStyles.centeredContent}
       >
-        <GestureHandlerRootView style={{flex: 1}}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Rename Player</Text>
             <TextInput
               style={[styles.input, renameSuggestions.length > 0 && styles.inputWithSuggestions]}
               value={renamedPlayerName}
@@ -1040,57 +1023,44 @@ export default function ActiveGameScreen() {
                 onPress={handleRenamePlayer}
               />
             </View>
-          </View>
-        </View>
-        </GestureHandlerRootView>
-      </Modal>
+      </AppModal>
 
       {/* Delete Player Confirmation Modal */}
-      <Modal
+      <AppModal
         visible={showDeleteConfirmation}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => setShowDeleteConfirmation(false)}
+        onClose={() => setShowDeleteConfirmation(false)}
+        dismissOnBackdrop={false}
+        contentStyle={appModalStyles.centeredContent}
       >
-        <GestureHandlerRootView style={{flex: 1}}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Ionicons name="warning" size={48} color="#C04657" style={styles.warningIcon} />
-            <Text style={styles.modalTitle}>Delete Player?</Text>
-            <Text style={styles.deleteWarningText}>
-              This will remove {playerToDelete?.name} and all their transactions from this game. 
-              {'\n\n'}This action cannot be undone.
-            </Text>
-            <View style={styles.modalButtons}>
-              <ModalButton
-                variant="cancel"
-                title="Cancel"
-                onPress={() => {
-                  setShowDeleteConfirmation(false);
-                  setPlayerToDelete(null);
-                }}
-              />
-              <ModalButton
-                variant="destructive"
-                title="Delete"
-                onPress={handleDeletePlayer}
-              />
-            </View>
-          </View>
+        <Ionicons name="warning" size={48} color="#C04657" style={styles.warningIcon} />
+        <Text style={appModalStyles.title}>Delete Player?</Text>
+        <Text style={styles.deleteWarningText}>
+          This will remove {playerToDelete?.name} and all their transactions from this game.
+          {'\n\n'}This action cannot be undone.
+        </Text>
+        <View style={styles.modalButtons}>
+          <ModalButton
+            variant="cancel"
+            title="Cancel"
+            onPress={() => {
+              setShowDeleteConfirmation(false);
+              setPlayerToDelete(null);
+            }}
+          />
+          <ModalButton
+            variant="destructive"
+            title="Delete"
+            onPress={handleDeletePlayer}
+          />
         </View>
-        </GestureHandlerRootView>
-      </Modal>
+      </AppModal>
 
       {/* Game Completion Modal */}
-      <Modal
+      <AppModal
         visible={showCompletionModal}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => setShowCompletionModal(false)}
+        onClose={() => setShowCompletionModal(false)}
+        contentStyle={appModalStyles.centeredContent}
       >
-        <GestureHandlerRootView style={{flex: 1}}>
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
               {/* Dynamic Icon */}
               {completionModalMode === 'error' && (
                 <Ionicons name="alert-circle" size={48} color="#C04657" style={styles.completionModalIcon} />
@@ -1103,7 +1073,7 @@ export default function ActiveGameScreen() {
               )}
 
               {/* Dynamic Title */}
-              <Text style={styles.modalTitle}>
+              <Text style={appModalStyles.title}>
                 {completionModalMode === 'error' ? 'Cannot Complete Game' :
                 completionModalMode === 'warning' ? 'Warning' :
                 'Complete Game'}
@@ -1160,23 +1130,16 @@ export default function ActiveGameScreen() {
                   />
                 </View>
               )}
-            </View>
-          </View>
-        </GestureHandlerRootView>
-      </Modal>
+      </AppModal>
 
       {/* Rounding-distortion Confirm Modal */}
-      <Modal
+      <AppModal
         visible={showDistortionModal}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => setShowDistortionModal(false)}
+        onClose={() => setShowDistortionModal(false)}
+        contentStyle={appModalStyles.centeredContent}
       >
-        <GestureHandlerRootView style={{flex: 1}}>
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
               <Ionicons name="warning" size={48} color="#E0A800" style={styles.completionModalIcon} />
-              <Text style={styles.modalTitle}>Rounding distorts a settlement</Text>
+              <Text style={appModalStyles.title}>Rounding distorts a settlement</Text>
               <Text style={styles.completionModalConfirmText}>
                 At {formatAmount(resolveCashUnit(activeGame.cashUnit, currency))} rounding:
               </Text>
@@ -1202,10 +1165,7 @@ export default function ActiveGameScreen() {
                   onPress={finalizeCompletion}
                 />
               </View>
-            </View>
-          </View>
-        </GestureHandlerRootView>
-      </Modal>
+      </AppModal>
 
       {/* Paywall Modal — shown when free user tries to add an 11th player */}
       <PaywallModal
@@ -1392,29 +1352,6 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: 'bold',
     letterSpacing: 1,
-  },
-  modalOverlay: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-  },
-  modalContent: {
-    width: '85%',
-    maxWidth: 400,
-    backgroundColor: '#1A1A1A',
-    borderRadius: 12,
-    padding: 24,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#2A2A2A',
-  },
-  modalTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    marginBottom: 20,
-    color: '#FFFFFF',
-    textAlign: 'center',
   },
   input: {
     width: '100%',
@@ -1629,7 +1566,6 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   suggestionBadge: { fontSize: 11, color: 'rgba(176,114,187,0.9)', fontFamily: 'SpaceMono', marginLeft: 12, flexShrink: 1, textAlign: 'right' },
-  disambigOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.7)', alignItems: 'center', justifyContent: 'center', padding: 24 },
   disambigSub: { fontSize: 13, color: 'rgba(255,255,255,0.5)', textAlign: 'center', marginBottom: 12 },
   disambigRow: { paddingVertical: 12, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1, borderColor: '#242424', backgroundColor: '#161616', marginBottom: 8 },
   disambigName: { fontSize: 16, color: '#FFFFFF', fontWeight: '600' },
