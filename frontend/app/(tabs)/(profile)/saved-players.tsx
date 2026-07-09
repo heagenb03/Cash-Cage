@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useMemo } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
   StyleSheet,
   ScrollView,
@@ -87,6 +87,7 @@ export default function SavedPlayersScreen() {
   const [addName, setAddName] = useState('');
   const [addPayment, setAddPayment] = useState<PreferredPayment | undefined>(undefined);
   const [adding, setAdding] = useState(false);
+  const addingRef = useRef(false);
   const [dupConfirm, setDupConfirm] = useState<{ name: string; payment?: PreferredPayment } | null>(null);
 
   const [showPaywall, setShowPaywall] = useState(false);
@@ -211,28 +212,33 @@ export default function SavedPlayersScreen() {
   }, [uid, cap, reload]);
 
   const handleAdd = useCallback(async () => {
-    if (adding) return;
-    const name = addName.trim();
-    if (!name) {
-      setShowAdd(false);
-      return;
-    }
-    if (!uid) return;
-    const existing = await getSavedPlayersByName(uid, name);
-    if (existing.length > 0) {
-      // Two paymentless same-name people are indistinguishable → merge into the existing one.
-      if (!addPayment && existing.some(p => !p.preferredPayment)) {
-        const target = existing.find(p => !p.preferredPayment)!;
-        await updateSavedPlayer(uid, target.id, {});
+    if (addingRef.current) return;
+    addingRef.current = true;
+    try {
+      const name = addName.trim();
+      if (!name) {
         setShowAdd(false);
-        reload();
         return;
       }
-      setDupConfirm({ name, payment: addPayment }); // ask: separate person?
-      return;
+      if (!uid) return;
+      const existing = await getSavedPlayersByName(uid, name);
+      if (existing.length > 0) {
+        // Two paymentless same-name people are indistinguishable → merge into the existing one.
+        if (!addPayment && existing.some(p => !p.preferredPayment)) {
+          const target = existing.find(p => !p.preferredPayment)!;
+          await updateSavedPlayer(uid, target.id, {});
+          setShowAdd(false);
+          reload();
+          return;
+        }
+        setDupConfirm({ name, payment: addPayment }); // ask: separate person?
+        return;
+      }
+      await doCreate(name, addPayment);
+    } finally {
+      addingRef.current = false;
     }
-    await doCreate(name, addPayment);
-  }, [uid, adding, addName, addPayment, doCreate, reload]);
+  }, [uid, addName, addPayment, doCreate, reload]);
 
   // Shared PaymentEditorModal target → synthetic Player (its player prop is init-only).
   // useMemo keyed on paymentTarget gives a STABLE reference: PaymentEditorModal re-seeds
@@ -263,7 +269,7 @@ export default function SavedPlayersScreen() {
         setPaymentTarget(null);
       }
     },
-    [uid, paymentTarget, cap, reload],
+    [uid, paymentTarget, reload],
   );
 
   const renderRow = (p: SavedPlayer) => {
