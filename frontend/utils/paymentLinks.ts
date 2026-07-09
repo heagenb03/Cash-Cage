@@ -51,7 +51,12 @@ export function buildPaymentUri(
   switch (method) {
     case 'venmo': {
       const r = h.replace(/^@/, '');
-      return `venmo://paycharge?txn=pay&recipients=${r}&amount=${amt}&note=${encodeURIComponent(note)}`;
+      const base = `venmo://paycharge?txn=pay&recipients=${r}&amount=${amt}`;
+      // Omit the note param entirely when empty — a trailing `&note=` is noise,
+      // and Cash Cage no longer sends a memo (a poker-related note risks the
+      // recipient's account under Venmo's TOS on gambling payments).
+      const memo = note.trim();
+      return memo ? `${base}&note=${encodeURIComponent(memo)}` : base;
     }
     case 'cashapp': {
       const tag = h.replace(/^\$/, '');

@@ -25,6 +25,14 @@ describe('buildPaymentUri', () => {
       'venmo://paycharge?txn=pay&recipients=alice&amount=50.00&note=Poker',
     );
   });
+  it('omits the note param when the note is empty or blank', () => {
+    expect(buildPaymentUri('venmo', '@alice', 50, '')).toBe(
+      'venmo://paycharge?txn=pay&recipients=alice&amount=50.00',
+    );
+    expect(buildPaymentUri('venmo', '@alice', 50, '   ')).toBe(
+      'venmo://paycharge?txn=pay&recipients=alice&amount=50.00',
+    );
+  });
   it('builds a Cash App URI, stripping a leading $', () => {
     expect(buildPaymentUri('cashapp', '$alice', 50, 'Poker')).toBe(
       'https://cash.app/$alice/50.00',

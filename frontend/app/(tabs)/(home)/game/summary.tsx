@@ -234,7 +234,7 @@ function SettlementCard({ groupedSettlement, reduceMotion, recipientPayment }: S
 
   const handlePay = useCallback((amount: number) => {
     if (!recipientPayment) return;
-    const uri = buildPaymentUri(recipientPayment.method, recipientPayment.handle, amount, 'Poker settle up');
+    const uri = buildPaymentUri(recipientPayment.method, recipientPayment.handle, amount, '');
     if (uri) Linking.openURL(uri).catch(() => {});
   }, [recipientPayment]);
 
@@ -326,7 +326,7 @@ function SettlementCard({ groupedSettlement, reduceMotion, recipientPayment }: S
                   {recipientPayment && buildPaymentUri(recipientPayment.method, recipientPayment.handle, payment.amount, 'x') && (
                     <TouchableOpacity onPress={() => handlePay(payment.amount)} style={styles.payButton}>
                       <Text style={styles.payButtonText}>
-                        Pay via {getPaymentMethodMeta(recipientPayment.method).label}
+                        Pay →
                       </Text>
                     </TouchableOpacity>
                   )}
@@ -1177,12 +1177,13 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     borderWidth: 1,
     borderColor: 'rgba(176,114,187,0.35)',
-    alignSelf: 'flex-start',
+    alignSelf: 'stretch',
   },
   payButtonText: {
     fontSize: 11,
     color: '#B072BB',
     fontWeight: '600',
     letterSpacing: 0.3,
+    textAlign: 'center',
   },
 });
