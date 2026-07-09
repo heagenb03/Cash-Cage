@@ -4,19 +4,16 @@ import {
   ScrollView,
   TouchableOpacity,
   Linking,
-  Modal,
   TextInput,
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Text, View } from '@/components/Themed';
 import HudSectionHeader from '@/components/HudSectionHeader';
 import ModalButton from '@/components/ModalButton';
 import PaywallModal from '@/components/PaywallModal';
+import AppModal, { appModalStyles } from '@/components/AppModal';
 import {
   updateDisplayName,
   updateUserPassword,
@@ -502,305 +499,238 @@ export default function SettingsScreen() {
       {/* ------------------------------------------------------------------- */}
       {/* Modal: Edit Display Name                                             */}
       {/* ------------------------------------------------------------------- */}
-      <Modal
-        visible={activeModal === 'editName'}
-        animationType="fade"
-        transparent
-        onRequestClose={closeModal}
-      >
-        <GestureHandlerRootView style={{ flex: 1 }}>
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={{ flex: 1 }}
-          >
-            <View style={styles.modalOverlay}>
-              <View style={styles.modalContent}>
-                <Ionicons name="person-outline" size={32} color="#B072BB" style={styles.modalIcon} />
-                <Text style={styles.modalTitle}>Display Name</Text>
-                <Text style={styles.modalSubtitle}>Enter your new display name.</Text>
+      <AppModal visible={activeModal === 'editName'} onClose={closeModal}>
+        <Ionicons name="person-outline" size={32} color="#B072BB" style={styles.modalIcon} />
+        <Text style={appModalStyles.title}>Display Name</Text>
+        <Text style={styles.modalSubtitle}>Enter your new display name.</Text>
 
-                <TextInput
-                  style={styles.textInput}
-                  value={nameInput}
-                  onChangeText={setNameInput}
-                  placeholder="Display name"
-                  placeholderTextColor="rgba(255,255,255,0.3)"
-                  autoCapitalize="words"
-                  autoCorrect={false}
-                  maxLength={50}
-                  editable={!modalLoading}
-                />
+        <TextInput
+          style={styles.textInput}
+          value={nameInput}
+          onChangeText={setNameInput}
+          placeholder="Display name"
+          placeholderTextColor="rgba(255,255,255,0.3)"
+          autoCapitalize="words"
+          autoCorrect={false}
+          maxLength={50}
+          editable={!modalLoading}
+        />
 
-                {modalError ? (
-                  <Text style={styles.modalError}>{modalError}</Text>
-                ) : null}
+        {modalError ? (
+          <Text style={styles.modalError}>{modalError}</Text>
+        ) : null}
 
-                <View style={styles.modalButtons}>
-                  <ModalButton
-                    title="Cancel"
-                    variant="cancel"
-                    onPress={closeModal}
-                    disabled={modalLoading}
-                  />
-                  <ModalButton
-                    title={modalLoading ? 'Saving…' : 'Save'}
-                    variant="confirm"
-                    onPress={handleSaveName}
-                    disabled={modalLoading || !nameInput.trim()}
-                  />
-                </View>
-              </View>
-            </View>
-          </KeyboardAvoidingView>
-        </GestureHandlerRootView>
-      </Modal>
+        <View style={styles.modalButtons}>
+          <ModalButton
+            title="Cancel"
+            variant="cancel"
+            onPress={closeModal}
+            disabled={modalLoading}
+          />
+          <ModalButton
+            title={modalLoading ? 'Saving…' : 'Save'}
+            variant="confirm"
+            onPress={handleSaveName}
+            disabled={modalLoading || !nameInput.trim()}
+          />
+        </View>
+      </AppModal>
 
       {/* ------------------------------------------------------------------- */}
       {/* Modal: Change Password                                               */}
       {/* ------------------------------------------------------------------- */}
-      <Modal
-        visible={activeModal === 'changePassword'}
-        animationType="fade"
-        transparent
-        onRequestClose={closeModal}
-      >
-        <GestureHandlerRootView style={{ flex: 1 }}>
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={{ flex: 1 }}
-          >
-            <View style={styles.modalOverlay}>
-              <View style={styles.modalContent}>
-                <Ionicons
-                  name="lock-closed-outline"
-                  size={32}
-                  color="#B072BB"
-                  style={styles.modalIcon}
-                />
-                <Text style={styles.modalTitle}>Change Password</Text>
+      <AppModal visible={activeModal === 'changePassword'} onClose={closeModal}>
+        <Ionicons
+          name="lock-closed-outline"
+          size={32}
+          color="#B072BB"
+          style={styles.modalIcon}
+        />
+        <Text style={appModalStyles.title}>Change Password</Text>
 
-                <TextInput
-                  style={styles.textInput}
-                  value={currentPassword}
-                  onChangeText={setCurrentPassword}
-                  placeholder="Current password"
-                  placeholderTextColor="rgba(255,255,255,0.3)"
-                  secureTextEntry
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  editable={!modalLoading}
-                />
-                <TextInput
-                  style={styles.textInput}
-                  value={newPassword}
-                  onChangeText={setNewPassword}
-                  placeholder="New password"
-                  placeholderTextColor="rgba(255,255,255,0.3)"
-                  secureTextEntry
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  editable={!modalLoading}
-                />
-                <TextInput
-                  style={styles.textInput}
-                  value={confirmPassword}
-                  onChangeText={setConfirmPassword}
-                  placeholder="Confirm new password"
-                  placeholderTextColor="rgba(255,255,255,0.3)"
-                  secureTextEntry
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  editable={!modalLoading}
-                />
+        <TextInput
+          style={styles.textInput}
+          value={currentPassword}
+          onChangeText={setCurrentPassword}
+          placeholder="Current password"
+          placeholderTextColor="rgba(255,255,255,0.3)"
+          secureTextEntry
+          autoCapitalize="none"
+          autoCorrect={false}
+          editable={!modalLoading}
+        />
+        <TextInput
+          style={styles.textInput}
+          value={newPassword}
+          onChangeText={setNewPassword}
+          placeholder="New password"
+          placeholderTextColor="rgba(255,255,255,0.3)"
+          secureTextEntry
+          autoCapitalize="none"
+          autoCorrect={false}
+          editable={!modalLoading}
+        />
+        <TextInput
+          style={styles.textInput}
+          value={confirmPassword}
+          onChangeText={setConfirmPassword}
+          placeholder="Confirm new password"
+          placeholderTextColor="rgba(255,255,255,0.3)"
+          secureTextEntry
+          autoCapitalize="none"
+          autoCorrect={false}
+          editable={!modalLoading}
+        />
 
-                {modalError ? (
-                  <Text style={styles.modalError}>{modalError}</Text>
-                ) : null}
+        {modalError ? (
+          <Text style={styles.modalError}>{modalError}</Text>
+        ) : null}
 
-                <View style={styles.modalButtons}>
-                  <ModalButton
-                    title="Cancel"
-                    variant="cancel"
-                    onPress={closeModal}
-                    disabled={modalLoading}
-                  />
-                  <ModalButton
-                    title={modalLoading ? 'Saving…' : 'Save'}
-                    variant="confirm"
-                    onPress={handleChangePassword}
-                    disabled={modalLoading || !currentPassword || !newPassword || !confirmPassword}
-                  />
-                </View>
-              </View>
-            </View>
-          </KeyboardAvoidingView>
-        </GestureHandlerRootView>
-      </Modal>
+        <View style={styles.modalButtons}>
+          <ModalButton
+            title="Cancel"
+            variant="cancel"
+            onPress={closeModal}
+            disabled={modalLoading}
+          />
+          <ModalButton
+            title={modalLoading ? 'Saving…' : 'Save'}
+            variant="confirm"
+            onPress={handleChangePassword}
+            disabled={modalLoading || !currentPassword || !newPassword || !confirmPassword}
+          />
+        </View>
+      </AppModal>
 
       {/* ------------------------------------------------------------------- */}
       {/* Modal: Sign Out Confirmation                                          */}
       {/* ------------------------------------------------------------------- */}
-      <Modal
-        visible={activeModal === 'signOutConfirm'}
-        animationType="fade"
-        transparent
-        onRequestClose={closeModal}
-      >
-        <GestureHandlerRootView style={{ flex: 1 }}>
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <Ionicons
-                name="log-out-outline"
-                size={32}
-                color="#C04657"
-                style={styles.modalIcon}
-              />
-              <Text style={styles.modalTitle}>Sign Out</Text>
-              <Text style={styles.modalBody}>
-                Sign out of {email}?{'\n'}Your games will remain on this device.
-              </Text>
+      <AppModal visible={activeModal === 'signOutConfirm'} onClose={closeModal}>
+        <Ionicons
+          name="log-out-outline"
+          size={32}
+          color="#C04657"
+          style={styles.modalIcon}
+        />
+        <Text style={appModalStyles.title}>Sign Out</Text>
+        <Text style={styles.modalBody}>
+          Sign out of {email}?{'\n'}Your games will remain on this device.
+        </Text>
 
-              {modalError ? (
-                <Text style={styles.modalError}>{modalError}</Text>
-              ) : null}
+        {modalError ? (
+          <Text style={styles.modalError}>{modalError}</Text>
+        ) : null}
 
-              {modalLoading ? (
-                <ActivityIndicator color="#B072BB" style={styles.modalSpinner} />
-              ) : (
-                <View style={styles.modalButtons}>
-                  <ModalButton title="Cancel" variant="cancel" onPress={closeModal} />
-                  <ModalButton
-                    title="Sign Out"
-                    variant="destructive"
-                    onPress={handleSignOut}
-                  />
-                </View>
-              )}
-            </View>
+        {modalLoading ? (
+          <ActivityIndicator color="#B072BB" style={styles.modalSpinner} />
+        ) : (
+          <View style={styles.modalButtons}>
+            <ModalButton title="Cancel" variant="cancel" onPress={closeModal} />
+            <ModalButton
+              title="Sign Out"
+              variant="destructive"
+              onPress={handleSignOut}
+            />
           </View>
-        </GestureHandlerRootView>
-      </Modal>
+        )}
+      </AppModal>
 
       {/* ------------------------------------------------------------------- */}
       {/* Modal: Delete Account — Step 1 (Type DELETE confirmation)            */}
       {/* ------------------------------------------------------------------- */}
-      <Modal
+      <AppModal
         visible={activeModal === 'deleteAccountConfirm'}
-        animationType="fade"
-        transparent
-        onRequestClose={closeModal}
+        onClose={closeModal}
+        dismissOnBackdrop={false}
       >
-        <GestureHandlerRootView style={{ flex: 1 }}>
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={{ flex: 1 }}
-          >
-            <View style={styles.modalOverlay}>
-              <View style={styles.modalContent}>
-                <Ionicons
-                  name="warning-outline"
-                  size={32}
-                  color="#C04657"
-                  style={styles.modalIcon}
-                />
-                <Text style={styles.modalTitle}>Delete Account</Text>
-                <Text style={styles.modalBody}>
-                  This will permanently delete your account and all associated data. This action cannot be undone.
-                </Text>
-                <Text style={styles.modalSubtitle}>Type DELETE to confirm.</Text>
+        <Ionicons
+          name="warning-outline"
+          size={32}
+          color="#C04657"
+          style={styles.modalIcon}
+        />
+        <Text style={appModalStyles.title}>Delete Account</Text>
+        <Text style={styles.modalBody}>
+          This will permanently delete your account and all associated data. This action cannot be undone.
+        </Text>
+        <Text style={styles.modalSubtitle}>Type DELETE to confirm.</Text>
 
-                <TextInput
-                  style={styles.textInput}
-                  value={deleteConfirmInput}
-                  onChangeText={setDeleteConfirmInput}
-                  placeholder="DELETE"
-                  placeholderTextColor="rgba(255,255,255,0.3)"
-                  autoCapitalize="characters"
-                  autoCorrect={false}
-                />
+        <TextInput
+          style={styles.textInput}
+          value={deleteConfirmInput}
+          onChangeText={setDeleteConfirmInput}
+          placeholder="DELETE"
+          placeholderTextColor="rgba(255,255,255,0.3)"
+          autoCapitalize="characters"
+          autoCorrect={false}
+        />
 
-                <View style={styles.modalButtons}>
-                  <ModalButton title="Cancel" variant="cancel" onPress={closeModal} />
-                  <ModalButton
-                    title="Continue"
-                    variant="destructive"
-                    onPress={handleDeleteConfirm}
-                    disabled={deleteConfirmInput !== 'DELETE'}
-                  />
-                </View>
-              </View>
-            </View>
-          </KeyboardAvoidingView>
-        </GestureHandlerRootView>
-      </Modal>
+        <View style={styles.modalButtons}>
+          <ModalButton title="Cancel" variant="cancel" onPress={closeModal} />
+          <ModalButton
+            title="Continue"
+            variant="destructive"
+            onPress={handleDeleteConfirm}
+            disabled={deleteConfirmInput !== 'DELETE'}
+          />
+        </View>
+      </AppModal>
 
       {/* ------------------------------------------------------------------- */}
       {/* Modal: Delete Account — Step 2 (Re-authentication for email accounts)*/}
       {/* ------------------------------------------------------------------- */}
-      <Modal
+      <AppModal
         visible={activeModal === 'deleteAccountReauth'}
-        animationType="fade"
-        transparent
-        onRequestClose={closeModal}
+        onClose={closeModal}
+        dismissOnBackdrop={false}
       >
-        <GestureHandlerRootView style={{ flex: 1 }}>
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            style={{ flex: 1 }}
-          >
-            <View style={styles.modalOverlay}>
-              <View style={styles.modalContent}>
-                <Ionicons
-                  name="shield-checkmark-outline"
-                  size={32}
-                  color="#C04657"
-                  style={styles.modalIcon}
-                />
-                <Text style={styles.modalTitle}>Confirm Identity</Text>
-                <Text style={styles.modalBody}>
-                  For your security, please enter your password to continue.
-                </Text>
+        <Ionicons
+          name="shield-checkmark-outline"
+          size={32}
+          color="#C04657"
+          style={styles.modalIcon}
+        />
+        <Text style={appModalStyles.title}>Confirm Identity</Text>
+        <Text style={styles.modalBody}>
+          For your security, please enter your password to continue.
+        </Text>
 
-                <TextInput
-                  style={[styles.textInput, styles.textInputDisabled]}
-                  value={email}
-                  editable={false}
-                  selectTextOnFocus={false}
-                />
-                <TextInput
-                  style={styles.textInput}
-                  value={reauthPassword}
-                  onChangeText={setReauthPassword}
-                  placeholder="Password"
-                  placeholderTextColor="rgba(255,255,255,0.3)"
-                  secureTextEntry
-                  autoCapitalize="none"
-                  autoCorrect={false}
-                  editable={!modalLoading}
-                />
+        <TextInput
+          style={[styles.textInput, styles.textInputDisabled]}
+          value={email}
+          editable={false}
+          selectTextOnFocus={false}
+        />
+        <TextInput
+          style={styles.textInput}
+          value={reauthPassword}
+          onChangeText={setReauthPassword}
+          placeholder="Password"
+          placeholderTextColor="rgba(255,255,255,0.3)"
+          secureTextEntry
+          autoCapitalize="none"
+          autoCorrect={false}
+          editable={!modalLoading}
+        />
 
-                {modalError ? (
-                  <Text style={styles.modalError}>{modalError}</Text>
-                ) : null}
+        {modalError ? (
+          <Text style={styles.modalError}>{modalError}</Text>
+        ) : null}
 
-                {modalLoading ? (
-                  <ActivityIndicator color="#C04657" style={styles.modalSpinner} />
-                ) : (
-                  <View style={styles.modalButtons}>
-                    <ModalButton title="Cancel" variant="cancel" onPress={closeModal} />
-                    <ModalButton
-                      title="Delete Account"
-                      variant="destructive"
-                      onPress={handleDeleteAccountWithReauth}
-                      disabled={!reauthPassword}
-                    />
-                  </View>
-                )}
-              </View>
-            </View>
-          </KeyboardAvoidingView>
-        </GestureHandlerRootView>
-      </Modal>
+        {modalLoading ? (
+          <ActivityIndicator color="#C04657" style={styles.modalSpinner} />
+        ) : (
+          <View style={styles.modalButtons}>
+            <ModalButton title="Cancel" variant="cancel" onPress={closeModal} />
+            <ModalButton
+              title="Delete Account"
+              variant="destructive"
+              onPress={handleDeleteAccountWithReauth}
+              disabled={!reauthPassword}
+            />
+          </View>
+        )}
+      </AppModal>
 
       <CurrencyPickerModal
         visible={showCurrencyPicker}
@@ -902,33 +832,9 @@ const styles = StyleSheet.create({
   },
 
   // Modal shared
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  modalContent: {
-    backgroundColor: '#1A1A1A',
-    borderRadius: 20,
-    padding: 24,
-    width: '100%',
-    maxWidth: 400,
-    borderWidth: 1,
-    borderColor: 'rgba(176,114,187,0.2)',
-  },
   modalIcon: {
     alignSelf: 'center',
     marginBottom: 12,
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    textAlign: 'center',
-    marginBottom: 8,
-    backgroundColor: 'transparent',
   },
   modalSubtitle: {
     fontSize: 13,
