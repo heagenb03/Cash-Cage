@@ -261,6 +261,7 @@ export async function getSettlements(
 export function validateSettlements(
   balances: PlayerBalance[],
   formatMoney: (n: number) => string = (n) => `$${n.toFixed(2)}`,
+  bankerPlayerId?: string,
 ): Validation {
   const tolerance = 2.50;
   const validation : Validation = {
@@ -272,7 +273,9 @@ export function validateSettlements(
     netDifference: 0
   };
 
-  const playersWithNoActivity = balances.filter(b => b.totalBuyins === 0 && b.totalCashouts === 0);
+  const playersWithNoActivity = balances.filter(
+    b => b.totalBuyins === 0 && b.totalCashouts === 0 && b.playerId !== bankerPlayerId
+  );
   if (!Array.isArray(balances) || balances.length === 0) {
     validation.errors.push('No player balances available for validation.');
     return validation;

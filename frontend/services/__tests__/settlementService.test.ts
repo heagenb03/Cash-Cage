@@ -400,3 +400,27 @@ describe('calculateBankerSettlements', () => {
     expect(settlements.every(s => s.amount % 5 === 0)).toBe(true);
   });
 });
+
+describe('validateSettlements banker exemption', () => {
+  it('does not error on a zero-activity player when they are the banker', () => {
+    const balances = [
+      makeBalance('Bank', 0, 0), // banker, no activity
+      makeBalance('L1', 50, 0),
+      makeBalance('W1', 0, 50),
+    ];
+    const v = validateSettlements(balances, undefined, 'id_Bank');
+    expect(v.errors).toHaveLength(0);
+    expect(v.isValid).toBe(true);
+  });
+
+  it('still errors on a zero-activity player who is NOT the banker', () => {
+    const balances = [
+      makeBalance('Bank', 40, 40),
+      makeBalance('Ghost', 0, 0), // not the banker
+      makeBalance('L1', 50, 0),
+    ];
+    const v = validateSettlements(balances, undefined, 'id_Bank');
+    expect(v.isValid).toBe(false);
+    expect(v.errors.join(' ')).toContain('Ghost');
+  });
+});
