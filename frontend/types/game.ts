@@ -39,6 +39,12 @@ export interface Game {
   /** Cash rounding unit in the game's currency. Default 5. 0 (or <=0) = Exact (no rounding). */
   cashUnit?: number;
 
+  /** Settlement mode. Absent = 'optimal' (peer-to-peer solver). 'banker' = star through bankerPlayerId. */
+  settlementMode?: 'optimal' | 'banker';
+
+  /** The player acting as banker/hub. Required when settlementMode === 'banker'. */
+  bankerPlayerId?: string;
+
   // Settlement cache
   cachedSettlements?: SettlementResult;
   transactionHash?: string;

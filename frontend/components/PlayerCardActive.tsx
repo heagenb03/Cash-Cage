@@ -19,6 +19,7 @@ interface PlayerCardActiveProps {
   onDelete: (player: Player) => void;
   onRename: (player: Player) => void;
   onEditPayment: (player: Player) => void;
+  isBanker?: boolean;
   reduceMotion: boolean;
 }
 
@@ -31,6 +32,7 @@ const PlayerCardActive: React.FC<PlayerCardActiveProps> = ({
   onDelete,
   onRename,
   onEditPayment,
+  isBanker = false,
   reduceMotion
 }) => {
   const scaleAnim = useRef(new Animated.Value(1)).current;
@@ -113,6 +115,14 @@ const PlayerCardActive: React.FC<PlayerCardActiveProps> = ({
             <RNTouchableOpacity onPress={() => onRename(player)} style={styles.nameRow}>
               <Text style={styles.playerName}>{player.name}</Text>
               <Text style={styles.nameEditIcon}>✎</Text>
+              {isBanker && (
+                <View style={styles.bankerBadge}>
+                  <Text style={styles.bankerBadgeText}>BANKER</Text>
+                </View>
+              )}
+              {isBanker && (balance?.totalBuyins ?? 0) === 0 && (balance?.totalCashouts ?? 0) === 0 && (
+                <Text style={styles.notPlayingHint}>not playing</Text>
+              )}
             </RNTouchableOpacity>
             <RNTouchableOpacity onPress={() => onEditPayment(player)} style={styles.paymentBadge}>
               {player.preferredPayment ? (
@@ -244,6 +254,27 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: 'rgba(255,255,255,0.35)',
   },
+  bankerBadge: {
+    marginLeft: 6,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderRadius: 4,
+    backgroundColor: 'rgba(176,114,187,0.18)',
+    borderWidth: 1,
+    borderColor: 'rgba(176,114,187,0.45)',
+  },
+  bankerBadgeText: {
+    fontSize: 9,
+    fontWeight: '700',
+    letterSpacing: 1,
+    color: '#B072BB',
+  },
+  notPlayingHint: {
+    marginLeft: 6,
+    fontSize: 10,
+    fontStyle: 'italic',
+    color: 'rgba(255,255,255,0.35)',
+  },
 });
 
 export default React.memo(PlayerCardActive, (prevProps, nextProps) => {
@@ -254,6 +285,7 @@ export default React.memo(PlayerCardActive, (prevProps, nextProps) => {
     prevProps.balance?.totalCashouts === nextProps.balance?.totalCashouts &&
     prevProps.player.preferredPayment?.method === nextProps.player.preferredPayment?.method &&
     prevProps.player.preferredPayment?.handle === nextProps.player.preferredPayment?.handle &&
+    prevProps.isBanker === nextProps.isBanker &&
     prevProps.reduceMotion === nextProps.reduceMotion
   );
 });

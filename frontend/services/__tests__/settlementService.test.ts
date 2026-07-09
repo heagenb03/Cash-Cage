@@ -2,6 +2,7 @@ import {
   calculateOptimalSettlements,
   validateSettlements,
   getSettlements,
+  calculateBankerSettlements,
 } from '../settlementService';
 import { PlayerBalance } from '@/types/game';
 
@@ -355,5 +356,92 @@ describe('getSettlements', () => {
     // DOMException is not instanceof Error in the Jest/Node environment, so the
     // service normalizes it to 'unknown-error'. Verify fallback was triggered.
     expect(result.error).toBeDefined();
+  });
+});
+
+// ---- calculateBankerSettlements ----
+
+describe('calculateBankerSettlements', () => {
+  const banker = { id: 'id_Bank', name: 'Bank' };
+
+  it('losers pay the banker, banker pays winners (net)', () => {
+    const balances = [
+      makeBalance('Bank', 0, 0),   // non-playing banker, net 0
+      makeBalance('L1', 30, 0),    // net -30
+      makeBalance('L2', 20, 0),    // net -20
+      makeBalance('W1', 0, 50),    // net +50
+    ];
+    const { settlements, algorithm, source } = calculateBankerSettlements(balances, banker);
+    expect(algorithm).toBe('client-banker-v1');
+    expect(source).toBe('client');
+    expect(settlements).toContainEqual({ from: 'L1', to: 'Bank', amount: 30 });
+    expect(settlements).toContainEqual({ from: 'L2', to: 'Bank', amount: 20 });
+    expect(settlements).toContainEqual({ from: 'Bank', to: 'W1', amount: 50 });
+    expect(settlements).toHaveLength(3);
+  });
+
+  it('excludes the banker by id and skips zero-net players', () => {
+    const balances = [
+      makeBalance('Bank', 100, 150), // playing banker, net +50 — must NOT settle with self
+      makeBalance('Even', 40, 40),   // net 0 — skipped
+      makeBalance('L1', 50, 0),      // net -50
+    ];
+    const { settlements } = calculateBankerSettlements(balances, banker);
+    expect(settlements).toEqual([{ from: 'L1', to: 'Bank', amount: 50 }]);
+  });
+
+  it('excludes strictly by id — a balance sharing the banker\'s name but not its id is still settled', () => {
+    // makeBalance derives playerId as `id_${name}`, so it can't produce two
+    // different-id balances with the same name — a raw PlayerBalance literal
+    // is used here instead to get a name collision with a distinct id.
+    const dealerBanker = { id: 'id_Dealer', name: 'Dealer' };
+    const balances = [
+      // Same NAME as the banker ('Dealer') but a DIFFERENT id — must NOT be
+      // excluded if exclusion is truly id-keyed. Because settlements are
+      // rendered by name, this produces a same-name self-loop
+      // ({from:'Dealer', to:'Dealer'}) — that self-loop is the discriminator:
+      // an id-keyed implementation keeps it (length 2 below), a name-keyed
+      // implementation would wrongly skip it (length 1).
+      { playerId: 'id_Dealer_2', playerName: 'Dealer', totalBuyins: 40, totalCashouts: 0, netBalance: -40 },
+      makeBalance('W1', 0, 40),
+    ];
+    const { settlements } = calculateBankerSettlements(balances, dealerBanker);
+    expect(settlements).toHaveLength(2);
+    expect(settlements).toContainEqual({ from: 'Dealer', to: 'Dealer', amount: 40 });
+    expect(settlements).toContainEqual({ from: 'Dealer', to: 'W1', amount: 40 });
+  });
+
+  it('rounds nets to the cash unit before building the star', () => {
+    const balances = [
+      makeBalance('Bank', 0, 0),
+      makeBalance('L1', 53, 0),   // -53 → -55 at unit 5
+      makeBalance('W1', 0, 53),   // +53 → +55 at unit 5
+    ];
+    const { settlements } = calculateBankerSettlements(balances, banker, 5);
+    expect(settlements.every(s => s.amount % 5 === 0)).toBe(true);
+  });
+});
+
+describe('validateSettlements banker exemption', () => {
+  it('does not error on a zero-activity player when they are the banker', () => {
+    const balances = [
+      makeBalance('Bank', 0, 0), // banker, no activity
+      makeBalance('L1', 50, 0),
+      makeBalance('W1', 0, 50),
+    ];
+    const v = validateSettlements(balances, undefined, 'id_Bank');
+    expect(v.errors).toHaveLength(0);
+    expect(v.isValid).toBe(true);
+  });
+
+  it('still errors on a zero-activity player who is NOT the banker', () => {
+    const balances = [
+      makeBalance('Bank', 40, 40),
+      makeBalance('Ghost', 0, 0), // not the banker
+      makeBalance('L1', 50, 0),
+    ];
+    const v = validateSettlements(balances, undefined, 'id_Bank');
+    expect(v.isValid).toBe(false);
+    expect(v.errors.join(' ')).toContain('Ghost');
   });
 });

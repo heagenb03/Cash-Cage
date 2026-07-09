@@ -135,6 +135,14 @@ export class GameService {
     game.transactions = game.transactions.filter(
       transaction => transaction.playerId !== playerId
     );
+
+    // If the removed player was the designated banker, fall back to optimal
+    // mode rather than leaving a dangling bankerPlayerId pointing at nobody.
+    if (game.bankerPlayerId === playerId) {
+      game.settlementMode = 'optimal';
+      game.bankerPlayerId = undefined;
+      this.clearSettlementCache(game);
+    }
   }
 
   /**
@@ -184,8 +192,9 @@ export class GameService {
   static validateGame(
     balances: PlayerBalance[],
     formatMoney?: (n: number) => string,
+    bankerPlayerId?: string,
   ): Validation {
-    return validateSettlements(balances, formatMoney);
+    return validateSettlements(balances, formatMoney, bankerPlayerId);
   }
   
   static completeGame(game: Game): void {

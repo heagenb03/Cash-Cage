@@ -7,7 +7,7 @@ import { Text, View } from '@/components/Themed';
 import { useGame } from '@/contexts/GameContext';
 import { useRouter } from 'expo-router';
 import { GameService } from '@/services/gameService';
-import { getSettlements } from '@/services/settlementService';
+import { getSettlements, calculateBankerSettlements } from '@/services/settlementService';
 import { Player, PlayerBalance, Validation, PreferredPayment } from '@/types/game';
 import { getNetBalanceColor, formatNetBalanceDisplay } from '@/utils/formatUtils';
 import { incrementProfileStats } from '@/services/firebaseService';
@@ -20,6 +20,7 @@ import Button from '@/components/Button';
 import ModalButton from '@/components/ModalButton';
 import PaywallModal from '@/components/PaywallModal';
 import CashUnitPickerModal from '@/components/CashUnitPickerModal';
+import SettlementModePicker from '@/components/SettlementModePicker';
 import PaymentEditorModal from '@/components/PaymentEditorModal';
 import AppModal, { AppModalCard, appModalStyles } from '@/components/AppModal';
 import { useAuth } from '@/contexts/AuthContext';
@@ -190,6 +191,10 @@ export default function ActiveGameScreen() {
   };
 
   const [showAddPlayer, setShowAddPlayer] = useState(false);
+  // Set by handleAddBanker; consumed (and reset) by commitAddPlayer or the Add Player
+  // modal's cancel/close paths. When true, the player resulting from the Add Player flow
+  // is designated banker.
+  const [pendingBankerDesignation, setPendingBankerDesignation] = useState(false);
   const [showAddTransaction, setShowAddTransaction] = useState(false);
   const [newPlayerName, setNewPlayerName] = useState('');
   const [newPlayerBuyIn, setNewPlayerBuyIn] = useState('');
@@ -227,6 +232,7 @@ export default function ActiveGameScreen() {
   const [validationResult, setValidationResult] = useState<Validation | null>(null);
   const [showSolvingModal, setShowSolvingModal] = useState(false);
   const [showCashUnitPicker, setShowCashUnitPicker] = useState(false);
+  const [showSettlementModePicker, setShowSettlementModePicker] = useState(false);
   const [showDistortionModal, setShowDistortionModal] = useState(false);
   const [distortions, setDistortions] = useState<PlayerDistortion[]>([]);
 
@@ -398,6 +404,12 @@ export default function ActiveGameScreen() {
       if (!isNaN(buyInAmount) && buyInAmount > 0) {
         GameService.addTransaction(activeGame, player.id, 'buyin', buyInAmount);
       }
+
+      if (pendingBankerDesignation) {
+        activeGame.settlementMode = 'banker';
+        activeGame.bankerPlayerId = player.id;
+        GameService.clearSettlementCache(activeGame);
+      }
       await updateGame(activeGame);
 
       setNewPlayerName('');
@@ -406,6 +418,7 @@ export default function ActiveGameScreen() {
       setSelectedSavedId(null);
       setDisambiguation(null);
       setShowAddPlayer(false);
+      setPendingBankerDesignation(false);
     } finally {
       addingPlayerRef.current = false;
     }
@@ -539,7 +552,11 @@ export default function ActiveGameScreen() {
 
   const handleCompleteGame = () => {
     const balances = GameService.calculateBalances(activeGame);
-    const validation = GameService.validateGame(balances, formatAmount);
+    const validation = GameService.validateGame(
+      balances,
+      formatAmount,
+      activeGame.settlementMode === 'banker' ? activeGame.bankerPlayerId : undefined,
+    );
 
     setValidationResult(validation);
 
@@ -564,9 +581,20 @@ export default function ActiveGameScreen() {
       setShowSolvingModal(true);
 
       const balances = GameService.calculateBalances(activeGame);
-      const result = await getSettlements(balances, {
-        settings: { cashRoundingUnit: resolveCashUnit(activeGame.cashUnit, currency) },
-      });
+      const banker =
+        activeGame.settlementMode === 'banker'
+          ? activeGame.players.find(p => p.id === activeGame.bankerPlayerId)
+          : undefined;
+      const result =
+        banker
+          ? calculateBankerSettlements(
+              balances,
+              { id: banker.id, name: banker.name },
+              resolveCashUnit(activeGame.cashUnit, currency),
+            )
+          : await getSettlements(balances, {
+              settings: { cashRoundingUnit: resolveCashUnit(activeGame.cashUnit, currency) },
+            });
 
       GameService.cacheSettlements(activeGame, result);
       await updateGame(activeGame);
@@ -598,6 +626,29 @@ export default function ActiveGameScreen() {
       Alert.alert('Error', 'Failed to complete game. Please try again.');
       console.error('Error completing game:', error);
     }
+  };
+
+  const bankerName =
+    activeGame.settlementMode === 'banker'
+      ? activeGame.players.find(p => p.id === activeGame.bankerPlayerId)?.name
+      : undefined;
+
+  const applySettlementMode = async (mode: 'optimal' | 'banker', bankerId?: string) => {
+    activeGame.settlementMode = mode;
+    activeGame.bankerPlayerId = mode === 'banker' ? bankerId : undefined;
+    GameService.clearSettlementCache(activeGame);
+    await updateGame(activeGame);
+  };
+
+  const handleAddBanker = (name: string) => {
+    // Delegate to the standard Add Player flow (disambiguation + distinct-name prompt)
+    // instead of adding directly, so this player is subject to the same hardened
+    // save/bind invariants as any other add. The picker (a native Modal) closes right
+    // after this via its own onClose, in the same batched update that opens the Add
+    // Player AppModal below — matching the existing paywall close-then-open precedent.
+    setPendingBankerDesignation(true);
+    setNewPlayerName(name.trim());
+    setShowAddPlayer(true);
   };
 
   const handleConfirmCompletion = async () => {
@@ -765,6 +816,18 @@ export default function ActiveGameScreen() {
                 : formatAmount(resolveCashUnit(activeGame.cashUnit, currency))}
             </Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.cashUnitRow}
+            onPress={() => setShowSettlementModePicker(true)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.cashUnitLabel}>Settlement: </Text>
+            <Text style={styles.cashUnitValue}>
+              {activeGame.settlementMode === 'banker'
+                ? `Banker · ${bankerName ?? 'choose'}`
+                : 'Optimal'}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Active Players List */}
@@ -801,6 +864,7 @@ export default function ActiveGameScreen() {
                     onRename={openRenameModal}
                     onEditPayment={openPaymentEditor}
                     reduceMotion={reduceMotionEnabled}
+                    isBanker={activeGame.settlementMode === 'banker' && activeGame.bankerPlayerId === player.id}
                   />
                 </View>
               );
@@ -848,7 +912,7 @@ export default function ActiveGameScreen() {
       <AppModal
         visible={showAddPlayer}
         title="Add Player"
-        onClose={() => { setDisambiguation(null); setNewPersonPrompt(null); setSelectedSavedId(null); setShowAddPlayer(false); }}
+        onClose={() => { setDisambiguation(null); setNewPersonPrompt(null); setSelectedSavedId(null); setShowAddPlayer(false); setPendingBankerDesignation(false); }}
         contentStyle={appModalStyles.centeredContent}
         overlay={
           <>
@@ -905,6 +969,9 @@ export default function ActiveGameScreen() {
           </>
         }
       >
+            {pendingBankerDesignation && (
+              <Text style={styles.bankerPendingHint}>This person will be set as banker</Text>
+            )}
             <TextInput
               style={[styles.input, playerSuggestions.length > 0 && styles.inputWithSuggestions]}
               value={newPlayerName}
@@ -962,6 +1029,7 @@ export default function ActiveGameScreen() {
                     // iOS shows one native modal at a time: close this one, then open the paywall
                     // (same direct close-then-open pattern as the distortion → completion modal swap).
                     setShowAddPlayer(false);
+                    setPendingBankerDesignation(false);
                     setPaywallMessage(SAVED_CAP_PAYWALL_MESSAGE);
                     setShowPaywall(true);
                   }}
@@ -993,6 +1061,7 @@ export default function ActiveGameScreen() {
                   setDisambiguation(null);
                   setNewPersonPrompt(null);
                   setShowAddPlayer(false);
+                  setPendingBankerDesignation(false);
                 }}
               />
               <ModalButton
@@ -1267,6 +1336,17 @@ export default function ActiveGameScreen() {
           await updateGame(activeGame);
         }}
         onClose={() => setShowCashUnitPicker(false)}
+      />
+
+      <SettlementModePicker
+        visible={showSettlementModePicker}
+        players={activeGame.players}
+        mode={activeGame.settlementMode ?? 'optimal'}
+        bankerPlayerId={activeGame.bankerPlayerId}
+        onSelectOptimal={() => applySettlementMode('optimal')}
+        onSelectBanker={(id) => applySettlementMode('banker', id)}
+        onAddBanker={handleAddBanker}
+        onClose={() => setShowSettlementModePicker(false)}
       />
 
       {/* Payment Editor Modal */}
@@ -1661,6 +1741,13 @@ const styles = StyleSheet.create({
     color: '#B072BB',
     fontSize: 15,
     fontWeight: '600',
+  },
+  bankerPendingHint: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#B072BB',
+    textAlign: 'center',
+    marginBottom: 10,
   },
   disambigSub: { fontSize: 13, color: 'rgba(255,255,255,0.5)', textAlign: 'center', marginBottom: 12 },
   disambigRow: { paddingVertical: 12, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1, borderColor: '#242424', backgroundColor: '#161616', marginBottom: 8 },

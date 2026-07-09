@@ -73,6 +73,7 @@ export function calculateOptimalSettlements(balances: PlayerBalance[]): Settleme
 
 const LOCAL_ALGORITHM_ID = 'client-greedy-v1';
 const DEFAULT_SERVER_ALGORITHM_ID = 'server-milp-v1';
+const LOCAL_BANKER_ALGORITHM_ID = 'client-banker-v1';
 
 function createLocalSettlementResult(
   balances: PlayerBalance[],
@@ -89,6 +90,41 @@ function createLocalSettlementResult(
     source: 'client',
     generatedAt: new Date().toISOString(),
     error: reason,
+  };
+}
+
+/**
+ * Star-topology settlement through a designated banker (home cash-game "the bank" model).
+ * Every non-banker settles their entire net directly with the banker:
+ *   net < 0 → player pays banker |net|;  net > 0 → banker pays player net.
+ * The banker's own net is absorbed by being the hub (no self-line). Computed on-device only.
+ */
+export function calculateBankerSettlements(
+  balances: PlayerBalance[],
+  banker: { id: string; name: string },
+  cashRoundingUnit?: number,
+): SettlementResult {
+  const prepared =
+    typeof cashRoundingUnit === 'number' && cashRoundingUnit > 0
+      ? roundBalancesToUnit(balances, cashRoundingUnit)
+      : balances;
+
+  const settlements: Settlement[] = [];
+  for (const b of prepared) {
+    if (b.playerId === banker.id) continue;
+    const net = parseFloat(b.netBalance.toFixed(2));
+    if (net < 0) {
+      settlements.push({ from: b.playerName, to: banker.name, amount: Math.abs(net) });
+    } else if (net > 0) {
+      settlements.push({ from: banker.name, to: b.playerName, amount: net });
+    }
+  }
+
+  return {
+    settlements,
+    algorithm: LOCAL_BANKER_ALGORITHM_ID,
+    source: 'client',
+    generatedAt: new Date().toISOString(),
   };
 }
 
@@ -225,6 +261,7 @@ export async function getSettlements(
 export function validateSettlements(
   balances: PlayerBalance[],
   formatMoney: (n: number) => string = (n) => `$${n.toFixed(2)}`,
+  bankerPlayerId?: string,
 ): Validation {
   const tolerance = 2.50;
   const validation : Validation = {
@@ -236,7 +273,9 @@ export function validateSettlements(
     netDifference: 0
   };
 
-  const playersWithNoActivity = balances.filter(b => b.totalBuyins === 0 && b.totalCashouts === 0);
+  const playersWithNoActivity = balances.filter(
+    b => b.totalBuyins === 0 && b.totalCashouts === 0 && b.playerId !== bankerPlayerId
+  );
   if (!Array.isArray(balances) || balances.length === 0) {
     validation.errors.push('No player balances available for validation.');
     return validation;
