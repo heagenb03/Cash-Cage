@@ -867,7 +867,7 @@ export default function ActiveGameScreen() {
                     </TouchableOpacity>
                   );
                 })}
-                <TouchableOpacity style={styles.disambigRow} onPress={() => commitAddPlayer(null)}>
+                <TouchableOpacity style={styles.disambigRow} onPress={() => { setDisambiguation(null); handleAddNewPerson(); }}>
                   <Text style={styles.disambigNewText}>+ Add as a new person</Text>
                 </TouchableOpacity>
                 <View style={styles.modalButtons}>
