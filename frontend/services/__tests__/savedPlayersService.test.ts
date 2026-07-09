@@ -339,6 +339,53 @@ describe('loadSavedPlayers', () => {
   });
 });
 
+describe('duplicate-name regression (id-less remote / corrupted local)', () => {
+  it('does not duplicate a name when the remote copy is a legacy id-less entry', async () => {
+    await savePlayer(A, 'Alice'); // local: { id: 'legacy:alice', name: 'Alice' }
+    // Firestore holds a pre-refactor, id-less copy of the SAME person. Without coercing
+    // the remote list, unionMerge keys it under `undefined` and keeps it alongside the
+    // coerced-local 'legacy:alice' — two rows named 'Alice'.
+    (fetchSavedPlayersFromFirestore as jest.Mock).mockResolvedValueOnce([
+      { name: 'Alice', updatedAt: 1 },
+    ]);
+    const merged = await new Promise<SavedPlayer[]>((resolve, reject) => {
+      loadSavedPlayers(A, resolve).catch(reject);
+    });
+    expect(merged.filter(p => p.name === 'Alice')).toHaveLength(1);
+    expect(merged[0].id).toBe('legacy:alice');
+  });
+
+  it('heals an already-corrupted local list (two entries coercing to the same id)', async () => {
+    // Storage left doubled by the pre-fix merge: two id-less 'Alice' copies that both
+    // coerce to id 'legacy:alice'. The read path must dedupe them (keeping the newest).
+    await AsyncStorage.setItem(
+      `saved_player_names:${A}`,
+      JSON.stringify([
+        { name: 'Alice', updatedAt: 1 },
+        { name: 'Alice', updatedAt: 2 },
+      ]),
+    );
+    const players = await getSavedPlayers(A);
+    expect(players).toHaveLength(1);
+    expect(players[0].id).toBe('legacy:alice');
+    expect(players[0].updatedAt).toBe(2);
+  });
+
+  it('plain add (deterministic id) reconciles with a remote-only same-name entry', async () => {
+    // The screen's plain "Add" routes through savePlayer, whose deterministic legacy:<name>
+    // id matches a same-name copy that exists only in Firestore (other device / pre-sync) —
+    // so the two collapse to one on merge. (createSavedPlayer's random id would NOT: that is
+    // reserved for the explicit "Add separate person" path.)
+    await savePlayer(A, 'Alice'); // deterministic legacy:alice, local-only
+    (fetchSavedPlayersFromFirestore as jest.Mock).mockResolvedValueOnce([{ name: 'Alice', updatedAt: 1 }]);
+    const merged = await new Promise<SavedPlayer[]>((resolve, reject) => {
+      loadSavedPlayers(A, resolve).catch(reject);
+    });
+    expect(merged.filter(p => p.name === 'Alice')).toHaveLength(1);
+    expect(merged[0].id).toBe('legacy:alice');
+  });
+});
+
 describe('id-addressed CRUD', () => {
   it('createSavedPlayer returns a new id and stores the entry', async () => {
     const res = await createSavedPlayer(A, 'Mike', { method: 'venmo', handle: 'm' });

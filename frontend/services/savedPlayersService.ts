@@ -68,6 +68,29 @@ function coerce(entry: unknown): SavedPlayer | null {
   return null;
 }
 
+/**
+ * Collapse entries that share an id, keeping the greater-updatedAt copy (missing → 0) and
+ * preserving first-seen order. Coercion can mint the SAME deterministic `legacy:<name>` id
+ * for two id-less same-name entries, so any list built by coercing raw (local or remote)
+ * data must pass through here before it reaches unionMerge or the UI — otherwise two rows
+ * collide on `key={p.id}`.
+ */
+function dedupeById(list: SavedPlayer[]): SavedPlayer[] {
+  const byId = new Map<string, SavedPlayer>();
+  for (const entry of list) {
+    const existing = byId.get(entry.id);
+    if (!existing || (entry.updatedAt ?? 0) >= (existing.updatedAt ?? 0)) {
+      byId.set(entry.id, entry);
+    }
+  }
+  return Array.from(byId.values());
+}
+
+/** Coerce every raw entry into a SavedPlayer and dedupe by id. */
+function normalize(entries: unknown[]): SavedPlayer[] {
+  return dedupeById(entries.map(coerce).filter((p): p is SavedPlayer => p !== null));
+}
+
 function parseList(raw: string | null): SavedPlayer[] {
   if (!raw) return [];
   let parsed: unknown;
@@ -77,7 +100,7 @@ function parseList(raw: string | null): SavedPlayer[] {
     return [];
   }
   if (!Array.isArray(parsed)) return [];
-  return parsed.map(coerce).filter((p): p is SavedPlayer => p !== null);
+  return normalize(parsed);
 }
 
 /**
@@ -366,7 +389,10 @@ export async function loadSavedPlayers(
   if (uid) {
     (async () => {
       try {
-        const remote = await fetchSavedPlayersFromFirestore(uid);
+        // Coerce/dedupe remote the same way local reads are: legacy Firestore docs hold
+        // id-less entries, and unionMerge keys by id — an uncoerced `undefined` id would
+        // sit alongside the coerced-local `legacy:<name>` twin and duplicate the person.
+        const remote = normalize(await fetchSavedPlayersFromFirestore(uid));
         if (signal?.aborted) return;
         const merged = await enqueue(async () => {
           const cur = await readLocal(uid);

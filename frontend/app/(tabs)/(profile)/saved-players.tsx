@@ -21,6 +21,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useReduceMotion } from '@/hooks/useReduceMotion';
 import {
   createSavedPlayer,
+  savePlayer,
   updateSavedPlayer,
   deleteSavedPlayerById,
   deleteSavedPlayersByIds,
@@ -195,27 +196,38 @@ export default function SavedPlayersScreen() {
       setShowPaywall(true);
     }
   }, [players.length, isPro, openAdd]);
-  const doCreate = useCallback(async (name: string, payment?: PreferredPayment) => {
-    if (!uid) return;
-    if (creatingRef.current) return;
-    creatingRef.current = true;
-    setAdding(true);
-    try {
-      const res = await createSavedPlayer(uid, name, payment, cap);
-      if (!res.ok && res.reason === 'full') {
-        Alert.alert('Saved Players Full', `You've reached the ${cap}-player limit.`);
+  // asNewPerson=true is the deliberate "Add separate" path → mint a fresh random id even if
+  // the name exists. The plain Add path (asNewPerson=false) uses savePlayer's deterministic
+  // legacy:<name> id so a same-name entry that exists only remotely (other device / pre-sync)
+  // reconciles by id on the next merge instead of duplicating.
+  const doCreate = useCallback(
+    async (name: string, payment?: PreferredPayment, asNewPerson: boolean = true) => {
+      if (!uid) return;
+      if (creatingRef.current) return;
+      creatingRef.current = true;
+      setAdding(true);
+      try {
+        if (asNewPerson) {
+          const res = await createSavedPlayer(uid, name, payment, cap);
+          if (!res.ok && res.reason === 'full') {
+            Alert.alert('Saved Players Full', `You've reached the ${cap}-player limit.`);
+          }
+        } else {
+          await savePlayer(uid, name, payment, cap);
+        }
+        setShowAdd(false);
+        setDupConfirm(null);
+        reload();
+      } catch {
+        setShowAdd(false);
+        Alert.alert('Error', 'Could not add player. Please try again.');
+      } finally {
+        setAdding(false);
+        creatingRef.current = false;
       }
-      setShowAdd(false);
-      setDupConfirm(null);
-      reload();
-    } catch {
-      setShowAdd(false);
-      Alert.alert('Error', 'Could not add player. Please try again.');
-    } finally {
-      setAdding(false);
-      creatingRef.current = false;
-    }
-  }, [uid, cap, reload]);
+    },
+    [uid, cap, reload],
+  );
 
   const handleAdd = useCallback(async () => {
     if (addingRef.current) return;
@@ -240,7 +252,7 @@ export default function SavedPlayersScreen() {
         setDupConfirm({ name, payment: addPayment }); // ask: separate person?
         return;
       }
-      await doCreate(name, addPayment);
+      await doCreate(name, addPayment, false); // plain add → deterministic id (reconciles)
     } finally {
       addingRef.current = false;
     }
