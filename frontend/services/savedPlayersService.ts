@@ -31,18 +31,36 @@ export function canAddMoreSavedPlayers(count: number, isPro: boolean): boolean {
 }
 
 export interface SavedPlayer {
+  id: string;
   name: string;
   preferredPayment?: PreferredPayment;
   /** Epoch ms of the last edit; tie-breaker for cross-device union merge. */
   updatedAt?: number;
 }
 
+/** Random opaque id for a newly created saved player (mirrors gameService id style). */
+export function newSavedPlayerId(): string {
+  return `sp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+}
+
+/**
+ * Deterministic id for a legacy entry that predates the id field. Derived from the
+ * lowercased name so two devices migrating the SAME legacy list independently produce
+ * identical ids — union-by-id then dedups instead of doubling the person.
+ */
+export function legacyIdFor(name: string): string {
+  return `legacy:${name.trim().toLowerCase()}`;
+}
+
 /** Coerce a raw stored entry (legacy string or object) into a SavedPlayer. */
 function coerce(entry: unknown): SavedPlayer | null {
-  if (typeof entry === 'string') return { name: entry };
+  if (typeof entry === 'string') return { id: legacyIdFor(entry), name: entry };
   if (entry && typeof entry === 'object' && typeof (entry as any).name === 'string') {
-    const e = entry as { name: string; preferredPayment?: PreferredPayment; updatedAt?: number };
-    const out: SavedPlayer = { name: e.name };
+    const e = entry as { id?: string; name: string; preferredPayment?: PreferredPayment; updatedAt?: number };
+    const out: SavedPlayer = {
+      id: typeof e.id === 'string' && e.id ? e.id : legacyIdFor(e.name),
+      name: e.name,
+    };
     if (e.preferredPayment) out.preferredPayment = e.preferredPayment;
     if (typeof e.updatedAt === 'number') out.updatedAt = e.updatedAt;
     return out;
@@ -97,20 +115,18 @@ function pushRemote(uid: string, players: SavedPlayer[]): void {
 }
 
 /**
- * Union two lists by lowercased name. For a name in both, keep the entry with the
- * greater updatedAt (missing → 0). Result sorted by updatedAt desc so the most
- * recently touched name sorts first.
+ * Union two lists by id. For an id in both, keep the entry with the greater updatedAt
+ * (missing → 0). Result sorted by updatedAt desc so the most recently touched entry sorts first.
  */
 export function unionMerge(local: SavedPlayer[], remote: SavedPlayer[]): SavedPlayer[] {
-  const byName = new Map<string, SavedPlayer>();
+  const byId = new Map<string, SavedPlayer>();
   for (const entry of [...remote, ...local]) {
-    const key = entry.name.toLowerCase();
-    const existing = byName.get(key);
+    const existing = byId.get(entry.id);
     if (!existing || (entry.updatedAt ?? 0) >= (existing.updatedAt ?? 0)) {
-      byName.set(key, entry);
+      byId.set(entry.id, entry);
     }
   }
-  return Array.from(byName.values()).sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
+  return Array.from(byId.values()).sort((a, b) => (b.updatedAt ?? 0) - (a.updatedAt ?? 0));
 }
 
 /**
@@ -161,7 +177,7 @@ export async function savePlayer(
     const existing = current.find(p => p.name.toLowerCase() === lower);
     if (!existing && opts?.updateOnly) return; // update-only: never create an entry
     if (!existing && current.length >= limit) return; // list full — do not add a new name
-    const merged: SavedPlayer = { name, updatedAt: Date.now() };
+    const merged: SavedPlayer = { id: existing?.id ?? legacyIdFor(name), name, updatedAt: Date.now() };
     const pay = preferredPayment ?? existing?.preferredPayment;
     if (pay) merged.preferredPayment = pay;
     const deduped = [merged, ...current.filter(p => p.name.toLowerCase() !== lower)];
@@ -210,7 +226,7 @@ export async function renameSavedPlayer(
       return { ok: false, reason: 'conflict' };
     }
     const entry = current[idx];
-    const renamed: SavedPlayer = { name: trimmed, updatedAt: Date.now() };
+    const renamed: SavedPlayer = { id: entry.id, name: trimmed, updatedAt: Date.now() };
     if (entry.preferredPayment) renamed.preferredPayment = entry.preferredPayment;
     const next = current.map((p, i) => (i === idx ? renamed : p));
     await writeLocal(uid, next);
@@ -237,7 +253,7 @@ export async function deleteSavedPlayers(uid: string, names: string[]): Promise<
  */
 export async function addSavedPlayers(
   uid: string,
-  entries: SavedPlayer[],
+  entries: Omit<SavedPlayer, 'id'>[],
   opts: { limit: number },
 ): Promise<{ added: number; updated: number; skippedFull: number }> {
   return enqueue(async () => {
@@ -253,7 +269,12 @@ export async function addSavedPlayers(
       const idx = result.findIndex(p => p.name.toLowerCase() === lower);
       if (idx !== -1) {
         if (entry.preferredPayment) {
-          result[idx] = { name: result[idx].name, preferredPayment: entry.preferredPayment, updatedAt: now };
+          result[idx] = {
+            id: result[idx].id,
+            name: result[idx].name,
+            preferredPayment: entry.preferredPayment,
+            updatedAt: now,
+          };
           updated++;
         }
         continue;
@@ -262,7 +283,7 @@ export async function addSavedPlayers(
         skippedFull++;
         continue;
       }
-      const fresh: SavedPlayer = { name, updatedAt: now };
+      const fresh: SavedPlayer = { id: legacyIdFor(name), name, updatedAt: now };
       if (entry.preferredPayment) fresh.preferredPayment = entry.preferredPayment;
       result.unshift(fresh);
       added++;

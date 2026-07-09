@@ -24,6 +24,8 @@ import {
   PRO_SAVED_CAP,
   savedCapFor,
   canAddMoreSavedPlayers,
+  legacyIdFor,
+  newSavedPlayerId,
 } from '@/services/savedPlayersService';
 import { fetchSavedPlayersFromFirestore } from '@/services/firebaseService';
 
@@ -92,7 +94,10 @@ describe('legacy-key migration', () => {
 describe('coercion of stored entries', () => {
   it('reads a legacy string[] under a uid key as SavedPlayer[]', async () => {
     await AsyncStorage.setItem(`saved_player_names:${A}`, JSON.stringify(['Alice', 'Bob']));
-    expect(await getSavedPlayers(A)).toEqual([{ name: 'Alice' }, { name: 'Bob' }]);
+    expect(await getSavedPlayers(A)).toEqual([
+      { id: 'legacy:alice', name: 'Alice' },
+      { id: 'legacy:bob', name: 'Bob' },
+    ]);
   });
 
   it('reads a mixed array (legacy string + new object)', async () => {
@@ -101,8 +106,64 @@ describe('coercion of stored entries', () => {
       JSON.stringify(['Alice', { name: 'Bob', preferredPayment: { method: 'venmo', handle: '@bob' } }]),
     );
     const players = await getSavedPlayers(A);
-    expect(players[0]).toEqual({ name: 'Alice' });
+    expect(players[0]).toEqual({ id: 'legacy:alice', name: 'Alice' });
     expect(players[1].preferredPayment?.handle).toBe('@bob');
+  });
+});
+
+describe('id: deterministic migration + generation', () => {
+  it('legacyIdFor is deterministic and case-insensitive', () => {
+    expect(legacyIdFor('Mike')).toBe('legacy:mike');
+    expect(legacyIdFor('  MIKE  ')).toBe('legacy:mike');
+  });
+
+  it('newSavedPlayerId is unique and sp-prefixed', () => {
+    const a = newSavedPlayerId();
+    const b = newSavedPlayerId();
+    expect(a).toMatch(/^sp_/);
+    expect(a).not.toBe(b);
+  });
+
+  it('coerces a legacy string to an entry with a deterministic id', async () => {
+    await AsyncStorage.setItem(`saved_player_names:${A}`, JSON.stringify(['Alice']));
+    const [p] = await getSavedPlayers(A);
+    expect(p).toEqual({ id: 'legacy:alice', name: 'Alice' });
+  });
+
+  it('two independent migrations of the same legacy list converge on the same ids', async () => {
+    await AsyncStorage.setItem(`saved_player_names:${A}`, JSON.stringify(['Alice', 'Bob']));
+    await AsyncStorage.setItem(`saved_player_names:${B}`, JSON.stringify(['Bob', 'Alice']));
+    const idsA = (await getSavedPlayers(A)).map(p => p.id).sort();
+    const idsB = (await getSavedPlayers(B)).map(p => p.id).sort();
+    expect(idsA).toEqual(idsB);
+    expect(idsA).toEqual(['legacy:alice', 'legacy:bob']);
+  });
+
+  it('preserves an already-present id (does not re-mint)', async () => {
+    await AsyncStorage.setItem(
+      `saved_player_names:${A}`,
+      JSON.stringify([{ id: 'sp_kept', name: 'Alice' }]),
+    );
+    expect((await getSavedPlayers(A))[0].id).toBe('sp_kept');
+  });
+});
+
+describe('unionMerge keyed by id', () => {
+  it('keeps two same-name entries with different ids', () => {
+    const merged = unionMerge(
+      [{ id: 'sp_1', name: 'Mike', updatedAt: 1 }],
+      [{ id: 'sp_2', name: 'Mike', updatedAt: 2 }],
+    );
+    expect(merged.map(p => p.id).sort()).toEqual(['sp_1', 'sp_2']);
+  });
+
+  it('dedups same-id entries by greater updatedAt', () => {
+    const merged = unionMerge(
+      [{ id: 'sp_1', name: 'Mike', preferredPayment: { method: 'venmo', handle: 'old' }, updatedAt: 1 }],
+      [{ id: 'sp_1', name: 'Mike', preferredPayment: { method: 'cashapp', handle: 'new' }, updatedAt: 9 }],
+    );
+    expect(merged).toHaveLength(1);
+    expect(merged[0].preferredPayment).toEqual({ method: 'cashapp', handle: 'new' });
   });
 });
 
@@ -226,32 +287,13 @@ describe('concurrency', () => {
   });
 });
 
-describe('unionMerge', () => {
-  it('unions names from both sides', () => {
-    const merged = unionMerge(
-      [{ name: 'Alice', updatedAt: 1 }, { name: 'Bob', updatedAt: 2 }],
-      [{ name: 'Alice', updatedAt: 1 }, { name: 'Carol', updatedAt: 3 }],
-    );
-    expect(merged.map(p => p.name).sort()).toEqual(['Alice', 'Bob', 'Carol']);
-  });
-
-  it('keeps the payment from the entry with the greater updatedAt', () => {
-    const merged = unionMerge(
-      [{ name: 'Alice', preferredPayment: { method: 'venmo', handle: 'old' }, updatedAt: 1 }],
-      [{ name: 'alice', preferredPayment: { method: 'cashapp', handle: 'new' }, updatedAt: 9 }],
-    );
-    expect(merged).toHaveLength(1);
-    expect(merged[0].preferredPayment).toEqual({ method: 'cashapp', handle: 'new' });
-  });
-});
-
 describe('loadSavedPlayers', () => {
   it('returns local immediately and delivers the union-merged remote via onRemoteUpdate', async () => {
     await savePlayer(A, 'Alice');
     await savePlayer(A, 'Bob');
     (fetchSavedPlayersFromFirestore as jest.Mock).mockResolvedValueOnce([
-      { name: 'Alice', updatedAt: 1 },
-      { name: 'Carol', updatedAt: 2 },
+      { id: 'legacy:alice', name: 'Alice', updatedAt: 1 },
+      { id: 'sp_carol', name: 'Carol', updatedAt: 2 },
     ]);
     const merged = await new Promise<SavedPlayer[]>((resolve, reject) => {
       loadSavedPlayers(A, resolve).catch(reject);
@@ -264,6 +306,7 @@ describe('loadSavedPlayers', () => {
   it('clamps a union exceeding PRO_SAVED_CAP to 200, keeping the most-recently-touched names', async () => {
     // Seed 200 distinct local names with ascending updatedAt (Local1 oldest ... Local200 newest-of-locals).
     const localEntries: SavedPlayer[] = Array.from({ length: PRO_SAVED_CAP }, (_, i) => ({
+      id: `sp_local_${i + 1}`,
       name: `Local${i + 1}`,
       updatedAt: i + 1,
     }));
@@ -271,6 +314,7 @@ describe('loadSavedPlayers', () => {
 
     // Remote contributes 10 more distinct names, all newer than every local entry.
     const remoteEntries: SavedPlayer[] = Array.from({ length: 10 }, (_, i) => ({
+      id: `sp_remote_${i + 1}`,
       name: `Remote${i + 1}`,
       updatedAt: 100000 + i,
     }));
