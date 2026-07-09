@@ -5,14 +5,12 @@ import {
   View,
   Text,
   TouchableOpacity,
-  Modal,
   TextInput,
   Alert,
-  KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import AppModal, { AppModalCard, appModalStyles } from '@/components/AppModal';
 import ModalButton from '@/components/ModalButton';
 import PaymentEditorModal, { PaymentEditorContent } from '@/components/PaymentEditorModal';
 import PaywallModal from '@/components/PaywallModal';
@@ -398,54 +396,23 @@ export default function SavedPlayersScreen() {
         </View>
       )}
 
-      <Modal visible={showAdd} animationType="fade" transparent onRequestClose={() => setShowAdd(false)}>
-        <GestureHandlerRootView style={{ flex: 1 }}>
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-            <View style={styles.modalOverlay}>
-              <View style={styles.modalContent}>
-                <Text style={styles.modalTitle}>Add player</Text>
-                <View style={styles.addRow}>
-                  <TextInput
-                    style={styles.addRowInput}
-                    value={addName}
-                    onChangeText={setAddName}
-                    placeholder="Name"
-                    placeholderTextColor="rgba(255,255,255,0.3)"
-                    autoCapitalize="words"
-                    autoCorrect={false}
-                    autoFocus
-                    returnKeyType="done"
-                    onSubmitEditing={handleAdd}
-                  />
-                  <TouchableOpacity
-                    style={styles.rowPayBtn}
-                    onPress={() => setPaymentTarget({ kind: 'add' })}
-                  >
-                    <Text style={styles.rowPayText} numberOfLines={1}>
-                      {addPayment ? getPaymentMethodMeta(addPayment.method).label : '+ Payment'}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-                <View style={[styles.modalButtons, styles.addModalButtons]}>
-                  <ModalButton variant="cancel" title="Cancel" onPress={() => setShowAdd(false)} />
-                  <ModalButton variant="confirm" title="Add" onPress={handleAdd} disabled={adding} />
-                </View>
-              </View>
-            </View>
-          </KeyboardAvoidingView>
-          {/* Payment editor rendered IN PLACE (not a second <Modal>) — iOS presents one modal at a time. */}
-          {paymentTarget?.kind === 'add' && (
-            <PaymentEditorContent
-              player={paymentPlayer}
-              onSave={handlePaymentSave}
-              onClose={() => setPaymentTarget(null)}
-            />
-          )}
-          {/* Duplicate-name confirm rendered IN PLACE (not a second <Modal>) — same one-modal rule. */}
-          {dupConfirm && (
-            <View style={styles.modalOverlay}>
-              <View style={styles.modalContent}>
-                <Text style={styles.modalTitle}>Name already used</Text>
+      <AppModal
+        visible={showAdd}
+        title="Add player"
+        onClose={() => setShowAdd(false)}
+        overlay={
+          <>
+            {/* Payment editor rendered IN PLACE (not a second <Modal>) — iOS presents one modal at a time. */}
+            {paymentTarget?.kind === 'add' && (
+              <PaymentEditorContent
+                player={paymentPlayer}
+                onSave={handlePaymentSave}
+                onClose={() => setPaymentTarget(null)}
+              />
+            )}
+            {/* Duplicate-name confirm rendered IN PLACE — same one-modal rule. */}
+            {dupConfirm && (
+              <AppModalCard title="Name already used" onClose={() => setDupConfirm(null)}>
                 <Text style={styles.deleteWarningText}>
                   You already have a saved player named "{dupConfirm.name}". Add a separate person
                   with the same name?
@@ -459,11 +426,38 @@ export default function SavedPlayersScreen() {
                     disabled={adding}
                   />
                 </View>
-              </View>
-            </View>
-          )}
-        </GestureHandlerRootView>
-      </Modal>
+              </AppModalCard>
+            )}
+          </>
+        }
+      >
+        <View style={styles.addRow}>
+          <TextInput
+            style={styles.addRowInput}
+            value={addName}
+            onChangeText={setAddName}
+            placeholder="Name"
+            placeholderTextColor="rgba(255,255,255,0.3)"
+            autoCapitalize="words"
+            autoCorrect={false}
+            autoFocus
+            returnKeyType="done"
+            onSubmitEditing={handleAdd}
+          />
+          <TouchableOpacity
+            style={styles.rowPayBtn}
+            onPress={() => setPaymentTarget({ kind: 'add' })}
+          >
+            <Text style={styles.rowPayText} numberOfLines={1}>
+              {addPayment ? getPaymentMethodMeta(addPayment.method).label : '+ Payment'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+        <View style={[styles.modalButtons, styles.addModalButtons]}>
+          <ModalButton variant="cancel" title="Cancel" onPress={() => setShowAdd(false)} />
+          <ModalButton variant="confirm" title="Add" onPress={handleAdd} disabled={adding} />
+        </View>
+      </AppModal>
 
       {/* Edit path (tapping a saved player) has no other modal open, so it uses
           its own native modal. The 'row' path is handled in-place above. */}
@@ -481,98 +475,76 @@ export default function SavedPlayersScreen() {
         trialExpired={trialExpired}
       />
 
-      <Modal
+      <AppModal
         visible={renameTarget !== null}
-        animationType="fade"
-        transparent
-        onRequestClose={() => setRenameTarget(null)}
+        title="Rename Player"
+        onClose={() => setRenameTarget(null)}
       >
-        <GestureHandlerRootView style={{ flex: 1 }}>
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
-            <View style={styles.modalOverlay}>
-              <View style={styles.modalContent}>
-                <Text style={styles.modalTitle}>Rename Player</Text>
-                <TextInput
-                  style={styles.renameInput}
-                  value={renameName}
-                  onChangeText={setRenameName}
-                  placeholder="New name"
-                  placeholderTextColor="rgba(255,255,255,0.3)"
-                  autoCapitalize="words"
-                  autoCorrect={false}
-                  autoFocus
-                  returnKeyType="done"
-                  onSubmitEditing={handleRename}
-                />
-                <View style={styles.modalButtons}>
-                  <ModalButton variant="cancel" title="Cancel" onPress={() => setRenameTarget(null)} />
-                  <ModalButton variant="confirm" title="Save" onPress={handleRename} disabled={renaming} />
-                </View>
-              </View>
-            </View>
-          </KeyboardAvoidingView>
-        </GestureHandlerRootView>
-      </Modal>
+        <TextInput
+          style={styles.renameInput}
+          value={renameName}
+          onChangeText={setRenameName}
+          placeholder="New name"
+          placeholderTextColor="rgba(255,255,255,0.3)"
+          autoCapitalize="words"
+          autoCorrect={false}
+          autoFocus
+          returnKeyType="done"
+          onSubmitEditing={handleRename}
+        />
+        <View style={styles.modalButtons}>
+          <ModalButton variant="cancel" title="Cancel" onPress={() => setRenameTarget(null)} />
+          <ModalButton variant="confirm" title="Save" onPress={handleRename} disabled={renaming} />
+        </View>
+      </AppModal>
 
-      <Modal
+      <AppModal
         visible={deleteTarget !== null}
-        animationType="fade"
-        transparent
-        onRequestClose={() => setDeleteTarget(null)}
+        onClose={() => setDeleteTarget(null)}
+        dismissOnBackdrop={false}
+        contentStyle={appModalStyles.centeredContent}
       >
-        <GestureHandlerRootView style={{ flex: 1 }}>
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <Ionicons name="warning" size={48} color="#C04657" style={styles.warningIcon} />
-              <Text style={styles.modalTitle}>Delete Player?</Text>
-              <Text style={styles.deleteWarningText}>
-                This will remove {deleteTarget?.name} from your saved players.
-                {'\n\n'}This action cannot be undone.
-              </Text>
-              <View style={styles.modalButtons}>
-                <ModalButton variant="cancel" title="Cancel" onPress={() => setDeleteTarget(null)} />
-                <ModalButton variant="destructive" title="Delete" onPress={handleConfirmDelete} />
-              </View>
-            </View>
-          </View>
-        </GestureHandlerRootView>
-      </Modal>
+        <Ionicons name="warning" size={48} color="#C04657" style={styles.warningIcon} />
+        <Text style={appModalStyles.title}>Delete Player?</Text>
+        <Text style={styles.deleteWarningText}>
+          This will remove {deleteTarget?.name} from your saved players.
+          {'\n\n'}This action cannot be undone.
+        </Text>
+        <View style={styles.modalButtons}>
+          <ModalButton variant="cancel" title="Cancel" onPress={() => setDeleteTarget(null)} />
+          <ModalButton variant="destructive" title="Delete" onPress={handleConfirmDelete} />
+        </View>
+      </AppModal>
 
-      <Modal
+      <AppModal
         visible={showBulkDeleteConfirm}
-        animationType="fade"
-        transparent
-        onRequestClose={() => setShowBulkDeleteConfirm(false)}
+        onClose={() => setShowBulkDeleteConfirm(false)}
+        dismissOnBackdrop={false}
+        contentStyle={appModalStyles.centeredContent}
       >
-        <GestureHandlerRootView style={{ flex: 1 }}>
-          <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-              <Ionicons name="warning" size={48} color="#C04657" style={styles.warningIcon} />
-              <Text style={styles.modalTitle}>
-                Delete {selected.size} saved {selected.size === 1 ? 'player' : 'players'}?
-              </Text>
-              <Text style={styles.deleteWarningText}>
-                This action cannot be undone.
-              </Text>
-              <View style={styles.modalButtons}>
-                <ModalButton
-                  variant="cancel"
-                  title="Cancel"
-                  onPress={() => setShowBulkDeleteConfirm(false)}
-                />
-                <ModalButton
-                  variant="destructive"
-                  title="Delete"
-                  onPress={() => {
-                    setShowBulkDeleteConfirm(false);
-                    handleBulkDelete();
-                  }}
-                />
-              </View>
-            </View>
-          </View>
-        </GestureHandlerRootView>
-      </Modal>
+        <Ionicons name="warning" size={48} color="#C04657" style={styles.warningIcon} />
+        <Text style={appModalStyles.title}>
+          Delete {selected.size} saved {selected.size === 1 ? 'player' : 'players'}?
+        </Text>
+        <Text style={styles.deleteWarningText}>
+          This action cannot be undone.
+        </Text>
+        <View style={styles.modalButtons}>
+          <ModalButton
+            variant="cancel"
+            title="Cancel"
+            onPress={() => setShowBulkDeleteConfirm(false)}
+          />
+          <ModalButton
+            variant="destructive"
+            title="Delete"
+            onPress={() => {
+              setShowBulkDeleteConfirm(false);
+              handleBulkDelete();
+            }}
+          />
+        </View>
+      </AppModal>
     </GestureHandlerRootView>
   );
 }
@@ -626,23 +598,6 @@ const styles = StyleSheet.create({
     borderTopColor: '#2A2A2A',
     backgroundColor: '#0A0A0A',
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.7)',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 24,
-  },
-  modalContent: {
-    backgroundColor: '#1A1A1A',
-    borderRadius: 20,
-    padding: 24,
-    width: '100%',
-    maxWidth: 400,
-    borderWidth: 1,
-    borderColor: 'rgba(176,114,187,0.2)',
-  },
-  modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#FFFFFF', textAlign: 'center', marginBottom: 16 },
   addRow: { flexDirection: 'row', gap: 8, marginBottom: 10, alignItems: 'stretch' },
   addRowInput: {
     flex: 1,
@@ -665,7 +620,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   rowPayText: { fontSize: 12, color: 'rgba(176,114,187,0.9)' },
-  modalButtons: { flexDirection: 'row', gap: 10 },
+  modalButtons: { flexDirection: 'row', gap: 10, alignSelf: 'stretch' },
   addModalButtons: { marginTop: 16 },
   renameInput: {
     width: '100%',
