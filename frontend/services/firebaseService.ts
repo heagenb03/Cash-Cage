@@ -404,6 +404,8 @@ export function deserializeFirestoreGame(data: Record<string, any>): Game {
     syncedAt: toOptDate(data.syncedAt),
     cashUnit: data.cashUnit,
     currency: data.currency,
+    settlementMode: data.settlementMode,
+    bankerPlayerId: data.bankerPlayerId,
   };
 }
 
