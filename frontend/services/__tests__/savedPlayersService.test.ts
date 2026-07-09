@@ -12,6 +12,12 @@ import {
   getSavedPlayers,
   getSavedPlayerNames,
   getSavedPlayer,
+  getSavedPlayerById,
+  getSavedPlayersByName,
+  createSavedPlayer,
+  updateSavedPlayer,
+  deleteSavedPlayerById,
+  deleteSavedPlayersByIds,
   savePlayer,
   deleteSavedPlayer,
   deleteSavedPlayers,
@@ -333,39 +339,91 @@ describe('loadSavedPlayers', () => {
   });
 });
 
-describe('renameSavedPlayer', () => {
-  it('renames an entry, preserving payment and bumping updatedAt', async () => {
-    await savePlayer(A, 'Bob', { method: 'venmo', handle: '@bob' });
-    const before = (await getSavedPlayer(A, 'Bob'))!.updatedAt!;
-    const res = await renameSavedPlayer(A, 'Bob', 'Bobby');
-    expect(res).toEqual({ ok: true });
-    expect(await getSavedPlayer(A, 'Bob')).toBeUndefined();
-    const renamed = await getSavedPlayer(A, 'Bobby');
-    expect(renamed?.preferredPayment).toEqual({ method: 'venmo', handle: '@bob' });
-    expect(renamed?.updatedAt).toBeGreaterThanOrEqual(before);
+describe('id-addressed CRUD', () => {
+  it('createSavedPlayer returns a new id and stores the entry', async () => {
+    const res = await createSavedPlayer(A, 'Mike', { method: 'venmo', handle: 'm' });
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    const p = await getSavedPlayerById(A, res.id);
+    expect(p?.name).toBe('Mike');
+    expect(p?.preferredPayment).toEqual({ method: 'venmo', handle: 'm' });
   });
 
-  it('rejects a rename that collides with a different existing entry', async () => {
-    await savePlayer(A, 'Bob');
-    await savePlayer(A, 'Jordan');
-    const res = await renameSavedPlayer(A, 'Bob', 'jordan');
-    expect(res).toEqual({ ok: false, reason: 'conflict' });
-    expect((await getSavedPlayerNames(A)).sort()).toEqual(['Bob', 'Jordan']);
+  it('createSavedPlayer allows a second person with the same name (distinct ids)', async () => {
+    const a = await createSavedPlayer(A, 'Mike', { method: 'venmo', handle: 'v' });
+    const b = await createSavedPlayer(A, 'Mike', { method: 'cashapp', handle: 'c' });
+    expect(a.ok && b.ok).toBe(true);
+    if (!a.ok || !b.ok) return;
+    expect(a.id).not.toBe(b.id);
+    expect((await getSavedPlayersByName(A, 'mike')).length).toBe(2);
   });
 
-  it('allows a case-only self-rename', async () => {
-    await savePlayer(A, 'bob', { method: 'venmo', handle: '@b' });
-    const res = await renameSavedPlayer(A, 'bob', 'Bob');
-    expect(res).toEqual({ ok: true });
-    const p = await getSavedPlayer(A, 'Bob');
-    expect(p?.name).toBe('Bob');
-    expect(p?.preferredPayment?.handle).toBe('@b');
+  it('createSavedPlayer refuses an empty name and reports full at the cap', async () => {
+    expect(await createSavedPlayer(A, '   ')).toEqual({ ok: false, reason: 'empty' });
+    await createSavedPlayer(A, 'X', undefined, 1);
+    expect(await createSavedPlayer(A, 'Y', undefined, 1)).toEqual({ ok: false, reason: 'full' });
+  });
+
+  it('updateSavedPlayer patches name and payment by id, bumping updatedAt', async () => {
+    const res = await createSavedPlayer(A, 'Mike');
+    if (!res.ok) throw new Error('setup');
+    const ok = await updateSavedPlayer(A, res.id, { name: 'Michael', preferredPayment: { method: 'venmo', handle: 'm' } });
+    expect(ok).toBe(true);
+    const p = await getSavedPlayerById(A, res.id);
+    expect(p?.name).toBe('Michael');
+    expect(p?.preferredPayment).toEqual({ method: 'venmo', handle: 'm' });
+    expect(typeof p?.updatedAt).toBe('number');
+  });
+
+  it('updateSavedPlayer returns false for an unknown id and touches nothing', async () => {
+    await createSavedPlayer(A, 'Mike');
+    expect(await updateSavedPlayer(A, 'sp_missing', { name: 'X' })).toBe(false);
     expect((await getSavedPlayers(A)).length).toBe(1);
   });
 
-  it('returns not-found when the old name has no entry', async () => {
-    const res = await renameSavedPlayer(A, 'Ghost', 'Casper');
-    expect(res).toEqual({ ok: false, reason: 'not-found' });
-    expect(await getSavedPlayers(A)).toEqual([]);
+  it('deletes by id, leaving a same-name twin intact', async () => {
+    const a = await createSavedPlayer(A, 'Mike', { method: 'venmo', handle: 'v' });
+    const b = await createSavedPlayer(A, 'Mike', { method: 'cashapp', handle: 'c' });
+    if (!a.ok || !b.ok) throw new Error('setup');
+    await deleteSavedPlayerById(A, a.id);
+    const left = await getSavedPlayersByName(A, 'Mike');
+    expect(left.map(p => p.id)).toEqual([b.id]);
+  });
+
+  it('deletes several by id', async () => {
+    const a = await createSavedPlayer(A, 'A');
+    const b = await createSavedPlayer(A, 'B');
+    const c = await createSavedPlayer(A, 'C');
+    if (!a.ok || !b.ok || !c.ok) throw new Error('setup');
+    await deleteSavedPlayersByIds(A, [a.id, c.id]);
+    expect((await getSavedPlayers(A)).map(p => p.name)).toEqual(['B']);
+  });
+});
+
+describe('renameSavedPlayer (id-based)', () => {
+  it('renames by id, preserving id + payment and bumping updatedAt', async () => {
+    const res = await createSavedPlayer(A, 'Bob', { method: 'venmo', handle: '@bob' });
+    if (!res.ok) throw new Error('setup');
+    const before = (await getSavedPlayerById(A, res.id))!.updatedAt!;
+    expect(await renameSavedPlayer(A, res.id, 'Bobby')).toBe(true);
+    const p = await getSavedPlayerById(A, res.id);
+    expect(p?.name).toBe('Bobby');
+    expect(p?.preferredPayment).toEqual({ method: 'venmo', handle: '@bob' });
+    expect(p?.updatedAt).toBeGreaterThanOrEqual(before);
+  });
+
+  it('allows renaming to a name that already exists (duplicates are allowed)', async () => {
+    await createSavedPlayer(A, 'Jordan');
+    const bob = await createSavedPlayer(A, 'Bob');
+    if (!bob.ok) throw new Error('setup');
+    expect(await renameSavedPlayer(A, bob.id, 'Jordan')).toBe(true);
+    expect((await getSavedPlayersByName(A, 'Jordan')).length).toBe(2);
+  });
+
+  it('returns false for an empty new name or an unknown id', async () => {
+    const res = await createSavedPlayer(A, 'Bob');
+    if (!res.ok) throw new Error('setup');
+    expect(await renameSavedPlayer(A, res.id, '   ')).toBe(false);
+    expect(await renameSavedPlayer(A, 'sp_missing', 'X')).toBe(false);
   });
 });

@@ -157,6 +157,85 @@ export async function getSavedPlayer(uid: string, name: string): Promise<SavedPl
   return (await getSavedPlayers(uid)).find(p => p.name.toLowerCase() === lower);
 }
 
+export async function getSavedPlayerById(uid: string, id: string): Promise<SavedPlayer | undefined> {
+  return (await getSavedPlayers(uid)).find(p => p.id === id);
+}
+
+/** ALL saved players whose name matches (case-insensitive). Empty array if none. */
+export async function getSavedPlayersByName(uid: string, name: string): Promise<SavedPlayer[]> {
+  const lower = name.trim().toLowerCase();
+  return (await getSavedPlayers(uid)).filter(p => p.name.toLowerCase() === lower);
+}
+
+/**
+ * Explicitly create a NEW saved player (its own id) even if the name already exists —
+ * this is the deliberate "add as a new/separate person" path. Honors the cap for new
+ * entries. Returns the new id on success.
+ */
+export async function createSavedPlayer(
+  uid: string,
+  name: string,
+  preferredPayment?: PreferredPayment,
+  limit: number = PRO_SAVED_CAP,
+): Promise<{ ok: true; id: string } | { ok: false; reason: 'full' | 'empty' }> {
+  const trimmed = name.trim();
+  if (!trimmed) return { ok: false, reason: 'empty' };
+  return enqueue(async () => {
+    const current = await readLocal(uid);
+    if (current.length >= limit) return { ok: false, reason: 'full' } as const;
+    const entry: SavedPlayer = { id: newSavedPlayerId(), name: trimmed, updatedAt: Date.now() };
+    if (preferredPayment) entry.preferredPayment = preferredPayment;
+    const next = [entry, ...current];
+    await writeLocal(uid, next);
+    pushRemote(uid, next);
+    return { ok: true, id: entry.id } as const;
+  });
+}
+
+/** Patch an existing entry by id (name and/or payment). Returns false if the id is absent. */
+export async function updateSavedPlayer(
+  uid: string,
+  id: string,
+  patch: { name?: string; preferredPayment?: PreferredPayment },
+): Promise<boolean> {
+  return enqueue(async () => {
+    const current = await readLocal(uid);
+    const idx = current.findIndex(p => p.id === id);
+    if (idx === -1) return false;
+    const prev = current[idx];
+    const updated: SavedPlayer = {
+      id: prev.id,
+      name: patch.name?.trim() ? patch.name.trim() : prev.name,
+      updatedAt: Date.now(),
+    };
+    const pay = patch.preferredPayment ?? prev.preferredPayment;
+    if (pay) updated.preferredPayment = pay;
+    const next = current.map((p, i) => (i === idx ? updated : p));
+    await writeLocal(uid, next);
+    pushRemote(uid, next);
+    return true;
+  });
+}
+
+export async function deleteSavedPlayerById(uid: string, id: string): Promise<void> {
+  return enqueue(async () => {
+    const current = await readLocal(uid);
+    const next = current.filter(p => p.id !== id);
+    await writeLocal(uid, next);
+    pushRemote(uid, next);
+  });
+}
+
+export async function deleteSavedPlayersByIds(uid: string, ids: string[]): Promise<void> {
+  return enqueue(async () => {
+    const idSet = new Set(ids);
+    const current = await readLocal(uid);
+    const next = current.filter(p => !idSet.has(p.id));
+    await writeLocal(uid, next);
+    pushRemote(uid, next);
+  });
+}
+
 /**
  * Persist a saved player. Updating an existing entry (case-insensitive) is always
  * allowed and moves it to the front. A brand-new entry is only added while the list
@@ -203,36 +282,14 @@ export async function deleteSavedPlayer(uid: string, name: string): Promise<void
 }
 
 /**
- * Rename a saved player (case-insensitive lookup of oldName). Preserves the entry's
- * preferredPayment and bumps updatedAt. Returns { ok: false, reason: 'not-found' } when
- * oldName has no entry, or { ok: false, reason: 'conflict' } when newName already belongs
- * to a DIFFERENT entry. A case-only self-rename (e.g. 'bob' -> 'Bob') is allowed. Caller
- * must trim and reject empty newName. NOTE: the collision guard is temporary data-safety
- * for the name-keyed store; it becomes obsolete under the future id-based identity model.
+ * Rename a saved player by id. Preserves the entry's id + preferredPayment and bumps
+ * updatedAt. Duplicate display names are allowed by design (id is the identity), so there
+ * is no collision reject. Returns false when the id has no entry. Caller trims/rejects empty.
  */
-export async function renameSavedPlayer(
-  uid: string,
-  oldName: string,
-  newName: string,
-): Promise<{ ok: true } | { ok: false; reason: 'not-found' | 'conflict' }> {
-  return enqueue(async () => {
-    const trimmed = newName.trim();
-    const oldLower = oldName.toLowerCase();
-    const newLower = trimmed.toLowerCase();
-    const current = await readLocal(uid);
-    const idx = current.findIndex(p => p.name.toLowerCase() === oldLower);
-    if (idx === -1) return { ok: false, reason: 'not-found' };
-    if (newLower !== oldLower && current.some(p => p.name.toLowerCase() === newLower)) {
-      return { ok: false, reason: 'conflict' };
-    }
-    const entry = current[idx];
-    const renamed: SavedPlayer = { id: entry.id, name: trimmed, updatedAt: Date.now() };
-    if (entry.preferredPayment) renamed.preferredPayment = entry.preferredPayment;
-    const next = current.map((p, i) => (i === idx ? renamed : p));
-    await writeLocal(uid, next);
-    pushRemote(uid, next);
-    return { ok: true };
-  });
+export async function renameSavedPlayer(uid: string, id: string, newName: string): Promise<boolean> {
+  const trimmed = newName.trim();
+  if (!trimmed) return false;
+  return updateSavedPlayer(uid, id, { name: trimmed });
 }
 
 /** Remove several saved players at once (case-insensitive). */
