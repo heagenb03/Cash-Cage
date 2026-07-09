@@ -115,6 +115,35 @@ describe('GameService.removePlayer', () => {
     GameService.removePlayer(game, player.id);
     expect(game.cachedSettlements).toBeDefined();
   });
+
+  it('resets banker mode to optimal when the removed player is the designated banker', () => {
+    const game = createTestGame({ status: 'active' });
+    const banker = GameService.addPlayer(game, 'Bank');
+    game.settlementMode = 'banker';
+    game.bankerPlayerId = banker.id;
+    game.cachedSettlements = { settlements: [], algorithm: 'test', source: 'client', generatedAt: '' };
+    game.transactionHash = 'abc';
+
+    GameService.removePlayer(game, banker.id);
+
+    expect(game.settlementMode).toBe('optimal');
+    expect(game.bankerPlayerId).toBeUndefined();
+    expect(game.cachedSettlements).toBeUndefined();
+    expect(game.transactionHash).toBeUndefined();
+  });
+
+  it('leaves banker mode untouched when the removed player is not the banker', () => {
+    const game = createTestGame({ status: 'active' });
+    const banker = GameService.addPlayer(game, 'Bank');
+    const other = GameService.addPlayer(game, 'Alice');
+    game.settlementMode = 'banker';
+    game.bankerPlayerId = banker.id;
+
+    GameService.removePlayer(game, other.id);
+
+    expect(game.settlementMode).toBe('banker');
+    expect(game.bankerPlayerId).toBe(banker.id);
+  });
 });
 
 // ---- setPlayerTransactionTotal ----

@@ -390,6 +390,27 @@ describe('calculateBankerSettlements', () => {
     expect(settlements).toEqual([{ from: 'L1', to: 'Bank', amount: 50 }]);
   });
 
+  it('excludes strictly by id — a balance sharing the banker\'s name but not its id is still settled', () => {
+    // makeBalance derives playerId as `id_${name}`, so it can't produce two
+    // different-id balances with the same name — a raw PlayerBalance literal
+    // is used here instead to get a name collision with a distinct id.
+    const dealerBanker = { id: 'id_Dealer', name: 'Dealer' };
+    const balances = [
+      // Same NAME as the banker ('Dealer') but a DIFFERENT id — must NOT be
+      // excluded if exclusion is truly id-keyed. Because settlements are
+      // rendered by name, this produces a same-name self-loop
+      // ({from:'Dealer', to:'Dealer'}) — that self-loop is the discriminator:
+      // an id-keyed implementation keeps it (length 2 below), a name-keyed
+      // implementation would wrongly skip it (length 1).
+      { playerId: 'id_Dealer_2', playerName: 'Dealer', totalBuyins: 40, totalCashouts: 0, netBalance: -40 },
+      makeBalance('W1', 0, 40),
+    ];
+    const { settlements } = calculateBankerSettlements(balances, dealerBanker);
+    expect(settlements).toHaveLength(2);
+    expect(settlements).toContainEqual({ from: 'Dealer', to: 'Dealer', amount: 40 });
+    expect(settlements).toContainEqual({ from: 'Dealer', to: 'W1', amount: 40 });
+  });
+
   it('rounds nets to the cash unit before building the star', () => {
     const balances = [
       makeBalance('Bank', 0, 0),
