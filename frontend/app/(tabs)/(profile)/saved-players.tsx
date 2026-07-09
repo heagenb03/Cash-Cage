@@ -20,9 +20,11 @@ import SavedPlayerCard from '@/components/SavedPlayerCard';
 import { useAuth } from '@/contexts/AuthContext';
 import { useReduceMotion } from '@/hooks/useReduceMotion';
 import {
-  savePlayer,
-  deleteSavedPlayer,
-  deleteSavedPlayers,
+  createSavedPlayer,
+  updateSavedPlayer,
+  deleteSavedPlayerById,
+  deleteSavedPlayersByIds,
+  getSavedPlayersByName,
   loadSavedPlayers,
   renameSavedPlayer,
   savedCapFor,
@@ -85,6 +87,7 @@ export default function SavedPlayersScreen() {
   const [addName, setAddName] = useState('');
   const [addPayment, setAddPayment] = useState<PreferredPayment | undefined>(undefined);
   const [adding, setAdding] = useState(false);
+  const [dupConfirm, setDupConfirm] = useState<{ name: string; payment?: PreferredPayment } | null>(null);
 
   const [showPaywall, setShowPaywall] = useState(false);
   const [paywallMessage, setPaywallMessage] = useState(BULK_PAYWALL_MESSAGE);
@@ -99,12 +102,11 @@ export default function SavedPlayersScreen() {
     [isPro],
   );
 
-  const toggleSelected = useCallback((name: string) => {
-    const lower = name.toLowerCase();
+  const toggleSelected = useCallback((id: string) => {
     setSelected(prev => {
       const next = new Set(prev);
-      if (next.has(lower)) next.delete(lower);
-      else next.add(lower);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
       return next;
     });
   }, []);
@@ -114,12 +116,12 @@ export default function SavedPlayersScreen() {
   }, []);
   const handleBulkDelete = useCallback(() => {
     if (!uid) return;
-    const names = players.filter(p => selected.has(p.name.toLowerCase())).map(p => p.name);
-    if (names.length === 0) {
+    const ids = players.filter(p => selected.has(p.id)).map(p => p.id);
+    if (ids.length === 0) {
       exitSelectMode();
       return;
     }
-    deleteSavedPlayers(uid, names)
+    deleteSavedPlayersByIds(uid, ids)
       .then(() => {
         exitSelectMode();
         reload();
@@ -149,13 +151,9 @@ export default function SavedPlayersScreen() {
     }
     setRenaming(true);
     try {
-      const res = await renameSavedPlayer(uid, renameTarget.name, trimmed);
-      if (!res.ok) {
-        if (res.reason === 'conflict') {
-          Alert.alert('Name Taken', `A saved player named "${trimmed}" already exists.`);
-        } else {
-          Alert.alert('Error', 'Could not rename this player.');
-        }
+      const ok = await renameSavedPlayer(uid, renameTarget.id, trimmed);
+      if (!ok) {
+        Alert.alert('Error', 'Could not rename this player.');
         return;
       }
       setRenameTarget(null);
@@ -167,9 +165,9 @@ export default function SavedPlayersScreen() {
 
   const handleConfirmDelete = useCallback(() => {
     if (!uid || !deleteTarget) return;
-    const name = deleteTarget.name;
+    const id = deleteTarget.id;
     setDeleteTarget(null);
-    deleteSavedPlayer(uid, name)
+    deleteSavedPlayerById(uid, id)
       .then(reload)
       .catch(() => Alert.alert('Error', 'Could not delete this player.'));
   }, [uid, deleteTarget, reload]);
@@ -193,6 +191,25 @@ export default function SavedPlayersScreen() {
       setShowPaywall(true);
     }
   }, [players.length, isPro, openAdd]);
+  const doCreate = useCallback(async (name: string, payment?: PreferredPayment) => {
+    if (!uid) return;
+    setAdding(true);
+    try {
+      const res = await createSavedPlayer(uid, name, payment, cap);
+      if (!res.ok && res.reason === 'full') {
+        Alert.alert('Saved Players Full', `You've reached the ${cap}-player limit.`);
+      }
+      setShowAdd(false);
+      setDupConfirm(null);
+      reload();
+    } catch {
+      setShowAdd(false);
+      Alert.alert('Error', 'Could not add player. Please try again.');
+    } finally {
+      setAdding(false);
+    }
+  }, [uid, cap, reload]);
+
   const handleAdd = useCallback(async () => {
     if (adding) return;
     const name = addName.trim();
@@ -201,18 +218,21 @@ export default function SavedPlayersScreen() {
       return;
     }
     if (!uid) return;
-    setAdding(true);
-    try {
-      await savePlayer(uid, name, addPayment, cap);
-      setShowAdd(false);
-      reload();
-    } catch {
-      setShowAdd(false);
-      Alert.alert('Error', 'Could not add player. Please try again.');
-    } finally {
-      setAdding(false);
+    const existing = await getSavedPlayersByName(uid, name);
+    if (existing.length > 0) {
+      // Two paymentless same-name people are indistinguishable → merge into the existing one.
+      if (!addPayment && existing.some(p => !p.preferredPayment)) {
+        const target = existing.find(p => !p.preferredPayment)!;
+        await updateSavedPlayer(uid, target.id, {});
+        setShowAdd(false);
+        reload();
+        return;
+      }
+      setDupConfirm({ name, payment: addPayment }); // ask: separate person?
+      return;
     }
-  }, [uid, adding, addName, addPayment, cap, reload]);
+    await doCreate(name, addPayment);
+  }, [uid, adding, addName, addPayment, doCreate, reload]);
 
   // Shared PaymentEditorModal target → synthetic Player (its player prop is init-only).
   // useMemo keyed on paymentTarget gives a STABLE reference: PaymentEditorModal re-seeds
@@ -234,7 +254,7 @@ export default function SavedPlayersScreen() {
     (pref: PreferredPayment) => {
       if (!paymentTarget) return;
       if (paymentTarget.kind === 'edit') {
-        if (uid) savePlayer(uid, paymentTarget.player.name, pref, cap).then(() => {
+        if (uid) updateSavedPlayer(uid, paymentTarget.player.id, { preferredPayment: pref }).then(() => {
           setPaymentTarget(null);
           reload();
         });
@@ -260,9 +280,9 @@ export default function SavedPlayersScreen() {
     );
 
     if (selectMode) {
-      const isSel = selected.has(p.name.toLowerCase());
+      const isSel = selected.has(p.id);
       return (
-        <TouchableOpacity key={p.name} style={styles.row} onPress={() => toggleSelected(p.name)} activeOpacity={0.7}>
+        <TouchableOpacity key={p.id} style={styles.row} onPress={() => toggleSelected(p.id)} activeOpacity={0.7}>
           <Ionicons
             name={isSel ? 'checkbox' : 'square-outline'}
             size={22}
@@ -276,7 +296,7 @@ export default function SavedPlayersScreen() {
 
     return (
       <SavedPlayerCard
-        key={p.name}
+        key={p.id}
         player={p}
         onRename={openRename}
         onEditPayment={pl => setPaymentTarget({ kind: 'edit', player: pl })}
@@ -396,6 +416,27 @@ export default function SavedPlayersScreen() {
               onSave={handlePaymentSave}
               onClose={() => setPaymentTarget(null)}
             />
+          )}
+          {/* Duplicate-name confirm rendered IN PLACE (not a second <Modal>) — same one-modal rule. */}
+          {dupConfirm && (
+            <View style={styles.modalOverlay}>
+              <View style={styles.modalContent}>
+                <Text style={styles.modalTitle}>Name already used</Text>
+                <Text style={styles.deleteWarningText}>
+                  You already have a saved player named "{dupConfirm.name}". Add a separate person
+                  with the same name?
+                </Text>
+                <View style={styles.modalButtons}>
+                  <ModalButton variant="cancel" title="Cancel" onPress={() => setDupConfirm(null)} />
+                  <ModalButton
+                    variant="confirm"
+                    title="Add separate"
+                    onPress={() => doCreate(dupConfirm.name, dupConfirm.payment)}
+                    disabled={adding}
+                  />
+                </View>
+              </View>
+            </View>
           )}
         </GestureHandlerRootView>
       </Modal>
