@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import AppModal, { AppModalCard, appModalStyles } from '@/components/AppModal';
+import AppModal, { appModalStyles } from '@/components/AppModal';
 import ModalButton from '@/components/ModalButton';
 import PaymentEditorModal, { PaymentEditorContent } from '@/components/PaymentEditorModal';
 import PaywallModal from '@/components/PaywallModal';
@@ -18,7 +18,6 @@ import SavedPlayerCard from '@/components/SavedPlayerCard';
 import { useAuth } from '@/contexts/AuthContext';
 import { useReduceMotion } from '@/hooks/useReduceMotion';
 import {
-  createSavedPlayer,
   savePlayer,
   updateSavedPlayer,
   deleteSavedPlayerById,
@@ -87,10 +86,8 @@ export default function SavedPlayersScreen() {
   const [addPayment, setAddPayment] = useState<PreferredPayment | undefined>(undefined);
   const [adding, setAdding] = useState(false);
   const addingRef = useRef(false);
-  // Separate guard for doCreate: it's reached both while addingRef is held (via handleAdd) and
-  // directly from the dupConfirm "Add separate" button after addingRef has already been released.
+  // Separate guard for doCreate, reentered internally (e.g. rapid double-submit of handleAdd).
   const creatingRef = useRef(false);
-  const [dupConfirm, setDupConfirm] = useState<{ name: string; payment?: PreferredPayment } | null>(null);
 
   const [showPaywall, setShowPaywall] = useState(false);
   const [paywallMessage, setPaywallMessage] = useState(BULK_PAYWALL_MESSAGE);
@@ -201,27 +198,23 @@ export default function SavedPlayersScreen() {
       setShowPaywall(true);
     }
   }, [players.length, isPro, openAdd]);
-  // asNewPerson=true is the deliberate "Add separate" path → mint a fresh random id even if
-  // the name exists. The plain Add path (asNewPerson=false) uses savePlayer's deterministic
-  // legacy:<name> id so a same-name entry that exists only remotely (other device / pre-sync)
-  // reconciles by id on the next merge instead of duplicating.
+  // Create a distinct-named saved player. Uses savePlayer's deterministic legacy:<name> id so a
+  // same-name entry that exists only remotely (other device / pre-sync) reconciles by id on the
+  // next merge instead of duplicating. handleAdd guarantees the name is not already used locally.
   const doCreate = useCallback(
-    async (name: string, payment?: PreferredPayment, asNewPerson: boolean = true) => {
+    async (name: string, payment?: PreferredPayment) => {
       if (!uid) return;
       if (creatingRef.current) return;
       creatingRef.current = true;
       setAdding(true);
       try {
-        if (asNewPerson) {
-          const res = await createSavedPlayer(uid, name, payment, cap);
-          if (!res.ok && res.reason === 'full') {
-            Alert.alert('Saved Players Full', `You've reached the ${cap}-player limit.`);
-          }
-        } else {
-          await savePlayer(uid, name, payment, cap);
+        if (!canAddMoreSavedPlayers(players.length, isPro)) {
+          Alert.alert('Saved Players Full', `You've reached the ${cap}-player limit.`);
+          setShowAdd(false);
+          return;
         }
+        await savePlayer(uid, name, payment, cap);
         setShowAdd(false);
-        setDupConfirm(null);
         reload();
       } catch {
         setShowAdd(false);
@@ -231,7 +224,7 @@ export default function SavedPlayersScreen() {
         creatingRef.current = false;
       }
     },
-    [uid, cap, reload],
+    [uid, cap, players.length, isPro, reload],
   );
 
   const handleAdd = useCallback(async () => {
@@ -246,22 +239,19 @@ export default function SavedPlayersScreen() {
       if (!uid) return;
       const existing = await getSavedPlayersByName(uid, name);
       if (existing.length > 0) {
-        // Two paymentless same-name people are indistinguishable → merge into the existing one.
-        if (!addPayment && existing.some(p => !p.preferredPayment)) {
-          const target = existing.find(p => !p.preferredPayment)!;
-          await updateSavedPlayer(uid, target.id, {});
-          setShowAdd(false);
-          reload();
-          return;
-        }
-        setDupConfirm({ name, payment: addPayment }); // ask: separate person?
+        // Saved names must stay distinct so the picker is never ambiguous. Ask for a distinct
+        // name (keep the modal open so the user can edit) instead of creating a same-name twin.
+        Alert.alert(
+          'Name already used',
+          `You already have a saved player named "${name}". Add a last initial (e.g. "${name} R") so you can tell them apart.`,
+        );
         return;
       }
-      await doCreate(name, addPayment, false); // plain add → deterministic id (reconciles)
+      await doCreate(name, addPayment);
     } finally {
       addingRef.current = false;
     }
-  }, [uid, addName, addPayment, doCreate, reload]);
+  }, [uid, addName, addPayment, doCreate]);
 
   // Shared PaymentEditorModal target → synthetic Player (its player prop is init-only).
   // useMemo keyed on paymentTarget gives a STABLE reference: PaymentEditorModal re-seeds
@@ -416,24 +406,6 @@ export default function SavedPlayersScreen() {
                 onSave={handlePaymentSave}
                 onClose={() => setPaymentTarget(null)}
               />
-            )}
-            {/* Duplicate-name confirm rendered IN PLACE — same one-modal rule. */}
-            {dupConfirm && (
-              <AppModalCard title="Name already used" onClose={() => setDupConfirm(null)}>
-                <Text style={styles.deleteWarningText}>
-                  You already have a saved player named "{dupConfirm.name}". Add a separate person
-                  with the same name?
-                </Text>
-                <View style={styles.modalButtons}>
-                  <ModalButton variant="cancel" title="Cancel" onPress={() => setDupConfirm(null)} />
-                  <ModalButton
-                    variant="confirm"
-                    title="Add separate"
-                    onPress={() => doCreate(dupConfirm.name, dupConfirm.payment)}
-                    disabled={adding}
-                  />
-                </View>
-              </AppModalCard>
             )}
           </>
         }
