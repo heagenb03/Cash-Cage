@@ -64,12 +64,6 @@ export default function AccountScreen() {
         <View style={styles.hero}>
           <Text style={styles.heroName}>{displayName}</Text>
           {!!email && <Text style={styles.heroEmail}>{email}</Text>}
-          {(isPro || isTrialing) && (
-            <View style={styles.tierPill}>
-              <Ionicons name="star" size={12} color="#B072BB" />
-              <Text style={styles.tierPillText}>{isTrialing ? 'TRIAL' : 'PRO'}</Text>
-            </View>
-          )}
         </View>
 
         {/* Membership card — free */}
@@ -175,26 +169,6 @@ const styles = StyleSheet.create({
     marginTop: 4,
     backgroundColor: 'transparent',
   },
-  tierPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    marginTop: 12,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: 'rgba(176,114,187,0.4)',
-    backgroundColor: 'rgba(176,114,187,0.08)',
-  },
-  tierPillText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#B072BB',
-    letterSpacing: 2,
-    backgroundColor: 'transparent',
-  },
-
   // Membership cards (unified radius 12, #1A1A1A, purple border)
   membershipCardUpgrade: {
     backgroundColor: '#1A1A1A',
