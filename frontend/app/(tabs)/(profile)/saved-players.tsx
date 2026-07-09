@@ -88,6 +88,9 @@ export default function SavedPlayersScreen() {
   const [addPayment, setAddPayment] = useState<PreferredPayment | undefined>(undefined);
   const [adding, setAdding] = useState(false);
   const addingRef = useRef(false);
+  // Separate guard for doCreate: it's reached both while addingRef is held (via handleAdd) and
+  // directly from the dupConfirm "Add separate" button after addingRef has already been released.
+  const creatingRef = useRef(false);
   const [dupConfirm, setDupConfirm] = useState<{ name: string; payment?: PreferredPayment } | null>(null);
 
   const [showPaywall, setShowPaywall] = useState(false);
@@ -194,6 +197,8 @@ export default function SavedPlayersScreen() {
   }, [players.length, isPro, openAdd]);
   const doCreate = useCallback(async (name: string, payment?: PreferredPayment) => {
     if (!uid) return;
+    if (creatingRef.current) return;
+    creatingRef.current = true;
     setAdding(true);
     try {
       const res = await createSavedPlayer(uid, name, payment, cap);
@@ -208,6 +213,7 @@ export default function SavedPlayersScreen() {
       Alert.alert('Error', 'Could not add player. Please try again.');
     } finally {
       setAdding(false);
+      creatingRef.current = false;
     }
   }, [uid, cap, reload]);
 

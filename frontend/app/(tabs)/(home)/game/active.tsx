@@ -213,6 +213,8 @@ export default function ActiveGameScreen() {
   // When an Add matches 2+ saved people and none was picked, hold the candidates for the
   // in-place disambiguation overlay (rendered inside the already-open Add modal).
   const [disambiguation, setDisambiguation] = useState<SavedPlayer[] | null>(null);
+  // Synchronous re-entry guard for commitAddPlayer (state-based `disabled` has a race window).
+  const addingPlayerRef = useRef(false);
 
   // Game completion modal state
   const [showCompletionModal, setShowCompletionModal] = useState(false);
@@ -340,47 +342,53 @@ export default function ActiveGameScreen() {
   const savedListFull = !canAddMoreSavedPlayers(savedPlayers.length, isPro);
 
   const commitAddPlayer = async (bound: SavedPlayer | null) => {
-    const name = newPlayerName.trim();
-    const player = GameService.addPlayer(activeGame, name);
+    if (addingPlayerRef.current) return;
+    addingPlayerRef.current = true;
+    try {
+      const name = newPlayerName.trim();
+      const player = GameService.addPlayer(activeGame, name);
 
-    // Resolve which saved entry (if any) this player is bound to, and its payment.
-    let savedId: string | undefined = bound?.id;
-    let payment = bound?.preferredPayment;
+      // Resolve which saved entry (if any) this player is bound to, and its payment.
+      let savedId: string | undefined = bound?.id;
+      let payment = bound?.preferredPayment;
 
-    if (uid) {
-      if (bound) {
-        // Existing person → recency bump (no new entry).
-        updateSavedPlayer(uid, bound.id, {}).catch(() => {});
-      } else if (savePlayerToggle && !savedListFull) {
-        // Brand-new person: create only if the Save toggle is on and there's room.
-        const res = await createSavedPlayer(uid, name, undefined, savedCapFor(isPro));
-        if (res.ok) savedId = res.id;
+      if (uid) {
+        if (bound) {
+          // Existing person → recency bump (no new entry).
+          updateSavedPlayer(uid, bound.id, {}).catch(() => {});
+        } else if (savePlayerToggle && !savedListFull) {
+          // Brand-new person: create only if the Save toggle is on and there's room.
+          const res = await createSavedPlayer(uid, name, undefined, savedCapFor(isPro));
+          if (res.ok) savedId = res.id;
+        }
       }
-    }
 
-    if (savedId || payment) {
-      const i = activeGame.players.findIndex(p => p.id === player.id);
-      if (i !== -1) {
-        activeGame.players[i] = {
-          ...activeGame.players[i],
-          ...(payment ? { preferredPayment: payment } : {}),
-          ...(savedId ? { savedPlayerId: savedId } : {}),
-        };
+      if (savedId || payment) {
+        const i = activeGame.players.findIndex(p => p.id === player.id);
+        if (i !== -1) {
+          activeGame.players[i] = {
+            ...activeGame.players[i],
+            ...(payment ? { preferredPayment: payment } : {}),
+            ...(savedId ? { savedPlayerId: savedId } : {}),
+          };
+        }
       }
-    }
 
-    const buyInAmount = parseFloat(newPlayerBuyIn);
-    if (!isNaN(buyInAmount) && buyInAmount > 0) {
-      GameService.addTransaction(activeGame, player.id, 'buyin', buyInAmount);
-    }
-    await updateGame(activeGame);
+      const buyInAmount = parseFloat(newPlayerBuyIn);
+      if (!isNaN(buyInAmount) && buyInAmount > 0) {
+        GameService.addTransaction(activeGame, player.id, 'buyin', buyInAmount);
+      }
+      await updateGame(activeGame);
 
-    setNewPlayerName('');
-    setNewPlayerBuyIn('');
-    setPlayerSuggestions([]);
-    setSelectedSavedId(null);
-    setDisambiguation(null);
-    setShowAddPlayer(false);
+      setNewPlayerName('');
+      setNewPlayerBuyIn('');
+      setPlayerSuggestions([]);
+      setSelectedSavedId(null);
+      setDisambiguation(null);
+      setShowAddPlayer(false);
+    } finally {
+      addingPlayerRef.current = false;
+    }
   };
 
   const handleAddPlayer = async () => {
