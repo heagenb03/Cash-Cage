@@ -76,6 +76,9 @@ export const AppModalCard: React.FC<AppModalCardProps> = ({
           style={StyleSheet.absoluteFill}
           onPress={handleBackdropPress}
           accessibilityLabel="Dismiss"
+          accessibilityRole="button"
+          accessibilityElementsHidden={!dismissOnBackdrop}
+          importantForAccessibility={dismissOnBackdrop ? 'auto' : 'no-hide-descendants'}
         />
         <View style={[styles.card, cardStyle]}>
           {title ? <Text style={appModalStyles.title}>{title}</Text> : null}
@@ -139,7 +142,7 @@ const styles = StyleSheet.create({
   card: {
     width: '100%',
     maxWidth: 400,
-    maxHeight: '100%',
+    flexShrink: 1,
     backgroundColor: '#1A1A1A',
     borderRadius: 12,
     borderWidth: 1,
