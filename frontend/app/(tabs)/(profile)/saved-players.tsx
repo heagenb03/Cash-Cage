@@ -13,7 +13,6 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import Swipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
 import ModalButton from '@/components/ModalButton';
 import PaymentEditorModal, { PaymentEditorContent } from '@/components/PaymentEditorModal';
 import PaywallModal from '@/components/PaywallModal';
@@ -75,6 +74,7 @@ export default function SavedPlayersScreen() {
   const [paymentTarget, setPaymentTarget] = useState<PaymentTarget>(null);
   const [renameTarget, setRenameTarget] = useState<SavedPlayer | null>(null);
   const [renameName, setRenameName] = useState('');
+  const [renaming, setRenaming] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<SavedPlayer | null>(null);
   const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
 
@@ -136,6 +136,7 @@ export default function SavedPlayersScreen() {
   }, []);
 
   const handleRename = useCallback(async () => {
+    if (renaming) return;
     if (!uid || !renameTarget) return;
     const trimmed = renameName.trim();
     if (!trimmed) {
@@ -146,18 +147,23 @@ export default function SavedPlayersScreen() {
       setRenameTarget(null);
       return;
     }
-    const res = await renameSavedPlayer(uid, renameTarget.name, trimmed);
-    if (!res.ok) {
-      if (res.reason === 'conflict') {
-        Alert.alert('Name Taken', `A saved player named "${trimmed}" already exists.`);
-      } else {
-        Alert.alert('Error', 'Could not rename this player.');
+    setRenaming(true);
+    try {
+      const res = await renameSavedPlayer(uid, renameTarget.name, trimmed);
+      if (!res.ok) {
+        if (res.reason === 'conflict') {
+          Alert.alert('Name Taken', `A saved player named "${trimmed}" already exists.`);
+        } else {
+          Alert.alert('Error', 'Could not rename this player.');
+        }
+        return;
       }
-      return;
+      setRenameTarget(null);
+      reload();
+    } finally {
+      setRenaming(false);
     }
-    setRenameTarget(null);
-    reload();
-  }, [uid, renameTarget, renameName, reload]);
+  }, [uid, renameTarget, renameName, renaming, reload]);
 
   const handleConfirmDelete = useCallback(() => {
     if (!uid || !deleteTarget) return;
@@ -171,6 +177,7 @@ export default function SavedPlayersScreen() {
   const openAdd = useCallback(() => {
     setAddName('');
     setAddPayment(undefined);
+    setPaymentTarget(null);
     setShowAdd(true);
   }, []);
   const handleAddPress = useCallback(() => {
@@ -434,7 +441,7 @@ export default function SavedPlayersScreen() {
                 />
                 <View style={styles.modalButtons}>
                   <ModalButton variant="cancel" title="Cancel" onPress={() => setRenameTarget(null)} />
-                  <ModalButton variant="confirm" title="Save" onPress={handleRename} />
+                  <ModalButton variant="confirm" title="Save" onPress={handleRename} disabled={renaming} />
                 </View>
               </View>
             </View>
@@ -545,16 +552,6 @@ const styles = StyleSheet.create({
   rowName: { fontSize: 16, color: '#FFFFFF', fontWeight: '600' },
   rowBadge: { fontSize: 12, color: 'rgba(176,114,187,0.9)', fontFamily: 'SpaceMono' },
   rowBadgeMuted: { fontSize: 12, color: 'rgba(255,255,255,0.35)' },
-  deleteAction: {
-    backgroundColor: '#1A1414',
-    justifyContent: 'center',
-    alignItems: 'center',
-    width: 72,
-    marginLeft: 10,
-    borderRadius: 10,
-    borderWidth: 1,
-    borderColor: 'rgba(192,70,87,0.25)',
-  },
   empty: { alignItems: 'center', paddingVertical: 64, gap: 10 },
   emptyText: { fontSize: 16, color: 'rgba(255,255,255,0.6)', fontWeight: '600' },
   emptySub: { fontSize: 13, color: 'rgba(255,255,255,0.35)', textAlign: 'center', paddingHorizontal: 24 },
