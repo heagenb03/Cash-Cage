@@ -12,7 +12,7 @@ import { Player, PlayerBalance, Validation, PreferredPayment } from '@/types/gam
 import { getNetBalanceColor, formatNetBalanceDisplay } from '@/utils/formatUtils';
 import { incrementProfileStats } from '@/services/firebaseService';
 import { isValidNumericInput } from '@/utils/validationUtils';
-import { savePlayerName, getSavedPlayer, savePlayer, loadSavedPlayers, SavedPlayer, FREE_SAVED_CAP, PRO_SAVED_CAP, savedCapFor, canAddMoreSavedPlayers, getSavedPlayersByName, createSavedPlayer, updateSavedPlayer } from '@/services/savedPlayersService';
+import { loadSavedPlayers, SavedPlayer, FREE_SAVED_CAP, PRO_SAVED_CAP, savedCapFor, canAddMoreSavedPlayers, getSavedPlayersByName, createSavedPlayer, updateSavedPlayer } from '@/services/savedPlayersService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import PlayerCardActive from '@/components/PlayerCardActive';
 import PlayerCardCompleted from '@/components/PlayerCardCompleted';
@@ -339,7 +339,7 @@ export default function ActiveGameScreen() {
     typedNameLower.length > 0 && savedPlayers.some(p => p.name.toLowerCase() === typedNameLower);
   const savedListFull = !canAddMoreSavedPlayers(savedPlayers.length, isPro);
 
-  const commitAddPlayer = async (bound: SavedPlayer | null, createAsNew: boolean) => {
+  const commitAddPlayer = async (bound: SavedPlayer | null) => {
     const name = newPlayerName.trim();
     const player = GameService.addPlayer(activeGame, name);
 
@@ -351,8 +351,8 @@ export default function ActiveGameScreen() {
       if (bound) {
         // Existing person → recency bump (no new entry).
         updateSavedPlayer(uid, bound.id, {}).catch(() => {});
-      } else if (createAsNew || (savePlayerToggle && !savedListFull)) {
-        // Brand-new person (0 matches, or explicit "add new person"): create if allowed.
+      } else if (savePlayerToggle && !savedListFull) {
+        // Brand-new person: create only if the Save toggle is on and there's room.
         const res = await createSavedPlayer(uid, name, undefined, savedCapFor(isPro));
         if (res.ok) savedId = res.id;
       }
@@ -403,7 +403,7 @@ export default function ActiveGameScreen() {
     // Picked from suggestions → bind that exact entry.
     if (selectedSavedId && uid) {
       const bound = savedPlayers.find(p => p.id === selectedSavedId) ?? null;
-      await commitAddPlayer(bound, false);
+      await commitAddPlayer(bound);
       return;
     }
 
@@ -413,7 +413,7 @@ export default function ActiveGameScreen() {
       setDisambiguation(matches); // require the user to choose (or add new person)
       return;
     }
-    await commitAddPlayer(matches[0] ?? null, false);
+    await commitAddPlayer(matches[0] ?? null);
   };
 
   const handlePlayerNameChange = (text: string) => {
@@ -640,12 +640,20 @@ export default function ActiveGameScreen() {
       // Re-resolve preferred payment for the new name so a renamed player doesn't
       // keep the previous person's payment info. Mirrors the Add Player autofill:
       // apply the new name's saved payment, or clear the badge if it has none.
-      const saved = uid ? await getSavedPlayer(uid, trimmedName) : undefined;
+      // Re-resolve the saved-pool binding for the NEW name. Keep savedPlayerId + payment only
+      // when the new name uniquely matches one saved entry; if it matches 0 or 2+ (ambiguous),
+      // drop the stale binding so a later payment edit can't write back to the wrong entry.
+      const matches = uid ? await getSavedPlayersByName(uid, trimmedName) : [];
+      const saved = matches.length === 1 ? matches[0] : undefined;
       const i = activeGame!.players.findIndex(p => p.id === selectedPlayer.id);
       if (i !== -1) {
-        const { preferredPayment, ...rest } = activeGame!.players[i];
-        activeGame!.players[i] = saved?.preferredPayment
-          ? { ...rest, preferredPayment: saved.preferredPayment }
+        const { preferredPayment, savedPlayerId, ...rest } = activeGame!.players[i];
+        activeGame!.players[i] = saved
+          ? {
+              ...rest,
+              savedPlayerId: saved.id,
+              ...(saved.preferredPayment ? { preferredPayment: saved.preferredPayment } : {}),
+            }
           : rest;
       }
       await updateGame(activeGame!);
@@ -785,7 +793,7 @@ export default function ActiveGameScreen() {
         visible={showAddPlayer}
         animationType="slide"
         transparent={true}
-        onRequestClose={() => setShowAddPlayer(false)}
+        onRequestClose={() => { setDisambiguation(null); setSelectedSavedId(null); setShowAddPlayer(false); }}
       >
         <GestureHandlerRootView style={{flex: 1}}>
         <View style={styles.modalOverlay}>
@@ -870,6 +878,8 @@ export default function ActiveGameScreen() {
                   setNewPlayerName('');
                   setNewPlayerBuyIn('');
                   setPlayerSuggestions([]);
+                  setSelectedSavedId(null);
+                  setDisambiguation(null);
                   setShowAddPlayer(false);
                 }}
               />
@@ -889,13 +899,13 @@ export default function ActiveGameScreen() {
               {disambiguation.map(p => {
                 const b = savedBadge(p);
                 return (
-                  <TouchableOpacity key={p.id} style={styles.disambigRow} onPress={() => commitAddPlayer(p, false)}>
+                  <TouchableOpacity key={p.id} style={styles.disambigRow} onPress={() => commitAddPlayer(p)}>
                     <Text style={styles.disambigName}>{p.name}</Text>
                     <Text style={styles.disambigBadge} numberOfLines={1}>{b ?? 'No payment set'}</Text>
                   </TouchableOpacity>
                 );
               })}
-              <TouchableOpacity style={styles.disambigRow} onPress={() => commitAddPlayer(null, true)}>
+              <TouchableOpacity style={styles.disambigRow} onPress={() => commitAddPlayer(null)}>
                 <Text style={styles.disambigNewText}>+ Add as a new person</Text>
               </TouchableOpacity>
               <View style={styles.modalButtons}>
