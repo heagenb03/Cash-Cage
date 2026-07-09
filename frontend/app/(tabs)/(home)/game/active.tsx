@@ -12,7 +12,7 @@ import { Player, PlayerBalance, Validation, PreferredPayment } from '@/types/gam
 import { getNetBalanceColor, formatNetBalanceDisplay } from '@/utils/formatUtils';
 import { incrementProfileStats } from '@/services/firebaseService';
 import { isValidNumericInput } from '@/utils/validationUtils';
-import { loadSavedPlayers, SavedPlayer, FREE_SAVED_CAP, PRO_SAVED_CAP, savedCapFor, canAddMoreSavedPlayers, getSavedPlayersByName, createSavedPlayer, updateSavedPlayer } from '@/services/savedPlayersService';
+import { loadSavedPlayers, SavedPlayer, FREE_SAVED_CAP, PRO_SAVED_CAP, savedCapFor, canAddMoreSavedPlayers, getSavedPlayersByName, getSavedPlayerById, createSavedPlayer, updateSavedPlayer } from '@/services/savedPlayersService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import PlayerCardActive from '@/components/PlayerCardActive';
 import PlayerCardCompleted from '@/components/PlayerCardCompleted';
@@ -241,6 +241,9 @@ export default function ActiveGameScreen() {
     return handle ? `${label} · ${formatHandleForDisplay(method, handle)}` : label;
   };
 
+  const samePayment = (a: PreferredPayment, b: PreferredPayment): boolean =>
+    a.method === b.method && (a.handle ?? '') === (b.handle ?? '');
+
   const handleCreateNewGame = async () => {
     try {
       await createGame('Untitled Game');
@@ -261,17 +264,25 @@ export default function ActiveGameScreen() {
     const idx = activeGame.players.findIndex(p => p.id === paymentPlayer.id);
     if (idx !== -1) activeGame.players[idx] = { ...activeGame.players[idx], preferredPayment: pref };
     await updateGame(activeGame);
-    // Update-only, id-precise: write the payment back to the exact saved entry this player
-    // was seeded from. Fall back to a unique name match for legacy players (no savedPlayerId);
-    // if the name is ambiguous (2+ saved), skip rather than guess.
-    if (uid) {
-      const sid = activeGame.players[idx]?.savedPlayerId ?? paymentPlayer.savedPlayerId;
-      if (sid) {
-        updateSavedPlayer(uid, sid, { preferredPayment: pref }).catch(() => {});
-      } else {
-        getSavedPlayersByName(uid, paymentPlayer.name)
-          .then(m => { if (m.length === 1) return updateSavedPlayer(uid, m[0].id, { preferredPayment: pref }); })
-          .catch(() => {});
+
+    // Write back to the SAVED list only through an explicit binding (savedPlayerId) — never
+    // guess by name. Fill an empty saved payment silently; confirm before overwriting a set one.
+    const sid = (idx !== -1 ? activeGame.players[idx]?.savedPlayerId : undefined) ?? paymentPlayer.savedPlayerId;
+    if (uid && sid) {
+      const saved = await getSavedPlayerById(uid, sid);
+      if (saved) {
+        if (!saved.preferredPayment) {
+          updateSavedPlayer(uid, sid, { preferredPayment: pref }).catch(() => {});
+        } else if (!samePayment(saved.preferredPayment, pref)) {
+          Alert.alert(
+            'Update saved player?',
+            `Also update ${saved.name}'s saved payment for next time?`,
+            [
+              { text: 'Just this game', style: 'cancel' },
+              { text: 'Update saved', onPress: () => { updateSavedPlayer(uid, sid, { preferredPayment: pref }).catch(() => {}); } },
+            ],
+          );
+        }
       }
     }
     setShowPaymentEditor(false);
