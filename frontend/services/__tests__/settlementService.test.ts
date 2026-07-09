@@ -2,6 +2,7 @@ import {
   calculateOptimalSettlements,
   validateSettlements,
   getSettlements,
+  calculateBankerSettlements,
 } from '../settlementService';
 import { PlayerBalance } from '@/types/game';
 
@@ -355,5 +356,47 @@ describe('getSettlements', () => {
     // DOMException is not instanceof Error in the Jest/Node environment, so the
     // service normalizes it to 'unknown-error'. Verify fallback was triggered.
     expect(result.error).toBeDefined();
+  });
+});
+
+// ---- calculateBankerSettlements ----
+
+describe('calculateBankerSettlements', () => {
+  const banker = { id: 'id_Bank', name: 'Bank' };
+
+  it('losers pay the banker, banker pays winners (net)', () => {
+    const balances = [
+      makeBalance('Bank', 0, 0),   // non-playing banker, net 0
+      makeBalance('L1', 30, 0),    // net -30
+      makeBalance('L2', 20, 0),    // net -20
+      makeBalance('W1', 0, 50),    // net +50
+    ];
+    const { settlements, algorithm, source } = calculateBankerSettlements(balances, banker);
+    expect(algorithm).toBe('client-banker-v1');
+    expect(source).toBe('client');
+    expect(settlements).toContainEqual({ from: 'L1', to: 'Bank', amount: 30 });
+    expect(settlements).toContainEqual({ from: 'L2', to: 'Bank', amount: 20 });
+    expect(settlements).toContainEqual({ from: 'Bank', to: 'W1', amount: 50 });
+    expect(settlements).toHaveLength(3);
+  });
+
+  it('excludes the banker by id and skips zero-net players', () => {
+    const balances = [
+      makeBalance('Bank', 100, 150), // playing banker, net +50 — must NOT settle with self
+      makeBalance('Even', 40, 40),   // net 0 — skipped
+      makeBalance('L1', 50, 0),      // net -50
+    ];
+    const { settlements } = calculateBankerSettlements(balances, banker);
+    expect(settlements).toEqual([{ from: 'L1', to: 'Bank', amount: 50 }]);
+  });
+
+  it('rounds nets to the cash unit before building the star', () => {
+    const balances = [
+      makeBalance('Bank', 0, 0),
+      makeBalance('L1', 53, 0),   // -53 → -55 at unit 5
+      makeBalance('W1', 0, 53),   // +53 → +55 at unit 5
+    ];
+    const { settlements } = calculateBankerSettlements(balances, banker, 5);
+    expect(settlements.every(s => s.amount % 5 === 0)).toBe(true);
   });
 });
