@@ -396,13 +396,12 @@ describe('id-addressed CRUD', () => {
     expect(p?.preferredPayment).toEqual({ method: 'venmo', handle: 'm' });
   });
 
-  it('createSavedPlayer allows a second person with the same name (distinct ids)', async () => {
+  it('createSavedPlayer refuses a second saved player with the same name (case-insensitive)', async () => {
     const a = await createSavedPlayer(A, 'Mike', { method: 'venmo', handle: 'v' });
-    const b = await createSavedPlayer(A, 'Mike', { method: 'cashapp', handle: 'c' });
-    expect(a.ok && b.ok).toBe(true);
-    if (!a.ok || !b.ok) return;
-    expect(a.id).not.toBe(b.id);
-    expect((await getSavedPlayersByName(A, 'mike')).length).toBe(2);
+    expect(a.ok).toBe(true);
+    const b = await createSavedPlayer(A, 'mike', { method: 'cashapp', handle: 'c' });
+    expect(b).toEqual({ ok: false, reason: 'duplicate' });
+    expect((await getSavedPlayersByName(A, 'mike')).length).toBe(1);
   });
 
   it('createSavedPlayer refuses an empty name and reports full at the cap', async () => {
@@ -429,12 +428,17 @@ describe('id-addressed CRUD', () => {
   });
 
   it('deletes by id, leaving a same-name twin intact', async () => {
-    const a = await createSavedPlayer(A, 'Mike', { method: 'venmo', handle: 'v' });
-    const b = await createSavedPlayer(A, 'Mike', { method: 'cashapp', handle: 'c' });
-    if (!a.ok || !b.ok) throw new Error('setup');
-    await deleteSavedPlayerById(A, a.id);
+    // Legacy / cross-device data can hold two same-name entries with distinct ids; seed directly.
+    await AsyncStorage.setItem(
+      `saved_player_names:${A}`,
+      JSON.stringify([
+        { id: 'sp_a', name: 'Mike', preferredPayment: { method: 'venmo', handle: 'v' }, updatedAt: 1 },
+        { id: 'sp_b', name: 'Mike', preferredPayment: { method: 'cashapp', handle: 'c' }, updatedAt: 2 },
+      ]),
+    );
+    await deleteSavedPlayerById(A, 'sp_a');
     const left = await getSavedPlayersByName(A, 'Mike');
-    expect(left.map(p => p.id)).toEqual([b.id]);
+    expect(left.map(p => p.id)).toEqual(['sp_b']);
   });
 
   it('deletes several by id', async () => {

@@ -200,11 +200,18 @@ export async function createSavedPlayer(
   name: string,
   preferredPayment?: PreferredPayment,
   limit: number = PRO_SAVED_CAP,
-): Promise<{ ok: true; id: string } | { ok: false; reason: 'full' | 'empty' }> {
+): Promise<{ ok: true; id: string } | { ok: false; reason: 'full' | 'empty' | 'duplicate' }> {
   const trimmed = name.trim();
   if (!trimmed) return { ok: false, reason: 'empty' };
   return enqueue(async () => {
     const current = await readLocal(uid);
+    const lower = trimmed.toLowerCase();
+    // Distinct saved names are an invariant — the explicit "separate person" action must
+    // use a distinct name (the UI prompts for one; this is the backstop). Checked before the
+    // cap so the user gets the more specific reason.
+    if (current.some(p => p.name.toLowerCase() === lower)) {
+      return { ok: false, reason: 'duplicate' } as const;
+    }
     if (current.length >= limit) return { ok: false, reason: 'full' } as const;
     const entry: SavedPlayer = { id: newSavedPlayerId(), name: trimmed, updatedAt: Date.now() };
     if (preferredPayment) entry.preferredPayment = preferredPayment;
