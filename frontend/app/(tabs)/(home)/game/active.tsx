@@ -12,7 +12,7 @@ import { Player, PlayerBalance, Validation, PreferredPayment } from '@/types/gam
 import { getNetBalanceColor, formatNetBalanceDisplay } from '@/utils/formatUtils';
 import { incrementProfileStats } from '@/services/firebaseService';
 import { isValidNumericInput } from '@/utils/validationUtils';
-import { savePlayerName, getSavedPlayer, savePlayer, loadSavedPlayers, SavedPlayer, FREE_SAVED_CAP, PRO_SAVED_CAP, savedCapFor, canAddMoreSavedPlayers } from '@/services/savedPlayersService';
+import { savePlayerName, getSavedPlayer, savePlayer, loadSavedPlayers, SavedPlayer, FREE_SAVED_CAP, PRO_SAVED_CAP, savedCapFor, canAddMoreSavedPlayers, getSavedPlayersByName, createSavedPlayer, updateSavedPlayer } from '@/services/savedPlayersService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import PlayerCardActive from '@/components/PlayerCardActive';
 import PlayerCardCompleted from '@/components/PlayerCardCompleted';
@@ -26,6 +26,8 @@ import { useCurrency } from '@/contexts/CurrencyContext';
 import { useReduceMotion } from '@/hooks/useReduceMotion';
 import { EXACT_CASH_UNIT, resolveCashUnit } from '@/constants/CashUnits';
 import { computeRoundingDistortion, PlayerDistortion } from '@/utils/roundingUtils';
+import { getPaymentMethodMeta } from '@/constants/PaymentMethods';
+import { formatHandleForDisplay } from '@/utils/paymentLinks';
 
 function HudSectionHeader({ label, onAction, actionIcon }: { label: string; onAction?: () => void; actionIcon?: string }) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
@@ -160,7 +162,7 @@ export default function ActiveGameScreen() {
   const uid = user?.uid ?? null;
   const refreshSavedNames = useCallback(() => {
     if (!uid) return;
-    const apply = (list: SavedPlayer[]) => setSavedPlayers(list.map(p => p.name));
+    const apply = (list: SavedPlayer[]) => setSavedPlayers(list);
     loadSavedPlayers(uid, apply).then(apply).catch(() => {});
   }, [uid]);
 
@@ -203,9 +205,14 @@ export default function ActiveGameScreen() {
   const [showPaywall, setShowPaywall] = useState(false);
   const [paywallMessage, setPaywallMessage] = useState(PLAYERS_PAYWALL_MESSAGE);
   const [savePlayerToggle, setSavePlayerToggle] = useState(true);
-  const [savedPlayers, setSavedPlayers] = useState<string[]>([]);
-  const [playerSuggestions, setPlayerSuggestions] = useState<string[]>([]);
-  const [renameSuggestions, setRenameSuggestions] = useState<string[]>([]);
+  const [savedPlayers, setSavedPlayers] = useState<SavedPlayer[]>([]);
+  const [playerSuggestions, setPlayerSuggestions] = useState<SavedPlayer[]>([]);
+  const [renameSuggestions, setRenameSuggestions] = useState<SavedPlayer[]>([]);
+  // Identity of the saved player the user picked from suggestions (null = typed freely).
+  const [selectedSavedId, setSelectedSavedId] = useState<string | null>(null);
+  // When an Add matches 2+ saved people and none was picked, hold the candidates for the
+  // in-place disambiguation overlay (rendered inside the already-open Add modal).
+  const [disambiguation, setDisambiguation] = useState<SavedPlayer[] | null>(null);
 
   // Game completion modal state
   const [showCompletionModal, setShowCompletionModal] = useState(false);
@@ -219,6 +226,13 @@ export default function ActiveGameScreen() {
   // Payment editor state
   const [showPaymentEditor, setShowPaymentEditor] = useState(false);
   const [paymentPlayer, setPaymentPlayer] = useState<Player | null>(null);
+
+  const savedBadge = (p: SavedPlayer): string | null => {
+    if (!p.preferredPayment) return null;
+    const { method, handle } = p.preferredPayment;
+    const label = getPaymentMethodMeta(method).label;
+    return handle ? `${label} · ${formatHandleForDisplay(method, handle)}` : label;
+  };
 
   const handleCreateNewGame = async () => {
     try {
@@ -240,9 +254,19 @@ export default function ActiveGameScreen() {
     const idx = activeGame.players.findIndex(p => p.id === paymentPlayer.id);
     if (idx !== -1) activeGame.players[idx] = { ...activeGame.players[idx], preferredPayment: pref };
     await updateGame(activeGame);
-    // Update-only: setting a payment in-game must never create/resurrect a saved
-    // entry (it would silently bypass the opt-out toggle and silently fail at cap).
-    if (uid) savePlayer(uid, paymentPlayer.name, pref, savedCapFor(isPro), { updateOnly: true }).catch(() => {});
+    // Update-only, id-precise: write the payment back to the exact saved entry this player
+    // was seeded from. Fall back to a unique name match for legacy players (no savedPlayerId);
+    // if the name is ambiguous (2+ saved), skip rather than guess.
+    if (uid) {
+      const sid = activeGame.players[idx]?.savedPlayerId ?? paymentPlayer.savedPlayerId;
+      if (sid) {
+        updateSavedPlayer(uid, sid, { preferredPayment: pref }).catch(() => {});
+      } else {
+        getSavedPlayersByName(uid, paymentPlayer.name)
+          .then(m => { if (m.length === 1) return updateSavedPlayer(uid, m[0].id, { preferredPayment: pref }); })
+          .catch(() => {});
+      }
+    }
     setShowPaymentEditor(false);
     setPaymentPlayer(null);
   };
@@ -312,64 +336,95 @@ export default function ActiveGameScreen() {
   // Save-toggle state for the Add Player modal (spec: the cap is never silent).
   const typedNameLower = newPlayerName.trim().toLowerCase();
   const nameAlreadySaved =
-    typedNameLower.length > 0 && savedPlayers.some(n => n.toLowerCase() === typedNameLower);
+    typedNameLower.length > 0 && savedPlayers.some(p => p.name.toLowerCase() === typedNameLower);
   const savedListFull = !canAddMoreSavedPlayers(savedPlayers.length, isPro);
+
+  const commitAddPlayer = async (bound: SavedPlayer | null, createAsNew: boolean) => {
+    const name = newPlayerName.trim();
+    const player = GameService.addPlayer(activeGame, name);
+
+    // Resolve which saved entry (if any) this player is bound to, and its payment.
+    let savedId: string | undefined = bound?.id;
+    let payment = bound?.preferredPayment;
+
+    if (uid) {
+      if (bound) {
+        // Existing person → recency bump (no new entry).
+        updateSavedPlayer(uid, bound.id, {}).catch(() => {});
+      } else if (createAsNew || (savePlayerToggle && !savedListFull)) {
+        // Brand-new person (0 matches, or explicit "add new person"): create if allowed.
+        const res = await createSavedPlayer(uid, name, undefined, savedCapFor(isPro));
+        if (res.ok) savedId = res.id;
+      }
+    }
+
+    if (savedId || payment) {
+      const i = activeGame.players.findIndex(p => p.id === player.id);
+      if (i !== -1) {
+        activeGame.players[i] = {
+          ...activeGame.players[i],
+          ...(payment ? { preferredPayment: payment } : {}),
+          ...(savedId ? { savedPlayerId: savedId } : {}),
+        };
+      }
+    }
+
+    const buyInAmount = parseFloat(newPlayerBuyIn);
+    if (!isNaN(buyInAmount) && buyInAmount > 0) {
+      GameService.addTransaction(activeGame, player.id, 'buyin', buyInAmount);
+    }
+    await updateGame(activeGame);
+
+    setNewPlayerName('');
+    setNewPlayerBuyIn('');
+    setPlayerSuggestions([]);
+    setSelectedSavedId(null);
+    setDisambiguation(null);
+    setShowAddPlayer(false);
+  };
 
   const handleAddPlayer = async () => {
     if (!newPlayerName.trim()) {
       Alert.alert('Error', 'Please enter a player name');
       return;
     }
-
-    // Validate format before parsing (if buy-in provided)
     if (newPlayerBuyIn.trim() && !isValidNumericInput(newPlayerBuyIn)) {
       Alert.alert('Error', 'Please enter a valid numeric amount (digits and decimal point only) or leave it empty');
       return;
     }
-
     const buyInAmount = parseFloat(newPlayerBuyIn);
     if (newPlayerBuyIn.trim() && (isNaN(buyInAmount) || buyInAmount < 0)) {
       Alert.alert('Error', 'Please enter a valid buy-in amount or leave it empty');
       return;
     }
 
-    const player = GameService.addPlayer(activeGame, newPlayerName.trim());
+    const name = newPlayerName.trim();
 
-    // Surface a remembered payment for this name (visible on the card badge;
-    // the handle is shown again prominently at payment time — see summary).
-    const saved = uid ? await getSavedPlayer(uid, newPlayerName.trim()) : undefined;
-    if (saved?.preferredPayment) {
-      const i = activeGame.players.findIndex(p => p.id === player.id);
-      if (i !== -1) activeGame.players[i] = { ...activeGame.players[i], preferredPayment: saved.preferredPayment };
+    // Picked from suggestions → bind that exact entry.
+    if (selectedSavedId && uid) {
+      const bound = savedPlayers.find(p => p.id === selectedSavedId) ?? null;
+      await commitAddPlayer(bound, false);
+      return;
     }
 
-    // Add initial buy-in if amount was provided
-    if (!isNaN(buyInAmount) && buyInAmount > 0) {
-      GameService.addTransaction(activeGame, player.id, 'buyin', buyInAmount);
+    // Typed freely: resolve matches.
+    const matches = uid ? await getSavedPlayersByName(uid, name) : [];
+    if (matches.length >= 2) {
+      setDisambiguation(matches); // require the user to choose (or add new person)
+      return;
     }
-
-    await updateGame(activeGame);
-    // Already-saved names always refresh (recency/updatedAt). New names save only
-    // when the user left the toggle ON and there is room — no silent cap skips.
-    if (uid && (nameAlreadySaved || (savePlayerToggle && !savedListFull))) {
-      savePlayerName(uid, newPlayerName.trim(), savedCapFor(isPro)).catch(() => {});
-    }
-    setNewPlayerName('');
-    setNewPlayerBuyIn('');
-    setPlayerSuggestions([]);
-    setShowAddPlayer(false);
+    await commitAddPlayer(matches[0] ?? null, false);
   };
 
   const handlePlayerNameChange = (text: string) => {
     setNewPlayerName(text);
+    setSelectedSavedId(null); // typing invalidates any prior pick
     if (text.trim().length === 0) {
       setPlayerSuggestions([]);
       return;
     }
     const lower = text.toLowerCase();
-    setPlayerSuggestions(
-      savedPlayers.filter(n => n.toLowerCase().startsWith(lower)).slice(0, 4)
-    );
+    setPlayerSuggestions(savedPlayers.filter(p => p.name.toLowerCase().startsWith(lower)).slice(0, 4));
   };
 
   const handleAddTransaction = async () => {
@@ -747,21 +802,26 @@ export default function ActiveGameScreen() {
             />
             {playerSuggestions.length > 0 && (
               <View style={styles.suggestionsContainer}>
-                {playerSuggestions.map((name, index) => (
-                  <TouchableOpacity
-                    key={name}
-                    style={[
-                      styles.suggestionItem,
-                      index === playerSuggestions.length - 1 && styles.suggestionItemLast,
-                    ]}
-                    onPress={() => {
-                      setNewPlayerName(name);
-                      setPlayerSuggestions([]);
-                    }}
-                  >
-                    <Text style={styles.suggestionText}>{name}</Text>
-                  </TouchableOpacity>
-                ))}
+                {playerSuggestions.map((p, index) => {
+                  const b = savedBadge(p);
+                  return (
+                    <TouchableOpacity
+                      key={p.id}
+                      style={[
+                        styles.suggestionItem,
+                        index === playerSuggestions.length - 1 && styles.suggestionItemLast,
+                      ]}
+                      onPress={() => {
+                        setNewPlayerName(p.name);
+                        setSelectedSavedId(p.id);
+                        setPlayerSuggestions([]);
+                      }}
+                    >
+                      <Text style={styles.suggestionText}>{p.name}</Text>
+                      {b ? <Text style={styles.suggestionBadge} numberOfLines={1}>{b}</Text> : null}
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             )}
             <TextInput
@@ -821,6 +881,29 @@ export default function ActiveGameScreen() {
             </View>
           </View>
         </View>
+        {disambiguation && (
+          <View style={styles.disambigOverlay}>
+            <View style={styles.modalContent}>
+              <Text style={styles.modalTitle}>Which {newPlayerName.trim()}?</Text>
+              <Text style={styles.disambigSub}>You have more than one saved player with this name.</Text>
+              {disambiguation.map(p => {
+                const b = savedBadge(p);
+                return (
+                  <TouchableOpacity key={p.id} style={styles.disambigRow} onPress={() => commitAddPlayer(p, false)}>
+                    <Text style={styles.disambigName}>{p.name}</Text>
+                    <Text style={styles.disambigBadge} numberOfLines={1}>{b ?? 'No payment set'}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+              <TouchableOpacity style={styles.disambigRow} onPress={() => commitAddPlayer(null, true)}>
+                <Text style={styles.disambigNewText}>+ Add as a new person</Text>
+              </TouchableOpacity>
+              <View style={styles.modalButtons}>
+                <ModalButton variant="cancel" title="Cancel" onPress={() => setDisambiguation(null)} />
+              </View>
+            </View>
+          </View>
+        )}
         </GestureHandlerRootView>
       </Modal>
 
@@ -894,7 +977,7 @@ export default function ActiveGameScreen() {
                 }
                 const lower = text.toLowerCase();
                 setRenameSuggestions(
-                  savedPlayers.filter(n => n.toLowerCase().startsWith(lower)).slice(0, 4)
+                  savedPlayers.filter(p => p.name.toLowerCase().startsWith(lower)).slice(0, 4)
                 );
               }}
               placeholder="New name"
@@ -905,19 +988,19 @@ export default function ActiveGameScreen() {
             />
             {renameSuggestions.length > 0 && (
               <View style={styles.suggestionsContainer}>
-                {renameSuggestions.map((name, index) => (
+                {renameSuggestions.map((p, index) => (
                   <TouchableOpacity
-                    key={name}
+                    key={p.id}
                     style={[
                       styles.suggestionItem,
                       index === renameSuggestions.length - 1 && styles.suggestionItemLast,
                     ]}
                     onPress={() => {
-                      setRenamedPlayerName(name);
+                      setRenamedPlayerName(p.name);
                       setRenameSuggestions([]);
                     }}
                   >
-                    <Text style={styles.suggestionText}>{name}</Text>
+                    <Text style={styles.suggestionText}>{p.name}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
@@ -1512,6 +1595,7 @@ const styles = StyleSheet.create({
   },
   suggestionItem: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
     gap: 10,
     paddingHorizontal: 16,
@@ -1526,6 +1610,13 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.75)',
     fontSize: 15,
   },
+  suggestionBadge: { fontSize: 11, color: 'rgba(176,114,187,0.9)', fontFamily: 'SpaceMono', marginLeft: 12, flexShrink: 1, textAlign: 'right' },
+  disambigOverlay: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(0,0,0,0.7)', alignItems: 'center', justifyContent: 'center', padding: 24 },
+  disambigSub: { fontSize: 13, color: 'rgba(255,255,255,0.5)', textAlign: 'center', marginBottom: 12 },
+  disambigRow: { paddingVertical: 12, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1, borderColor: '#242424', backgroundColor: '#161616', marginBottom: 8 },
+  disambigName: { fontSize: 16, color: '#FFFFFF', fontWeight: '600' },
+  disambigBadge: { fontSize: 12, color: 'rgba(176,114,187,0.9)', fontFamily: 'SpaceMono', marginTop: 3 },
+  disambigNewText: { fontSize: 15, color: '#B072BB', fontWeight: '600', textAlign: 'center' },
   cashUnitRow: {
     flexDirection: 'row',
     alignItems: 'center',
