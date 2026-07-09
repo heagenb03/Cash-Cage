@@ -143,9 +143,17 @@ interface SettlementCardProps {
 
 function SettlementCard({ groupedSettlement, reduceMotion, recipientPayment }: SettlementCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
+  const [copied, setCopied] = useState(false);
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
+  const copyTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { formatAmount } = useCurrency();
+
+  const hasHandle = !!recipientPayment?.handle?.trim();
+  const methodLabel = recipientPayment ? getPaymentMethodMeta(recipientPayment.method).label : '';
+  const displayHandle = recipientPayment && hasHandle
+    ? formatHandleForDisplay(recipientPayment.method, recipientPayment.handle)
+    : '';
 
   // Sort payments by amount (largest first)
   const sortedPayments = sortPaymentsByAmount(groupedSettlement).payments;
@@ -187,25 +195,47 @@ function SettlementCard({ groupedSettlement, reduceMotion, recipientPayment }: S
     }
   }, [reduceMotion, scaleAnim]);
 
-  const tapGesture = useMemo(() => Gesture.Tap()
-    .maxDuration(200)
-    .maxDistance(10)
-    .onBegin(() => runOnJS(animateScaleDown)())
-    .onFinalize((_, success) => {
-      runOnJS(animateScaleUp)();
+  const handleCopyHandle = useCallback(() => {
+    if (!recipientPayment?.handle) return;
+    Clipboard.setStringAsync(formatHandleForDisplay(recipientPayment.method, recipientPayment.handle)).catch(() => {});
+    setCopied(true);
+    if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+    copyTimerRef.current = setTimeout(() => setCopied(false), 1200);
+  }, [recipientPayment]);
+
+  useEffect(() => () => {
+    if (copyTimerRef.current) clearTimeout(copyTimerRef.current);
+  }, []);
+
+  const badgeTapGesture = useMemo(() => Gesture.Tap()
+    .maxDuration(250)
+    .hitSlop({ top: 8, bottom: 8, left: 8, right: 8 })
+    .onEnd((_event, success) => {
       if (success) {
-        runOnJS(handleToggle)();
+        runOnJS(handleCopyHandle)();
       }
-    }), [animateScaleDown, animateScaleUp, handleToggle]);
+    }), [handleCopyHandle]);
+
+  const tapGesture = useMemo(() => {
+    const tap = Gesture.Tap()
+      .maxDuration(200)
+      .maxDistance(10)
+      .onBegin(() => runOnJS(animateScaleDown)())
+      .onFinalize((_, success) => {
+        runOnJS(animateScaleUp)();
+        if (success) {
+          runOnJS(handleToggle)();
+        }
+      });
+    // A tap on the badge must copy, not toggle: the card tap only activates
+    // once the badge tap has failed (i.e. the touch wasn't on the badge).
+    return hasHandle ? tap.requireExternalGestureToFail(badgeTapGesture) : tap;
+  }, [animateScaleDown, animateScaleUp, handleToggle, hasHandle, badgeTapGesture]);
 
   const handlePay = useCallback((amount: number) => {
     if (!recipientPayment) return;
     const uri = buildPaymentUri(recipientPayment.method, recipientPayment.handle, amount, 'Poker settle up');
     if (uri) Linking.openURL(uri).catch(() => {});
-  }, [recipientPayment]);
-
-  const handleCopyHandle = useCallback(() => {
-    if (recipientPayment?.handle) Clipboard.setStringAsync(formatHandleForDisplay(recipientPayment.method, recipientPayment.handle)).catch(() => {});
   }, [recipientPayment]);
 
   return (
@@ -216,22 +246,35 @@ function SettlementCard({ groupedSettlement, reduceMotion, recipientPayment }: S
       ]}
     >
       <GestureDetector gesture={tapGesture}>
-        <View
-          style={styles.settlementCardBody}
-          accessible={true}
-          accessibilityRole="button"
-          accessibilityLabel={`${groupedSettlement.recipient} receives ${formatAmount(groupedSettlement.totalAmount)}. ${isExpanded ? 'Collapse' : 'Expand'} payment details.`}
-          accessibilityHint={isExpanded ? 'Double tap to collapse payment details' : 'Double tap to expand payment details'}
-          accessibilityState={{ expanded: isExpanded }}
-        >
+        <View style={styles.settlementCardBody}>
           <View style={styles.settlementHeader}>
             <View style={styles.recipientNameWrapper}>
-              <Text style={styles.recipientName}>{groupedSettlement.recipient}</Text>
-              {recipientPayment && (
-                <Text style={styles.payeeBadge} numberOfLines={1}>
-                  {getPaymentMethodMeta(recipientPayment.method).label}
-                  {recipientPayment.handle ? ` · ${formatHandleForDisplay(recipientPayment.method, recipientPayment.handle)}` : ''}
-                </Text>
+              <View
+                accessible={true}
+                accessibilityRole="button"
+                accessibilityLabel={`${groupedSettlement.recipient} receives ${formatAmount(groupedSettlement.totalAmount)}. ${isExpanded ? 'Collapse' : 'Expand'} payment details.`}
+                accessibilityHint={isExpanded ? 'Double tap to collapse payment details' : 'Double tap to expand payment details'}
+                accessibilityState={{ expanded: isExpanded }}
+                style={styles.toggleA11yRegion}
+              >
+                <Text style={styles.recipientName}>{groupedSettlement.recipient}</Text>
+              </View>
+              {recipientPayment && hasHandle && (
+                <GestureDetector gesture={badgeTapGesture}>
+                  <View
+                    accessible={true}
+                    accessibilityRole="button"
+                    accessibilityLabel={copied ? 'Handle copied' : `Copy ${methodLabel} handle ${displayHandle}`}
+                    style={styles.payeeBadgeTap}
+                  >
+                    <Text style={styles.payeeBadge} numberOfLines={1}>
+                      {copied ? 'Copied ✓' : `${methodLabel} · ${displayHandle}`}
+                    </Text>
+                  </View>
+                </GestureDetector>
+              )}
+              {recipientPayment && !hasHandle && (
+                <Text style={styles.payeeBadge} numberOfLines={1}>{methodLabel}</Text>
               )}
             </View>
             <Ionicons
@@ -285,11 +328,6 @@ function SettlementCard({ groupedSettlement, reduceMotion, recipientPayment }: S
                       <Text style={styles.payButtonText}>
                         Pay via {getPaymentMethodMeta(recipientPayment.method).label}
                       </Text>
-                    </TouchableOpacity>
-                  )}
-                  {recipientPayment && !buildPaymentUri(recipientPayment.method, recipientPayment.handle, payment.amount, 'x') && recipientPayment.handle && (
-                    <TouchableOpacity onPress={handleCopyHandle} style={styles.payButton}>
-                      <Text style={styles.payButtonText}>Copy handle</Text>
                     </TouchableOpacity>
                   )}
                 </View>
@@ -1121,6 +1159,16 @@ const styles = StyleSheet.create({
     color: 'rgba(176,114,187,0.9)',
     marginTop: 2,
     letterSpacing: 0.2,
+  },
+  toggleA11yRegion: {
+    backgroundColor: 'transparent',
+    alignSelf: 'flex-start',
+    maxWidth: '100%',
+  },
+  payeeBadgeTap: {
+    backgroundColor: 'transparent',
+    alignSelf: 'flex-start',
+    maxWidth: '100%',
   },
   payButton: {
     marginTop: 6,
