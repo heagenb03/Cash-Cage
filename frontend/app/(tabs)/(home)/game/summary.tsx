@@ -6,7 +6,7 @@ import { Text, View } from '@/components/Themed';
 import { useGame } from '@/contexts/GameContext';
 import { useRouter } from 'expo-router';
 import { GameService } from '@/services/gameService';
-import { getSettlements } from '@/services/settlementService';
+import { getSettlements, calculateBankerSettlements } from '@/services/settlementService';
 import { PlayerBalance, SettlementResult } from '@/types/game';
 import { groupSettlementsByRecipient, sortPaymentsByAmount } from '@/utils/settlementUtils';
 import { getNetBalanceColor } from '@/utils/formatUtils';
@@ -39,9 +39,10 @@ function HudSectionHeader({ label }: { label: string }) {
 interface BalanceCardProps {
   balance: PlayerBalance;
   reduceMotion: boolean;
+  hint?: string;
 }
 
-function BalanceCard({ balance, reduceMotion }: BalanceCardProps) {
+function BalanceCard({ balance, reduceMotion, hint }: BalanceCardProps) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
   const { formatAmountCompact } = useCurrency();
 
@@ -92,6 +93,7 @@ function BalanceCard({ balance, reduceMotion }: BalanceCardProps) {
         <View style={styles.cardHeader}>
           <View style={styles.nameRow}>
             <Text style={styles.playerName}>{balance.playerName}</Text>
+            {hint && <Text style={styles.balanceHint}>{hint}</Text>}
           </View>
         </View>
 
@@ -492,6 +494,28 @@ export default function GameSummaryScreen() {
       return;
     }
 
+    // Banker mode: compute the star on-device. Never call the server, show the
+    // fallback banner, or offer retry (those are keyed on server-vs-client fallback,
+    // which does not apply to an intentional client computation).
+    if (activeGame?.settlementMode === 'banker' && activeGame.bankerPlayerId) {
+      const banker = activeGame.players.find(p => p.id === activeGame.bankerPlayerId);
+      if (banker) {
+        const result = calculateBankerSettlements(
+          summary.balances,
+          { id: banker.id, name: banker.name },
+          resolveCashUnit(summary.game.cashUnit, currency),
+        );
+        setSettlementResult(result);
+        setIsLoadingSettlements(false);
+        setLastError(undefined);
+        setShowFallbackBanner(false);
+        GameService.cacheSettlements(activeGame, result);
+        updateGame(activeGame); // fire-and-forget persist
+        return;
+      }
+      // banker id unresolved (player removed) → fall through to optimal
+    }
+
     // Check for cached settlements first
     const cachedResult = activeGame
       ? GameService.getCachedSettlements(activeGame)
@@ -568,7 +592,7 @@ setSettlementResult(cachedResult);
     return () => {
       cancelled = true;
     };
-  }, [summary?.game.id]);
+  }, [summary?.game.id, activeGame?.settlementMode, activeGame?.bankerPlayerId]);
 
   const handleRetry = async () => {
     if (!summary || !activeGame) return;
@@ -733,6 +757,12 @@ setSettlementResult(cachedResult);
         <View style={styles.section}>
           <HudSectionHeader label="SETTLEMENTS" />
 
+          {activeGame.settlementMode === 'banker' && (
+            <Text style={styles.roundingNote}>
+              Banker: {activeGame.players.find(p => p.id === activeGame.bankerPlayerId)?.name ?? '—'}
+            </Text>
+          )}
+
           {/* Fallback notice */}
           {showFallbackBanner && (
             <FallbackBanner
@@ -769,9 +799,21 @@ setSettlementResult(cachedResult);
         <View style={styles.section}>
           <HudSectionHeader label="FINAL BALANCES" />
           <View style={styles.balancesContainer}>
-            {summary.balances.map(balance => (
-              <BalanceCard key={balance.playerId} balance={balance} reduceMotion={reduceMotion} />
-            ))}
+            {summary.balances.map(balance => {
+              const isNonPlayingBanker =
+                activeGame.settlementMode === 'banker' &&
+                activeGame.bankerPlayerId === balance.playerId &&
+                balance.totalBuyins === 0 &&
+                balance.totalCashouts === 0;
+              return (
+                <BalanceCard
+                  key={balance.playerId}
+                  balance={balance}
+                  reduceMotion={reduceMotion}
+                  hint={isNonPlayingBanker ? 'banker · not playing' : undefined}
+                />
+              );
+            })}
           </View>
         </View>
       </ScrollView>
@@ -1077,6 +1119,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#FFFFFF',
     letterSpacing: 0.3,
+  },
+  balanceHint: {
+    marginLeft: 6,
+    fontSize: 10,
+    fontStyle: 'italic',
+    color: 'rgba(255,255,255,0.35)',
   },
   dataRow: {
     flexDirection: 'row',
