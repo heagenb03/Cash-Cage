@@ -7,7 +7,7 @@ import { Text, View } from '@/components/Themed';
 import { useGame } from '@/contexts/GameContext';
 import { useRouter } from 'expo-router';
 import { GameService } from '@/services/gameService';
-import { getSettlements } from '@/services/settlementService';
+import { getSettlements, calculateBankerSettlements } from '@/services/settlementService';
 import { Player, PlayerBalance, Validation, PreferredPayment } from '@/types/game';
 import { getNetBalanceColor, formatNetBalanceDisplay } from '@/utils/formatUtils';
 import { incrementProfileStats } from '@/services/firebaseService';
@@ -20,6 +20,7 @@ import Button from '@/components/Button';
 import ModalButton from '@/components/ModalButton';
 import PaywallModal from '@/components/PaywallModal';
 import CashUnitPickerModal from '@/components/CashUnitPickerModal';
+import SettlementModePicker from '@/components/SettlementModePicker';
 import PaymentEditorModal from '@/components/PaymentEditorModal';
 import AppModal, { AppModalCard, appModalStyles } from '@/components/AppModal';
 import { useAuth } from '@/contexts/AuthContext';
@@ -227,6 +228,7 @@ export default function ActiveGameScreen() {
   const [validationResult, setValidationResult] = useState<Validation | null>(null);
   const [showSolvingModal, setShowSolvingModal] = useState(false);
   const [showCashUnitPicker, setShowCashUnitPicker] = useState(false);
+  const [showSettlementModePicker, setShowSettlementModePicker] = useState(false);
   const [showDistortionModal, setShowDistortionModal] = useState(false);
   const [distortions, setDistortions] = useState<PlayerDistortion[]>([]);
 
@@ -539,7 +541,11 @@ export default function ActiveGameScreen() {
 
   const handleCompleteGame = () => {
     const balances = GameService.calculateBalances(activeGame);
-    const validation = GameService.validateGame(balances, formatAmount);
+    const validation = GameService.validateGame(
+      balances,
+      formatAmount,
+      activeGame.settlementMode === 'banker' ? activeGame.bankerPlayerId : undefined,
+    );
 
     setValidationResult(validation);
 
@@ -564,9 +570,20 @@ export default function ActiveGameScreen() {
       setShowSolvingModal(true);
 
       const balances = GameService.calculateBalances(activeGame);
-      const result = await getSettlements(balances, {
-        settings: { cashRoundingUnit: resolveCashUnit(activeGame.cashUnit, currency) },
-      });
+      const banker =
+        activeGame.settlementMode === 'banker'
+          ? activeGame.players.find(p => p.id === activeGame.bankerPlayerId)
+          : undefined;
+      const result =
+        banker
+          ? calculateBankerSettlements(
+              balances,
+              { id: banker.id, name: banker.name },
+              resolveCashUnit(activeGame.cashUnit, currency),
+            )
+          : await getSettlements(balances, {
+              settings: { cashRoundingUnit: resolveCashUnit(activeGame.cashUnit, currency) },
+            });
 
       GameService.cacheSettlements(activeGame, result);
       await updateGame(activeGame);
@@ -598,6 +615,23 @@ export default function ActiveGameScreen() {
       Alert.alert('Error', 'Failed to complete game. Please try again.');
       console.error('Error completing game:', error);
     }
+  };
+
+  const bankerName =
+    activeGame.settlementMode === 'banker'
+      ? activeGame.players.find(p => p.id === activeGame.bankerPlayerId)?.name
+      : undefined;
+
+  const applySettlementMode = async (mode: 'optimal' | 'banker', bankerId?: string) => {
+    activeGame.settlementMode = mode;
+    activeGame.bankerPlayerId = mode === 'banker' ? bankerId : undefined;
+    GameService.clearSettlementCache(activeGame);
+    await updateGame(activeGame);
+  };
+
+  const handleAddBanker = async (name: string) => {
+    const player = GameService.addPlayer(activeGame, name.trim());
+    await applySettlementMode('banker', player.id);
   };
 
   const handleConfirmCompletion = async () => {
@@ -765,6 +799,18 @@ export default function ActiveGameScreen() {
                 : formatAmount(resolveCashUnit(activeGame.cashUnit, currency))}
             </Text>
           </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.cashUnitRow}
+            onPress={() => setShowSettlementModePicker(true)}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.cashUnitLabel}>Settlement: </Text>
+            <Text style={styles.cashUnitValue}>
+              {activeGame.settlementMode === 'banker'
+                ? `Banker · ${bankerName ?? 'choose'}`
+                : 'Optimal'}
+            </Text>
+          </TouchableOpacity>
         </View>
 
         {/* Active Players List */}
@@ -801,6 +847,7 @@ export default function ActiveGameScreen() {
                     onRename={openRenameModal}
                     onEditPayment={openPaymentEditor}
                     reduceMotion={reduceMotionEnabled}
+                    isBanker={activeGame.settlementMode === 'banker' && activeGame.bankerPlayerId === player.id}
                   />
                 </View>
               );
@@ -1267,6 +1314,17 @@ export default function ActiveGameScreen() {
           await updateGame(activeGame);
         }}
         onClose={() => setShowCashUnitPicker(false)}
+      />
+
+      <SettlementModePicker
+        visible={showSettlementModePicker}
+        players={activeGame.players}
+        mode={activeGame.settlementMode ?? 'optimal'}
+        bankerPlayerId={activeGame.bankerPlayerId}
+        onSelectOptimal={() => applySettlementMode('optimal')}
+        onSelectBanker={(id) => applySettlementMode('banker', id)}
+        onAddBanker={handleAddBanker}
+        onClose={() => setShowSettlementModePicker(false)}
       />
 
       {/* Payment Editor Modal */}
