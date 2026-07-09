@@ -76,6 +76,7 @@ export default function SavedPlayersScreen() {
   const [renameTarget, setRenameTarget] = useState<SavedPlayer | null>(null);
   const [renameName, setRenameName] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<SavedPlayer | null>(null);
+  const [showBulkDeleteConfirm, setShowBulkDeleteConfirm] = useState(false);
 
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -339,7 +340,7 @@ export default function SavedPlayersScreen() {
           <ModalButton
             variant="destructive"
             title={`Delete (${selected.size})`}
-            onPress={handleBulkDelete}
+            onPress={() => setShowBulkDeleteConfirm(true)}
             disabled={selected.size === 0}
             fullWidth
           />
@@ -459,6 +460,42 @@ export default function SavedPlayersScreen() {
               <View style={styles.modalButtons}>
                 <ModalButton variant="cancel" title="Cancel" onPress={() => setDeleteTarget(null)} />
                 <ModalButton variant="destructive" title="Delete" onPress={handleConfirmDelete} />
+              </View>
+            </View>
+          </View>
+        </GestureHandlerRootView>
+      </Modal>
+
+      <Modal
+        visible={showBulkDeleteConfirm}
+        animationType="fade"
+        transparent
+        onRequestClose={() => setShowBulkDeleteConfirm(false)}
+      >
+        <GestureHandlerRootView style={{ flex: 1 }}>
+          <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+              <Ionicons name="warning" size={48} color="#C04657" style={styles.warningIcon} />
+              <Text style={styles.modalTitle}>
+                Delete {selected.size} saved {selected.size === 1 ? 'player' : 'players'}?
+              </Text>
+              <Text style={styles.deleteWarningText}>
+                This action cannot be undone.
+              </Text>
+              <View style={styles.modalButtons}>
+                <ModalButton
+                  variant="cancel"
+                  title="Cancel"
+                  onPress={() => setShowBulkDeleteConfirm(false)}
+                />
+                <ModalButton
+                  variant="destructive"
+                  title="Delete"
+                  onPress={() => {
+                    setShowBulkDeleteConfirm(false);
+                    handleBulkDelete();
+                  }}
+                />
               </View>
             </View>
           </View>
