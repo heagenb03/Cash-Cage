@@ -4,6 +4,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Player, PreferredPayment, PaymentMethod } from '@/types/game';
 import { PAYMENT_METHODS, getPaymentMethodMeta } from '@/constants/PaymentMethods';
 import { normalizeHandle } from '@/utils/paymentLinks';
+import { AppModalCard } from '@/components/AppModal';
 import ModalButton from '@/components/ModalButton';
 import { modalLayoutStyles } from '@/styles/modal';
 
@@ -69,66 +70,64 @@ export const PaymentEditorContent: React.FC<PaymentEditorContentProps> = ({
   };
 
   return (
-    <View style={styles.overlay}>
-      <View style={styles.content}>
-        <Text style={styles.title}>Preferred payment</Text>
+    <AppModalCard onClose={onClose} cardStyle={styles.card}>
+      <Text style={styles.title}>Preferred payment</Text>
 
-        <View style={styles.grid}>
-          {PAYMENT_METHODS.map((m) => {
-            const selected = method === m.key;
-            const fullWidth = m.key === 'other';
-            return (
-              <TouchableOpacity
-                key={m.key}
-                onPress={() => setMethod(m.key)}
-                activeOpacity={0.8}
-                accessibilityRole="button"
-                accessibilityState={{ selected }}
-                style={[
-                  styles.tile,
-                  fullWidth ? styles.tileFull : styles.tileHalf,
-                  selected && styles.tileSelected,
-                ]}
-              >
-                <Text style={[styles.tileText, selected && styles.tileTextSelected]}>
-                  {m.label}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {meta.takesHandle && (
-          <View style={styles.handleRow}>
-            {meta.affix ? (
-              <View style={styles.affixBox}>
-                <Text style={styles.affixText}>{meta.affix}</Text>
-              </View>
-            ) : null}
-            <TextInput
-              value={handle}
-              onChangeText={setHandle}
-              placeholder={meta.handlePlaceholder}
-              placeholderTextColor="rgba(255,255,255,0.3)"
-              autoCapitalize="none"
-              autoCorrect={false}
-              style={[styles.input, meta.affix ? styles.inputWithAffix : styles.inputPlain]}
-            />
-          </View>
-        )}
-
-        <View style={[modalLayoutStyles.modalButtons, styles.buttons]}>
-          <ModalButton variant="cancel" title="Cancel" onPress={onClose} />
-          <ModalButton variant="confirm" title="Save" onPress={handleSave} />
-        </View>
+      <View style={styles.grid}>
+        {PAYMENT_METHODS.map((m) => {
+          const selected = method === m.key;
+          const fullWidth = m.key === 'other';
+          return (
+            <TouchableOpacity
+              key={m.key}
+              onPress={() => setMethod(m.key)}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+              style={[
+                styles.tile,
+                fullWidth ? styles.tileFull : styles.tileThird,
+                selected && styles.tileSelected,
+              ]}
+            >
+              <Text style={[styles.tileText, selected && styles.tileTextSelected]}>
+                {m.label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
       </View>
-    </View>
+
+      {meta.takesHandle && (
+        <View style={styles.handleRow}>
+          {meta.affix ? (
+            <View style={styles.affixBox}>
+              <Text style={styles.affixText}>{meta.affix}</Text>
+            </View>
+          ) : null}
+          <TextInput
+            value={handle}
+            onChangeText={setHandle}
+            placeholder={meta.handlePlaceholder}
+            placeholderTextColor="rgba(255,255,255,0.3)"
+            autoCapitalize="none"
+            autoCorrect={false}
+            style={[styles.input, meta.affix ? styles.inputWithAffix : styles.inputPlain]}
+          />
+        </View>
+      )}
+
+      <View style={[modalLayoutStyles.modalButtons, styles.buttons]}>
+        <ModalButton variant="cancel" title="Cancel" onPress={onClose} />
+        <ModalButton variant="confirm" title="Save" onPress={handleSave} />
+      </View>
+    </AppModalCard>
   );
 };
 
 const PaymentEditorModal: React.FC<PaymentEditorModalProps> = ({ visible, player, onSave, onClose }) => {
   return (
-    <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
+    <Modal visible={visible} animationType="fade" transparent statusBarTranslucent onRequestClose={onClose}>
       <GestureHandlerRootView style={{ flex: 1 }}>
         <PaymentEditorContent visible={visible} player={player} onSave={onSave} onClose={onClose} />
       </GestureHandlerRootView>
@@ -137,25 +136,13 @@ const PaymentEditorModal: React.FC<PaymentEditorModalProps> = ({ visible, player
 };
 
 const styles = StyleSheet.create({
-  overlay: {
-    ...StyleSheet.absoluteFillObject,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-  },
-  content: {
-    width: '85%',
-    maxWidth: 400,
-    backgroundColor: '#1A1A1A',
-    borderRadius: 12,
-    padding: 24,
-    borderWidth: 1,
-    borderColor: '#2A2A2A',
+  card: {
+    padding: 20,
   },
   title: {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: 'bold',
-    marginBottom: 20,
+    marginBottom: 14,
     color: '#FFFFFF',
     textAlign: 'center',
   },
@@ -163,20 +150,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'wrap',
     justifyContent: 'space-between',
-    rowGap: 10,
+    rowGap: 8,
   },
   tile: {
-    minHeight: 50,
+    minHeight: 42,
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#2A2A2A',
     backgroundColor: '#0A0A0A',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
   },
-  tileHalf: {
-    width: '48%',
+  tileThird: {
+    width: '31.5%',
   },
   tileFull: {
     width: '100%',
@@ -186,7 +173,7 @@ const styles = StyleSheet.create({
     borderColor: '#B072BB',
   },
   tileText: {
-    fontSize: 15,
+    fontSize: 13,
     fontWeight: '600',
     color: 'rgba(255,255,255,0.8)',
     textAlign: 'center',
@@ -197,11 +184,11 @@ const styles = StyleSheet.create({
   handleRow: {
     flexDirection: 'row',
     alignItems: 'stretch',
-    marginTop: 16,
+    marginTop: 14,
   },
   affixBox: {
     justifyContent: 'center',
-    paddingHorizontal: 14,
+    paddingHorizontal: 12,
     backgroundColor: '#0A0A0A',
     borderWidth: 1,
     borderRightWidth: 0,
@@ -210,14 +197,14 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 6,
   },
   affixText: {
-    fontSize: 18,
+    fontSize: 16,
     color: 'rgba(255,255,255,0.6)',
   },
   input: {
     flex: 1,
     backgroundColor: '#0A0A0A',
-    padding: 16,
-    fontSize: 18,
+    padding: 12,
+    fontSize: 16,
     color: '#fff',
     borderWidth: 1,
     borderColor: '#2A2A2A',
@@ -230,7 +217,7 @@ const styles = StyleSheet.create({
     borderBottomRightRadius: 6,
   },
   buttons: {
-    marginTop: 24,
+    marginTop: 20,
   },
 });
 
