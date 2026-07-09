@@ -283,7 +283,7 @@ function SettlementCard({ groupedSettlement, reduceMotion, recipientPayment }: S
                   {recipientPayment && buildPaymentUri(recipientPayment.method, recipientPayment.handle, payment.amount, 'x') && (
                     <TouchableOpacity onPress={() => handlePay(payment.amount)} style={styles.payButton}>
                       <Text style={styles.payButtonText}>
-                        Pay {getPaymentMethodMeta(recipientPayment.method).label}
+                        Pay via {getPaymentMethodMeta(recipientPayment.method).label}
                       </Text>
                     </TouchableOpacity>
                   )}
