@@ -404,6 +404,15 @@ describe('id-addressed CRUD', () => {
     expect((await getSavedPlayersByName(A, 'mike')).length).toBe(1);
   });
 
+  it('reports duplicate (not full) when a same-name entry already exists at the cap', async () => {
+    // limit 1: after this the list is at the cap AND holds 'Mike'.
+    const a = await createSavedPlayer(A, 'Mike', undefined, 1);
+    expect(a.ok).toBe(true);
+    // Both conditions true (at cap + duplicate name). The duplicate guard must win → 'duplicate', not 'full'.
+    const b = await createSavedPlayer(A, 'mike', undefined, 1);
+    expect(b).toEqual({ ok: false, reason: 'duplicate' });
+  });
+
   it('createSavedPlayer refuses an empty name and reports full at the cap', async () => {
     expect(await createSavedPlayer(A, '   ')).toEqual({ ok: false, reason: 'empty' });
     await createSavedPlayer(A, 'X', undefined, 1);

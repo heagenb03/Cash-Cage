@@ -191,9 +191,11 @@ export async function getSavedPlayersByName(uid: string, name: string): Promise<
 }
 
 /**
- * Explicitly create a NEW saved player (its own id) even if the name already exists —
- * this is the deliberate "add as a new/separate person" path. Honors the cap for new
- * entries. Returns the new id on success.
+ * Create a saved player with its own opaque id. Saved names must stay distinct, so this
+ * REJECTS a name that already matches an existing saved entry (trimmed, case-insensitive)
+ * with reason 'duplicate'. The cap is honored for new entries and is checked AFTER the
+ * duplicate guard, so a colliding name reports 'duplicate' rather than 'full'. Returns the
+ * new id on success.
  */
 export async function createSavedPlayer(
   uid: string,
