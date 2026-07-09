@@ -24,7 +24,6 @@ import {
   savePlayer,
   deleteSavedPlayer,
   deleteSavedPlayers,
-  addSavedPlayers,
   loadSavedPlayers,
   renameSavedPlayer,
   savedCapFor,
@@ -37,10 +36,9 @@ import { PreferredPayment, Player } from '@/types/game';
 import { getPaymentMethodMeta } from '@/constants/PaymentMethods';
 import { formatHandleForDisplay } from '@/utils/paymentLinks';
 
-type AddRow = { name: string; preferredPayment?: PreferredPayment };
 type PaymentTarget =
   | { kind: 'edit'; player: SavedPlayer }
-  | { kind: 'row'; index: number }
+  | { kind: 'add' }
   | null;
 
 function badgeText(p: SavedPlayer): string | null {
@@ -83,7 +81,8 @@ export default function SavedPlayersScreen() {
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
   const [showAdd, setShowAdd] = useState(false);
-  const [addRows, setAddRows] = useState<AddRow[]>([{ name: '' }]);
+  const [addName, setAddName] = useState('');
+  const [addPayment, setAddPayment] = useState<PreferredPayment | undefined>(undefined);
   const [adding, setAdding] = useState(false);
 
   const [showPaywall, setShowPaywall] = useState(false);
@@ -169,7 +168,8 @@ export default function SavedPlayersScreen() {
   }, [uid, deleteTarget, reload]);
 
   const openAdd = useCallback(() => {
-    setAddRows([{ name: '' }]);
+    setAddName('');
+    setAddPayment(undefined);
     setShowAdd(true);
   }, []);
   const handleAddPress = useCallback(() => {
@@ -185,46 +185,26 @@ export default function SavedPlayersScreen() {
       setShowPaywall(true);
     }
   }, [players.length, isPro, openAdd]);
-  const updateRowName = (i: number, name: string) =>
-    setAddRows(rows => rows.map((r, idx) => (idx === i ? { ...r, name } : r)));
-  const addAnotherRow = () => setAddRows(rows => [...rows, { name: '' }]);
-  const handleAddAll = useCallback(async () => {
+  const handleAdd = useCallback(async () => {
     if (adding) return;
-    const entries = addRows
-      .map(r => ({ name: r.name.trim(), preferredPayment: r.preferredPayment }))
-      .filter(r => r.name.length > 0);
-    if (entries.length === 0) {
+    const name = addName.trim();
+    if (!name) {
       setShowAdd(false);
       return;
     }
+    if (!uid) return;
     setAdding(true);
     try {
-      if (!uid) return;
-      const { added, updated, skippedFull } = await addSavedPlayers(uid, entries, { limit: cap });
+      await savePlayer(uid, name, addPayment, cap);
       setShowAdd(false);
       reload();
-      const parts: string[] = [];
-      if (added) parts.push(`${added} added`);
-      if (updated) parts.push(`${updated} updated`);
-      if (skippedFull) parts.push(`${skippedFull} skipped (list full)`);
-      Alert.alert('Saved Players', parts.join(' · ') || 'No changes.', [
-        {
-          text: 'OK',
-          onPress: () => {
-            if (skippedFull > 0 && !isPro) {
-              setPaywallMessage(CAP_PAYWALL_MESSAGE);
-              setShowPaywall(true);
-            }
-          },
-        },
-      ]);
     } catch {
       setShowAdd(false);
-      Alert.alert('Error', 'Could not add players. Please try again.');
+      Alert.alert('Error', 'Could not add player. Please try again.');
     } finally {
       setAdding(false);
     }
-  }, [uid, adding, addRows, cap, reload, isPro]);
+  }, [uid, adding, addName, addPayment, cap, reload]);
 
   // Shared PaymentEditorModal target → synthetic Player (its player prop is init-only).
   // useMemo keyed on paymentTarget gives a STABLE reference: PaymentEditorModal re-seeds
@@ -237,13 +217,9 @@ export default function SavedPlayersScreen() {
       const p = paymentTarget.player;
       return { id: p.name, name: p.name, preferredPayment: p.preferredPayment };
     }
-    const row = addRows[paymentTarget.index];
-    return {
-      id: `row-${paymentTarget.index}`,
-      name: row?.name || 'Player',
-      preferredPayment: row?.preferredPayment,
-    };
-    // addRows intentionally omitted: capture the row snapshot at open time only.
+    // kind === 'add' — snapshot the add form at open time.
+    return { id: 'add', name: addName || 'Player', preferredPayment: addPayment };
+    // addName/addPayment intentionally omitted: capture at open time only.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [paymentTarget]);
   const handlePaymentSave = useCallback(
@@ -255,8 +231,7 @@ export default function SavedPlayersScreen() {
           reload();
         });
       } else {
-        const i = paymentTarget.index;
-        setAddRows(rows => rows.map((r, idx) => (idx === i ? { ...r, preferredPayment: pref } : r)));
+        setAddPayment(pref);
         setPaymentTarget(null);
       }
     },
@@ -376,45 +351,38 @@ export default function SavedPlayersScreen() {
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
             <View style={styles.modalOverlay}>
               <View style={styles.modalContent}>
-                <Text style={styles.modalTitle}>Add players</Text>
-                <ScrollView style={styles.addRowsScroll} keyboardShouldPersistTaps="handled">
-                  {addRows.map((row, i) => (
-                    <View key={i} style={styles.addRow}>
-                      <TextInput
-                        style={styles.addRowInput}
-                        value={row.name}
-                        onChangeText={t => updateRowName(i, t)}
-                        placeholder="Name"
-                        placeholderTextColor="rgba(255,255,255,0.3)"
-                        autoCapitalize="words"
-                        autoCorrect={false}
-                      />
-                      <TouchableOpacity
-                        style={styles.rowPayBtn}
-                        onPress={() => setPaymentTarget({ kind: 'row', index: i })}
-                      >
-                        <Text style={styles.rowPayText} numberOfLines={1}>
-                          {row.preferredPayment ? getPaymentMethodMeta(row.preferredPayment.method).label : '+ Payment'}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                </ScrollView>
-                <TouchableOpacity onPress={addAnotherRow} style={styles.addAnother}>
-                  <Ionicons name="add-circle-outline" size={18} color="#B072BB" />
-                  <Text style={styles.addAnotherText}>Add another</Text>
-                </TouchableOpacity>
-                <View style={styles.modalButtons}>
+                <Text style={styles.modalTitle}>Add player</Text>
+                <View style={styles.addRow}>
+                  <TextInput
+                    style={styles.addRowInput}
+                    value={addName}
+                    onChangeText={setAddName}
+                    placeholder="Name"
+                    placeholderTextColor="rgba(255,255,255,0.3)"
+                    autoCapitalize="words"
+                    autoCorrect={false}
+                    autoFocus
+                    returnKeyType="done"
+                    onSubmitEditing={handleAdd}
+                  />
+                  <TouchableOpacity
+                    style={styles.rowPayBtn}
+                    onPress={() => setPaymentTarget({ kind: 'add' })}
+                  >
+                    <Text style={styles.rowPayText} numberOfLines={1}>
+                      {addPayment ? getPaymentMethodMeta(addPayment.method).label : '+ Payment'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+                <View style={[styles.modalButtons, styles.addModalButtons]}>
                   <ModalButton variant="cancel" title="Cancel" onPress={() => setShowAdd(false)} />
-                  <ModalButton variant="confirm" title="Add" onPress={handleAddAll} disabled={adding} />
+                  <ModalButton variant="confirm" title="Add" onPress={handleAdd} disabled={adding} />
                 </View>
               </View>
             </View>
           </KeyboardAvoidingView>
-          {/* Payment editor for a row is rendered IN PLACE here (not as its own
-              <Modal>) because iOS can only present one native modal at a time — a
-              second <Modal> opened over this one is silently dropped. */}
-          {paymentTarget?.kind === 'row' && (
+          {/* Payment editor rendered IN PLACE (not a second <Modal>) — iOS presents one modal at a time. */}
+          {paymentTarget?.kind === 'add' && (
             <PaymentEditorContent
               player={paymentPlayer}
               onSave={handlePaymentSave}
@@ -576,7 +544,6 @@ const styles = StyleSheet.create({
     borderColor: 'rgba(176,114,187,0.2)',
   },
   modalTitle: { fontSize: 20, fontWeight: 'bold', color: '#FFFFFF', textAlign: 'center', marginBottom: 16 },
-  addRowsScroll: { maxHeight: 260 },
   addRow: { flexDirection: 'row', gap: 8, marginBottom: 10, alignItems: 'stretch' },
   addRowInput: {
     flex: 1,
@@ -599,9 +566,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   rowPayText: { fontSize: 12, color: 'rgba(176,114,187,0.9)' },
-  addAnother: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'center', marginTop: 4, marginBottom: 16 },
-  addAnotherText: { fontSize: 14, color: '#B072BB', fontWeight: '600' },
   modalButtons: { flexDirection: 'row', gap: 10 },
+  addModalButtons: { marginTop: 16 },
   renameInput: {
     width: '100%',
     backgroundColor: '#0A0A0A',
