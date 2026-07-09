@@ -11,6 +11,9 @@ export interface Player {
   name: string;
   completedAt?: Date;
   preferredPayment?: PreferredPayment;
+  /** The saved-pool entry (by id) that seeded this player, so mid-game payment edits
+   *  write back to the right saved player. Undefined for players typed with no match. */
+  savedPlayerId?: string;
 }
 
 export interface Transaction {

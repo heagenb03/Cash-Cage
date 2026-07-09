@@ -105,6 +105,19 @@ describe('deserializeFirestoreGame', () => {
     const game = deserializeFirestoreGame(baseDoc);
     expect(game.players[0].preferredPayment).toBeUndefined();
   });
+
+  it('round-trips Player.savedPlayerId (must be in the deserialize whitelist)', () => {
+    const game = deserializeFirestoreGame({
+      id: 'g1',
+      name: 'Game',
+      date: new Date(),
+      createdAt: new Date(),
+      status: 'active',
+      players: [{ id: 'p1', name: 'Mike', savedPlayerId: 'sp_123' }],
+      transactions: [],
+    });
+    expect(game.players[0].savedPlayerId).toBe('sp_123');
+  });
 });
 
 describe('fetchSavedPlayersFromFirestore', () => {

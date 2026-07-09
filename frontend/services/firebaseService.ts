@@ -394,6 +394,7 @@ export function deserializeFirestoreGame(data: Record<string, any>): Game {
       name: p.name,
       completedAt: toOptDate(p.completedAt),
       preferredPayment: p.preferredPayment,
+      savedPlayerId: p.savedPlayerId,
     })),
     transactions: (data.transactions ?? []).map((t: any) => ({
       ...t,
