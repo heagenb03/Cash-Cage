@@ -18,8 +18,8 @@ jest.mock('firebase/auth', () => ({
   reauthenticateWithCredential: jest.fn(),
   EmailAuthProvider: { credential: jest.fn() },
   deleteUser: jest.fn(),
-  GoogleAuthProvider: { credential: jest.fn() },
-  OAuthProvider: jest.fn(),
+  GoogleAuthProvider: { credential: jest.fn(() => ({})) },
+  OAuthProvider: jest.fn().mockImplementation(() => ({ credential: jest.fn(() => ({})) })),
 }));
 jest.mock('firebase/firestore', () => ({
   initializeFirestore: jest.fn(() => ({})),
@@ -44,8 +44,11 @@ import {
   deserializeFirestoreGame,
   fetchSavedPlayersFromFirestore,
   incrementProfileStats,
+  signInWithGoogleCredential,
+  signInWithAppleCredential,
 } from '@/services/firebaseService';
-import { getDoc, runTransaction, increment, updateDoc } from 'firebase/firestore';
+import { getDoc, setDoc, runTransaction, increment, updateDoc } from 'firebase/firestore';
+import { signInWithCredential } from 'firebase/auth';
 
 describe('deserializeFirestoreGame', () => {
   const baseDoc = {
@@ -125,6 +128,45 @@ describe('fetchSavedPlayersFromFirestore', () => {
       data: () => ({}),
     });
     expect(await fetchSavedPlayersFromFirestore('userA')).toEqual([]);
+  });
+});
+
+// Regression guard for the OAuth doc-creation defect: the modular Firebase SDK's
+// UserCredential has no `additionalUserInfo` property, so gating createUserDocument
+// on `(result as any).additionalUserInfo?.isNewUser` meant Apple/Google accounts
+// never got a /users/{uid} doc — which broke trials, currency, and stat tracking.
+describe('OAuth sign-in creates the user document unconditionally', () => {
+  beforeEach(() => {
+    (setDoc as jest.Mock).mockClear();
+    (setDoc as jest.Mock).mockResolvedValue(undefined);
+    // Modular UserCredential carries NO additionalUserInfo — mirror that here.
+    (signInWithCredential as jest.Mock).mockResolvedValue({
+      user: { uid: 'oauthUid', email: 'user@example.com', displayName: null, photoURL: null },
+    });
+    // Doc does not exist yet, so createUserDocument proceeds to write it.
+    (getDoc as jest.Mock).mockResolvedValue({ exists: () => false });
+  });
+
+  it('Google sign-in writes the user doc even though isNewUser is unavailable', async () => {
+    await signInWithGoogleCredential('id-token');
+    expect(setDoc as jest.Mock).toHaveBeenCalledTimes(1);
+    expect((setDoc as jest.Mock).mock.calls[0][1]).toEqual(
+      expect.objectContaining({ tier: 'free', totalGamesPlayed: 0, biggestPot: 0 }),
+    );
+  });
+
+  it('Apple sign-in writes the user doc even though isNewUser is unavailable', async () => {
+    await signInWithAppleCredential('identity-token');
+    expect(setDoc as jest.Mock).toHaveBeenCalledTimes(1);
+    expect((setDoc as jest.Mock).mock.calls[0][1]).toEqual(
+      expect.objectContaining({ tier: 'free', totalGamesPlayed: 0, biggestPot: 0 }),
+    );
+  });
+
+  it('does not overwrite an existing doc (createUserDocument is a no-op)', async () => {
+    (getDoc as jest.Mock).mockResolvedValue({ exists: () => true });
+    await signInWithGoogleCredential('id-token');
+    expect(setDoc as jest.Mock).not.toHaveBeenCalled();
   });
 });
 

@@ -1,8 +1,8 @@
 import React, { createContext, useContext, useState, useEffect, useRef, ReactNode } from 'react';
 import { onAuthStateChanged, User } from 'firebase/auth';
-import { doc, getDoc } from 'firebase/firestore';
+import { doc, getDoc, onSnapshot } from 'firebase/firestore';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { auth, db, firebaseSignOut } from '@/services/firebaseService';
+import { auth, db, firebaseSignOut, createUserDocument } from '@/services/firebaseService';
 import {
   initializePurchases,
   loginPurchases,
@@ -118,12 +118,67 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
+  // Live subscription to /users/{uid} so stat/tier/trial changes reflect in the
+  // UI without an app reload. Also self-heals a missing doc — e.g. an OAuth
+  // account that never got one, or a brand-new user whose creation write has not
+  // landed yet. Kept in refs so the onAuthStateChanged listener can tear it down.
+  const userDocUnsubRef = useRef<null | (() => void)>(null);
+  const healingRef = useRef(false);
+
+  const applyUserDocSnapshot = (data: any): void => {
+    setUserDoc({
+      ...data,
+      proSince: data.proSince?.toDate?.() ?? data.proSince ?? null,
+      trialEndsAt: data.trialEndsAt?.toDate?.() ?? data.trialEndsAt ?? null,
+      createdAt: data.createdAt?.toDate?.() ?? data.createdAt ?? null,
+    } as UserDocument);
+  };
+
+  const subscribeUserDoc = (firebaseUser: User, attempt = 0): void => {
+    // Tear down any previous listener before starting a new one.
+    userDocUnsubRef.current?.();
+    userDocUnsubRef.current = onSnapshot(
+      doc(db, 'users', firebaseUser.uid),
+      (snapshot) => {
+        if (snapshot.exists()) {
+          healingRef.current = false;
+          applyUserDocSnapshot(snapshot.data());
+          return;
+        }
+        // Doc missing — heal it once. The listener re-fires with the created doc.
+        setUserDoc(null);
+        if (healingRef.current) return;
+        healingRef.current = true;
+        createUserDocument(firebaseUser).catch((err) => {
+          healingRef.current = false;
+          console.error('AuthContext: failed to create missing user doc', err);
+        });
+      },
+      (err: any) => {
+        // New users can briefly get permission-denied while Firebase propagates
+        // the auth token to Firestore — retry the subscription with backoff.
+        if (err?.code === 'permission-denied' && attempt < 4) {
+          setTimeout(() => subscribeUserDoc(firebaseUser, attempt + 1), 1000 * (attempt + 1));
+          return;
+        }
+        // Offline — keep any previously loaded doc; the listener resumes on
+        // reconnect. Do NOT clear userDoc.
+        if (err?.code === 'unavailable') return;
+        console.error('AuthContext: user doc listener error', err);
+      },
+    );
+  };
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
       setUser(firebaseUser);
 
       if (firebaseUser) {
-        // Fetch Firestore doc and RC entitlements in parallel
+        // Start (or restart) the live user-doc subscription — this is what keeps
+        // stats current without a reload and heals a missing doc on any app open.
+        subscribeUserDoc(firebaseUser);
+        // Initial load: one-shot fetch (so we don't render past the splash with a
+        // null doc) plus RC entitlements, in parallel.
         await Promise.all([
           fetchUserDoc(firebaseUser.uid),
           (async () => {
@@ -136,6 +191,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (!val) AsyncStorage.setItem('review_install_date', String(Date.now()));
         }).catch(() => {});
       } else {
+        // Tear down the listener and clear state on sign-out.
+        userDocUnsubRef.current?.();
+        userDocUnsubRef.current = null;
+        healingRef.current = false;
         setUserDoc(null);
         setRcIsPro(false);
         await logoutPurchases();
@@ -144,7 +203,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsLoading(false);
     });
 
-    return unsubscribe;
+    return () => {
+      unsubscribe();
+      userDocUnsubRef.current?.();
+      userDocUnsubRef.current = null;
+    };
   }, []);
 
   const handleSignOut = async (): Promise<void> => {

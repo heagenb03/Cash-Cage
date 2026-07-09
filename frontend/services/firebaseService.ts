@@ -176,9 +176,11 @@ export async function resetPassword(email: string): Promise<void> {
 export async function signInWithGoogleCredential(idToken: string): Promise<User> {
   const credential = GoogleAuthProvider.credential(idToken);
   const result = await signInWithCredential(auth, credential);
-  if ((result as any).additionalUserInfo?.isNewUser) {
-    await createUserDocument(result.user);
-  }
+  // Ensure the Firestore user doc exists. NOT gated on isNewUser: the modular
+  // SDK's UserCredential has no `additionalUserInfo` property (that data is only
+  // reachable via getAdditionalUserInfo), so the old gate never fired and Google
+  // accounts never got a doc. createUserDocument is a no-op if it already exists.
+  await createUserDocument(result.user);
   return result.user;
 }
 
@@ -196,13 +198,14 @@ export async function signInWithAppleCredential(
   const credential = provider.credential({ idToken: identityToken });
   const result = await signInWithCredential(auth, credential);
 
-  if ((result as any).additionalUserInfo?.isNewUser) {
-    // Apple only returns the full name on first sign-in — store it immediately
-    if (fullName) {
-      await updateProfile(result.user, { displayName: fullName });
-    }
-    await createUserDocument(result.user, fullName ?? undefined);
+  // Apple only returns the full name on the first sign-in — store it if present.
+  if (fullName) {
+    await updateProfile(result.user, { displayName: fullName });
   }
+  // Ensure the Firestore user doc exists. NOT gated on isNewUser: the modular
+  // SDK's UserCredential has no `additionalUserInfo` property, so the old gate
+  // never fired and Apple accounts never got a doc. No-op if it already exists.
+  await createUserDocument(result.user, fullName ?? undefined);
 
   return result.user;
 }
