@@ -1,5 +1,4 @@
-import { StyleSheet, FlatList, TouchableOpacity, Alert, Modal, ListRenderItemInfo } from 'react-native';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { StyleSheet, FlatList, TouchableOpacity, Alert, ListRenderItemInfo } from 'react-native';
 import { Text, View } from '@/components/Themed';
 import { useGame } from '@/contexts/GameContext';
 import { useRouter } from 'expo-router';
@@ -9,6 +8,7 @@ import GameCard from '@/components/GameCard';
 import Button from '@/components/Button';
 import ModalButton from '@/components/ModalButton';
 import PaywallModal from '@/components/PaywallModal';
+import AppModal, { appModalStyles } from '@/components/AppModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { Game } from '@/types/game';
 import { useReduceMotion } from '@/hooks/useReduceMotion';
@@ -225,41 +225,35 @@ export default function HomeScreen() {
       />
 
       {/* Delete Confirmation Modal */}
-      <Modal
+      <AppModal
         visible={showDeleteConfirmation}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => setShowDeleteConfirmation(false)}
+        onClose={() => setShowDeleteConfirmation(false)}
+        dismissOnBackdrop={false}
+        contentStyle={appModalStyles.centeredContent}
       >
-        <GestureHandlerRootView style={{flex: 1}}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Ionicons name="warning" size={48} color="#C04657" style={styles.warningIcon} />
-            <Text style={styles.modalTitle}>Delete Game?</Text>
-            <Text style={styles.deleteWarningText}>
-              Are you sure you want to delete "{gameToDelete?.name}"? This will remove all players,
-              transactions, and settlements.
-              {'\n\n'}This action cannot be undone.
-            </Text>
-            <View style={styles.modalButtons}>
-              <ModalButton
-                variant="cancel"
-                title="Cancel"
-                onPress={() => {
-                  setShowDeleteConfirmation(false);
-                  setGameToDelete(null);
-                }}
-              />
-              <ModalButton
-                variant="destructive"
-                title="Delete"
-                onPress={handleDeleteGame}
-              />
-            </View>
-          </View>
+        <Ionicons name="warning" size={48} color="#C04657" style={styles.warningIcon} />
+        <Text style={appModalStyles.title}>Delete Game?</Text>
+        <Text style={styles.deleteWarningText}>
+          Are you sure you want to delete "{gameToDelete?.name}"? This will remove all players,
+          transactions, and settlements.
+          {'\n\n'}This action cannot be undone.
+        </Text>
+        <View style={styles.modalButtons}>
+          <ModalButton
+            variant="cancel"
+            title="Cancel"
+            onPress={() => {
+              setShowDeleteConfirmation(false);
+              setGameToDelete(null);
+            }}
+          />
+          <ModalButton
+            variant="destructive"
+            title="Delete"
+            onPress={handleDeleteGame}
+          />
         </View>
-        </GestureHandlerRootView>
-      </Modal>
+      </AppModal>
     </View>
   );
 }
@@ -356,31 +350,8 @@ const styles = StyleSheet.create({
   },
 
   // Modal
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    backgroundColor: '#1A1A1A',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#2A2A2A',
-    padding: 24,
-    width: '85%',
-    maxWidth: 400,
-    alignItems: 'center',
-  },
   warningIcon: {
     marginBottom: 16,
-  },
-  modalTitle: {
-    fontSize: 22,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
-    marginBottom: 12,
-    textAlign: 'center',
   },
   deleteWarningText: {
     fontSize: 15,

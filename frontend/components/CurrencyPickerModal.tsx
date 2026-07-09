@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal, FlatList, TouchableOpacity, StyleSheet } from 'react-native';
+import { Modal, FlatList, TouchableOpacity, StyleSheet, Pressable } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { Text, View } from '@/components/Themed';
@@ -23,8 +23,8 @@ export default function CurrencyPickerModal({
   return (
     <Modal visible={visible} animationType="fade" transparent onRequestClose={onClose}>
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <View style={styles.overlay}>
-          <View style={styles.sheet}>
+        <Pressable style={styles.overlay} onPress={onClose}>
+          <Pressable style={styles.sheet} onPress={() => {}}>
             <Text style={styles.title}>Currency</Text>
             <FlatList
               data={CURRENCIES}
@@ -55,8 +55,8 @@ export default function CurrencyPickerModal({
             <TouchableOpacity style={styles.cancelButton} onPress={onClose} activeOpacity={0.7}>
               <Text style={styles.cancelText}>Cancel</Text>
             </TouchableOpacity>
-          </View>
-        </View>
+          </Pressable>
+        </Pressable>
       </GestureHandlerRootView>
     </Modal>
   );
