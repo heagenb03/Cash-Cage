@@ -2,6 +2,7 @@ import React from 'react';
 import {
   Keyboard,
   KeyboardAvoidingView,
+  LayoutChangeEvent,
   Modal,
   Platform,
   Pressable,
@@ -12,8 +13,14 @@ import {
   View,
   ViewStyle,
 } from 'react-native';
+import Animated, {
+  useAnimatedKeyboard,
+  useAnimatedStyle,
+  useSharedValue,
+} from 'react-native-reanimated';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { backdropPressAction } from '@/utils/modalBackdrop';
+import { computeCardLift } from '@/utils/keyboardLift';
 
 export interface AppModalCardProps {
   /** Called when the modal should close (backdrop tap, Android back). */
@@ -43,13 +50,57 @@ export interface AppModalProps extends AppModalCardProps {
   overlay?: React.ReactNode;
 }
 
+/** Backdrop tap: dismiss the keyboard first, then close (per backdropPressAction). */
+const handleBackdropPress = (dismissOnBackdrop: boolean, onClose: () => void) => {
+  const action = backdropPressAction(Keyboard.isVisible(), dismissOnBackdrop);
+  if (action === 'dismiss-keyboard') {
+    Keyboard.dismiss();
+  } else if (action === 'close') {
+    onClose();
+  }
+};
+
+/** Dim, tap-to-dismiss backdrop shared by both platform cards. */
+const Backdrop: React.FC<{ dismissOnBackdrop: boolean; onPress: () => void }> = ({
+  dismissOnBackdrop,
+  onPress,
+}) => (
+  <Pressable
+    style={StyleSheet.absoluteFill}
+    onPress={onPress}
+    accessibilityLabel="Dismiss"
+    accessibilityRole="button"
+    accessibilityElementsHidden={!dismissOnBackdrop}
+    importantForAccessibility={dismissOnBackdrop ? 'auto' : 'no-hide-descendants'}
+  />
+);
+
+/** Optional title + scrolling body shared by both platform cards. */
+const CardBody: React.FC<
+  Pick<AppModalCardProps, 'title' | 'contentStyle' | 'children'>
+> = ({ title, contentStyle, children }) => (
+  <>
+    {title ? <Text style={appModalStyles.title}>{title}</Text> : null}
+    <ScrollView
+      style={styles.body}
+      contentContainerStyle={[styles.bodyContent, contentStyle]}
+      keyboardShouldPersistTaps="handled"
+      bounces={false}
+      showsVerticalScrollIndicator={false}
+    >
+      {children}
+    </ScrollView>
+  </>
+);
+
 /**
- * The card + backdrop WITHOUT a native <Modal> wrapper, absolute-fill so it
- * can render either inside AppModal or in place inside an already-open modal.
- * A GestureHandlerRootView ancestor must exist (AppModal or the host modal
- * provides it) so gesture-based ModalButtons work.
+ * iOS card: a plain centered overlay (NO KeyboardAvoidingView) plus a Reanimated
+ * translate that lifts the card only as far as it needs to clear the keyboard.
+ * `useAnimatedKeyboard` is iOS-reliable and tracks the system keyboard curve, so
+ * the card slides in sync. Lives in its own component so the keyboard hook only
+ * ever mounts on iOS.
  */
-export const AppModalCard: React.FC<AppModalCardProps> = ({
+const IOSKeyboardCard: React.FC<AppModalCardProps> = ({
   onClose,
   title,
   dismissOnBackdrop = true,
@@ -57,45 +108,90 @@ export const AppModalCard: React.FC<AppModalCardProps> = ({
   contentStyle,
   children,
 }) => {
-  const handleBackdropPress = () => {
-    const action = backdropPressAction(Keyboard.isVisible(), dismissOnBackdrop);
-    if (action === 'dismiss-keyboard') {
-      Keyboard.dismiss();
-    } else if (action === 'close') {
-      onClose();
-    }
-  };
+  const keyboard = useAnimatedKeyboard();
+  const overlayHeight = useSharedValue(0);
+  const cardHeight = useSharedValue(0);
+
+  const animatedCardStyle = useAnimatedStyle(() => ({
+    transform: [
+      {
+        translateY: -computeCardLift(
+          keyboard.height.value,
+          overlayHeight.value,
+          cardHeight.value,
+        ),
+      },
+    ],
+  }));
 
   return (
-    <KeyboardAvoidingView
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.kav}
-    >
-      <View style={styles.overlay}>
-        <Pressable
-          style={StyleSheet.absoluteFill}
-          onPress={handleBackdropPress}
-          accessibilityLabel="Dismiss"
-          accessibilityRole="button"
-          accessibilityElementsHidden={!dismissOnBackdrop}
-          importantForAccessibility={dismissOnBackdrop ? 'auto' : 'no-hide-descendants'}
+    <View style={styles.kav}>
+      <View
+        style={styles.overlay}
+        onLayout={(e: LayoutChangeEvent) => {
+          overlayHeight.value = e.nativeEvent.layout.height;
+        }}
+      >
+        <Backdrop
+          dismissOnBackdrop={dismissOnBackdrop}
+          onPress={() => handleBackdropPress(dismissOnBackdrop, onClose)}
         />
-        <View style={[styles.card, cardStyle]}>
-          {title ? <Text style={appModalStyles.title}>{title}</Text> : null}
-          <ScrollView
-            style={styles.body}
-            contentContainerStyle={[styles.bodyContent, contentStyle]}
-            keyboardShouldPersistTaps="handled"
-            bounces={false}
-            showsVerticalScrollIndicator={false}
-          >
+        <Animated.View
+          style={[styles.card, cardStyle, animatedCardStyle]}
+          onLayout={(e: LayoutChangeEvent) => {
+            cardHeight.value = e.nativeEvent.layout.height;
+          }}
+        >
+          <CardBody title={title} contentStyle={contentStyle}>
             {children}
-          </ScrollView>
-        </View>
+          </CardBody>
+        </Animated.View>
       </View>
-    </KeyboardAvoidingView>
+    </View>
   );
 };
+
+/**
+ * Android card: unchanged from the original — KeyboardAvoidingView with
+ * behavior="height". Left untouched because the too-high issue was observed only
+ * on iOS, and Android <Modal> keyboard insets are a separate, unverified concern.
+ */
+const AndroidKavCard: React.FC<AppModalCardProps> = ({
+  onClose,
+  title,
+  dismissOnBackdrop = true,
+  cardStyle,
+  contentStyle,
+  children,
+}) => (
+  <KeyboardAvoidingView behavior="height" style={styles.kav}>
+    <View style={styles.overlay}>
+      <Backdrop
+        dismissOnBackdrop={dismissOnBackdrop}
+        onPress={() => handleBackdropPress(dismissOnBackdrop, onClose)}
+      />
+      <View style={[styles.card, cardStyle]}>
+        <CardBody title={title} contentStyle={contentStyle}>
+          {children}
+        </CardBody>
+      </View>
+    </View>
+  </KeyboardAvoidingView>
+);
+
+/**
+ * The card + backdrop WITHOUT a native <Modal> wrapper, absolute-fill so it can
+ * render either inside AppModal or in place inside an already-open modal. A
+ * GestureHandlerRootView ancestor must exist (AppModal or the host modal provides
+ * it) so gesture-based ModalButtons work. Platform-split: iOS lifts the card only
+ * as needed for the keyboard; Android keeps the KeyboardAvoidingView path.
+ */
+export const AppModalCard: React.FC<AppModalCardProps> = (props) =>
+  Platform.OS === 'ios' ? (
+    <IOSKeyboardCard {...props} />
+  ) : (
+    <AndroidKavCard {...props} />
+  );
 
 const AppModal: React.FC<AppModalProps> = ({ visible, overlay, ...card }) => (
   <Modal
