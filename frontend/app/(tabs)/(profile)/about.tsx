@@ -80,7 +80,6 @@ export default function AboutScreen() {
               <Text style={styles.infoLabel}>Platforms</Text>
               <View style={styles.platformIcons}>
                 <Ionicons name="logo-apple" size={20} color="#FFFFFF" style={styles.platformIcon} />
-                <Ionicons name="logo-android" size={20} color="#FFFFFF" style={styles.platformIcon} />
               </View>
             </View>
           </View>
@@ -93,7 +92,7 @@ export default function AboutScreen() {
           <View style={styles.contentCard}>
             <Text style={styles.bodyText}>
               Cash Cage is a poker buy-in and cash-out tracking app designed to simplify managing home cash games.
-              Built for the dealers who are in charge of hosting and settling the games, Cash Cage is designed to be simple but
+              Built for the hosts who are in charge of settling the games, Cash Cage is designed to be simple but
               powerful.
             </Text>
             <Text style={styles.bodyText}>
@@ -101,8 +100,8 @@ export default function AboutScreen() {
               Once the game is over, you can settle the game, and Cash Cage will calculate who owes who with X amount.
             </Text>
             <Text style={styles.bodyText}>
-              This is a student-built app by Heagen Bell, a computer science student at the University of Kansas and the dealer for home games,
-              who wanted a better way to manage cash games. Please reach out with any questions, feedback, or if you want to get involved 
+              This is a student-built app by Heagen Bell, a computer science student at the University of Kansas and commonly the host for home games,
+              who wanted a better way to manage his games at college. Please reach out with any questions, feedback, or if you want to get involved 
               as the project is open-source. 
             </Text>
           </View>
@@ -110,7 +109,7 @@ export default function AboutScreen() {
 
         {/* App Info Footer */}
         <View style={styles.footer}>
-          <Text style={styles.footerText}>Cash Cage v1.0.0</Text>
+          <Text style={styles.footerText}>Cash Cage v2.0.0</Text>
         </View>
       </ScrollView>
     </View>
