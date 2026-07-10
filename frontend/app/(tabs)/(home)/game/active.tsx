@@ -629,20 +629,32 @@ export default function ActiveGameScreen() {
       : undefined;
 
   const applySettlementMode = async (mode: 'optimal' | 'banker', bankerId?: string) => {
-    activeGame.settlementMode = mode;
-    activeGame.bankerPlayerId = mode === 'banker' ? bankerId : undefined;
-    GameService.clearSettlementCache(activeGame);
+    GameService.setSettlementMode(activeGame, mode, bankerId);
     await updateGame(activeGame);
   };
 
-  const handleAddBanker = (name: string) => {
-    // Delegate to the standard Add Player flow instead of adding directly, so this
-    // player is subject to the same hardened save/bind invariants as any other add.
-    // The picker (a native Modal) closes right after this via its own onClose, in the
-    // same batched update that opens the Add Player AppModal below — matching the
-    // existing paywall close-then-open precedent.
+  const handleTapDirect = () => {
+    if (activeGame.settlementMode !== 'banker') return; // already Direct
+    applySettlementMode('optimal');
+  };
+
+  const handleTapBanker = () => {
+    if (GameService.hasRememberedBanker(activeGame)) {
+      applySettlementMode('banker'); // one-tap: reuse the remembered banker
+    } else {
+      setShowSettlementModePicker(true); // must choose one first (invariant)
+    }
+  };
+
+  // From the banker picker's "Add someone" row / empty-state prompt. Close the
+  // picker (a native Modal) in the same batch that opens the Add Player AppModal
+  // — iOS shows one native Modal at a time. Designation is applied atomically on
+  // save via the existing pendingBankerDesignation path; cancelling Add Player
+  // leaves settlementMode untouched, so we never enter a banker-without-banker state.
+  const handleAddBanker = () => {
+    setShowSettlementModePicker(false);
     setPendingBankerDesignation(true);
-    setNewPlayerName(name.trim());
+    setNewPlayerName('');
     setShowAddPlayer(true);
   };
 
@@ -799,30 +811,63 @@ export default function ActiveGameScreen() {
               year: 'numeric'
             })}
           </Text>
-          <TouchableOpacity
-            style={styles.cashUnitRow}
-            onPress={() => setShowCashUnitPicker(true)}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.cashUnitLabel}>Rounding: </Text>
-            <Text style={styles.cashUnitValue}>
-              {resolveCashUnit(activeGame.cashUnit, currency) === EXACT_CASH_UNIT
-                ? 'Exact'
-                : formatAmount(resolveCashUnit(activeGame.cashUnit, currency))}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={styles.cashUnitRow}
-            onPress={() => setShowSettlementModePicker(true)}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.cashUnitLabel}>Settlement: </Text>
-            <Text style={styles.cashUnitValue}>
-              {activeGame.settlementMode === 'banker'
-                ? `Banker · ${bankerName ?? 'choose'}`
-                : 'Optimal'}
-            </Text>
-          </TouchableOpacity>
+          <View style={styles.gameSetupCard}>
+            <Text style={styles.setupLabel}>Settlement</Text>
+            <View style={styles.segment}>
+              <TouchableOpacity
+                style={[styles.segmentBtn, activeGame.settlementMode !== 'banker' && styles.segmentBtnActive]}
+                onPress={handleTapDirect}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.segmentText, activeGame.settlementMode !== 'banker' && styles.segmentTextActive]}>
+                  Direct
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.segmentBtn, activeGame.settlementMode === 'banker' && styles.segmentBtnActive]}
+                onPress={handleTapBanker}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.segmentText, activeGame.settlementMode === 'banker' && styles.segmentTextActive]}>
+                  Banker
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {activeGame.settlementMode === 'banker' && (
+              <TouchableOpacity
+                style={styles.bankerCaption}
+                onPress={() => setShowSettlementModePicker(true)}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.bankerCaptionText}>
+                  {bankerName ? `Everyone settles with ${bankerName}` : 'Choose who the banker is'}
+                </Text>
+                <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.4)" />
+              </TouchableOpacity>
+            )}
+
+            <View style={styles.setupDivider} />
+
+            <TouchableOpacity
+              style={styles.roundingRow}
+              onPress={() => setShowCashUnitPicker(true)}
+              activeOpacity={0.7}
+            >
+              <View style={styles.roundingLeft}>
+                <Ionicons name="options-outline" size={16} color="rgba(255,255,255,0.5)" />
+                <Text style={styles.roundingLabel}>Rounding</Text>
+              </View>
+              <View style={styles.roundingValueRow}>
+                <Text style={styles.roundingValue}>
+                  {resolveCashUnit(activeGame.cashUnit, currency) === EXACT_CASH_UNIT
+                    ? 'Exact'
+                    : formatAmount(resolveCashUnit(activeGame.cashUnit, currency))}
+                </Text>
+                <Ionicons name="chevron-forward" size={16} color="rgba(255,255,255,0.4)" />
+              </View>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Active Players List */}
@@ -1291,11 +1336,9 @@ export default function ActiveGameScreen() {
       <SettlementModePicker
         visible={showSettlementModePicker}
         players={activeGame.players}
-        mode={activeGame.settlementMode ?? 'optimal'}
         bankerPlayerId={activeGame.bankerPlayerId}
-        onSelectOptimal={() => applySettlementMode('optimal')}
         onSelectBanker={(id) => applySettlementMode('banker', id)}
-        onAddBanker={handleAddBanker}
+        onAddSomeone={handleAddBanker}
         onClose={() => setShowSettlementModePicker(false)}
       />
 
@@ -1734,20 +1777,36 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 10,
   },
-  cashUnitRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 8,
+  gameSetupCard: {
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(176,114,187,0.2)',
+    borderRadius: 14,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    backgroundColor: '#141414',
   },
-  cashUnitLabel: {
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.45)',
-    letterSpacing: 0.5,
+  setupLabel: {
+    fontSize: 11, color: 'rgba(176,114,187,0.65)', textTransform: 'uppercase',
+    letterSpacing: 1.5, marginBottom: 8, marginLeft: 2,
   },
-  cashUnitValue: {
-    fontSize: 13,
-    color: '#B072BB',
-    fontWeight: '500',
+  segment: {
+    flexDirection: 'row', backgroundColor: 'rgba(255,255,255,0.05)',
+    borderRadius: 10, padding: 3,
   },
+  segmentBtn: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 8 },
+  segmentBtnActive: { backgroundColor: '#49264F' },
+  segmentText: { fontSize: 14, fontWeight: '600', color: 'rgba(255,255,255,0.5)' },
+  segmentTextActive: { color: '#FFFFFF' },
+  bankerCaption: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    marginTop: 10, paddingHorizontal: 2,
+  },
+  bankerCaptionText: { fontSize: 13, color: 'rgba(255,255,255,0.6)' },
+  setupDivider: { height: 1, backgroundColor: 'rgba(176,114,187,0.12)', marginVertical: 12 },
+  roundingRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  roundingLeft: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  roundingLabel: { fontSize: 14, color: 'rgba(255,255,255,0.7)' },
+  roundingValueRow: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  roundingValue: { fontSize: 14, color: '#B072BB', fontWeight: '500' },
 });
