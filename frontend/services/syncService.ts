@@ -43,7 +43,13 @@ export class SyncService {
         try {
           const remote = await fetchGamesFromFirestore(uid);
           if (signal?.aborted) return;
-          const merged = SyncService.mergeGames(localWithDates, remote);
+          // Re-read local storage NOW, not the snapshot captured at load time.
+          // A user edit made while this fetch was in flight (e.g. deleting a
+          // player right after an app reload) has already been written to
+          // AsyncStorage; merging the stale load-time snapshot would silently
+          // resurrect it. Reading fresh local here folds that edit into the merge.
+          const currentLocal = (await StorageService.loadGames()).map(deserializeSyncedAt);
+          const merged = SyncService.mergeGames(currentLocal, remote);
           await StorageService.saveGames(merged);
           if (signal?.aborted) return;
           onRemoteUpdate?.(merged);
