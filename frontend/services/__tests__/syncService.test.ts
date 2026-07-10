@@ -10,7 +10,7 @@ jest.mock('@/services/firebaseService', () => ({
 }));
 
 import { Game } from '@/types/game';
-import { SyncService } from '@/services/syncService';
+import { SyncService, applyPendingMutations } from '@/services/syncService';
 import { StorageService } from '@/services/storageService';
 import { fetchGamesFromFirestore } from '@/services/firebaseService';
 
@@ -78,5 +78,38 @@ describe('background-sync race: a local edit during the sync window survives (th
     const lastDelivered = delivered[delivered.length - 1];
     expect(lastDelivered).toBeDefined();
     expect(lastDelivered[0].players.map(p => p.id)).not.toContain('X');
+  });
+});
+
+describe('applyPendingMutations (pure reconciliation)', () => {
+  const g = (id: string, players: { id: string; name: string }[]) => {
+    const base = makeGame(players);
+    return { ...base, id } as Game;
+  };
+
+  it('forces the fresh-local version for a game with a pending save', () => {
+    const localEdited = g('game1', [{ id: 'A', name: 'Alice' }]);            // B removed locally
+    const mergedRemote = g('game1', [{ id: 'A', name: 'Alice' }, { id: 'B', name: 'Bob' }]);
+    const out = applyPendingMutations([mergedRemote], [localEdited], new Set(['game1']), new Set());
+    expect(out).toHaveLength(1);
+    expect(out[0].players.map(p => p.id)).toEqual(['A']);
+  });
+
+  it('re-adds a pending-saved game that the merge dropped entirely', () => {
+    const localOnly = g('game1', [{ id: 'A', name: 'Alice' }]);
+    const out = applyPendingMutations([], [localOnly], new Set(['game1']), new Set());
+    expect(out.map(x => x.id)).toEqual(['game1']);
+  });
+
+  it('removes a game with a pending delete', () => {
+    const remoteStillHasIt = g('game1', [{ id: 'A', name: 'Alice' }]);
+    const out = applyPendingMutations([remoteStillHasIt], [], new Set(), new Set(['game1']));
+    expect(out).toEqual([]);
+  });
+
+  it('leaves non-pending games untouched', () => {
+    const other = g('game2', [{ id: 'C', name: 'Cara' }]);
+    const out = applyPendingMutations([other], [], new Set(), new Set());
+    expect(out).toEqual([other]);
   });
 });

@@ -155,3 +155,32 @@ function deserializeSyncedAt(game: Game & { syncedAt?: any }): Game {
   }
   return game;
 }
+
+/**
+ * Reconcile a merge result against unconfirmed local mutations.
+ *
+ * A game with a pending local write keeps its fresh-local version regardless
+ * of syncedAt (the in-flight remote is definitionally stale for it); a game
+ * with a pending local delete is removed even if the merge re-added it from
+ * remote. Pure — no I/O, no module state — so it is unit-testable in isolation.
+ */
+export function applyPendingMutations(
+  merged: Game[],
+  freshLocal: Game[],
+  saves: Set<string>,
+  deletes: Set<string>,
+): Game[] {
+  const localById = new Map(freshLocal.map(game => [game.id, game]));
+
+  let result = merged.map(game =>
+    saves.has(game.id) && localById.has(game.id) ? localById.get(game.id)! : game,
+  );
+
+  for (const id of saves) {
+    if (localById.has(id) && !result.some(game => game.id === id)) {
+      result.push(localById.get(id)!);
+    }
+  }
+
+  return result.filter(game => !deletes.has(game.id));
+}
