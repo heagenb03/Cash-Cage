@@ -23,11 +23,23 @@ import {
 //     block the local operation or surface errors to the user.
 // ---------------------------------------------------------------------------
 
-// Games with a local write/delete not yet confirmed in Firestore. The background
-// merge must keep the local version for these (the in-flight remote is stale for
-// them), otherwise a strictly-newer remote silently reverts the local mutation.
-const pendingSaves = new Set<string>();
-const pendingDeletes = new Set<string>();
+// Games with a local write/delete not yet confirmed in Firestore, ref-counted by
+// number of in-flight writes. The background merge keeps the local version while a
+// game's count is > 0 (the in-flight remote is stale for it). Ref-counting (not a
+// plain Set) is required so that when a game gets rapid successive edits, the FIRST
+// write's confirmation does not clear protection while a LATER write is still pending.
+const pendingSaves = new Map<string, number>();
+const pendingDeletes = new Map<string, number>();
+
+function markPending(map: Map<string, number>, id: string): void {
+  map.set(id, (map.get(id) ?? 0) + 1);
+}
+
+function unmarkPending(map: Map<string, number>, id: string): void {
+  const remaining = (map.get(id) ?? 0) - 1;
+  if (remaining > 0) map.set(id, remaining);
+  else map.delete(id);
+}
 
 // Serialize AsyncStorage read-modify-write sequences. AsyncStorage has no
 // transactions, so a concurrent saveGame and background merge can otherwise
@@ -69,7 +81,12 @@ export class SyncService {
           const reconciled = await withStorageLock(async () => {
             const currentLocal = (await StorageService.loadGames()).map(deserializeSyncedAt);
             const merged = SyncService.mergeGames(currentLocal, remote);
-            const next = applyPendingMutations(merged, currentLocal, pendingSaves, pendingDeletes);
+            const next = applyPendingMutations(
+              merged,
+              currentLocal,
+              new Set(pendingSaves.keys()),
+              new Set(pendingDeletes.keys()),
+            );
             await StorageService.saveGames(next);
             return next;
           });
@@ -97,26 +114,33 @@ export class SyncService {
    */
   static async saveGame(uid: string | null, game: Game): Promise<void> {
     if (uid) {
-      pendingSaves.add(game.id);
-      pendingDeletes.delete(game.id);
+      markPending(pendingSaves, game.id);
+      pendingDeletes.delete(game.id);   // a save fully supersedes any pending delete for this id
     }
 
     // Read current local state, patch the target game, write back
-    await withStorageLock(async () => {
-      const current = await StorageService.loadGames();
-      const withDates = current.map(deserializeSyncedAt);
-      const exists = withDates.some(g => g.id === game.id);
-      const updated = exists
-        ? withDates.map(g => (g.id === game.id ? game : g))
-        : [...withDates, game];
-      await StorageService.saveGames(updated);
-    });
+    try {
+      await withStorageLock(async () => {
+        const current = await StorageService.loadGames();
+        const withDates = current.map(deserializeSyncedAt);
+        const exists = withDates.some(g => g.id === game.id);
+        const updated = exists
+          ? withDates.map(g => (g.id === game.id ? game : g))
+          : [...withDates, game];
+        await StorageService.saveGames(updated);
+      });
+    } catch (err) {
+      // Local write failed — release the protection we optimistically added so this
+      // id can't be stranded as permanently protected against future remote updates.
+      if (uid) unmarkPending(pendingSaves, game.id);
+      throw err;
+    }
 
     // Fire-and-forget Firestore write
     if (uid) {
       saveGameToFirestore(uid, game)
         .then(() => {
-          pendingSaves.delete(game.id);
+          unmarkPending(pendingSaves, game.id);
         })
         .catch(err => {
           if (isFirestoreOfflineError(err)) {
@@ -133,20 +157,25 @@ export class SyncService {
    */
   static async deleteGame(uid: string | null, gameId: string): Promise<void> {
     if (uid) {
-      pendingDeletes.add(gameId);
-      pendingSaves.delete(gameId);
+      markPending(pendingDeletes, gameId);
+      pendingSaves.delete(gameId);   // a delete fully supersedes any pending save for this id
     }
 
-    await withStorageLock(async () => {
-      const current = await StorageService.loadGames();
-      const updated = current.filter(g => g.id !== gameId);
-      await StorageService.saveGames(updated);
-    });
+    try {
+      await withStorageLock(async () => {
+        const current = await StorageService.loadGames();
+        const updated = current.filter(g => g.id !== gameId);
+        await StorageService.saveGames(updated);
+      });
+    } catch (err) {
+      if (uid) unmarkPending(pendingDeletes, gameId);
+      throw err;
+    }
 
     if (uid) {
       deleteGameFromFirestore(uid, gameId)
         .then(() => {
-          pendingDeletes.delete(gameId);
+          unmarkPending(pendingDeletes, gameId);
         })
         .catch(err => {
           if (isFirestoreOfflineError(err)) {

@@ -120,6 +120,12 @@ describe('applyPendingMutations (pure reconciliation)', () => {
     const out = applyPendingMutations([other], [], new Set(), new Set());
     expect(out).toEqual([other]);
   });
+
+  it('removes a game that is in BOTH saves and deletes (delete wins)', () => {
+    const local = g('game1', [{ id: 'A', name: 'Alice' }]);
+    const out = applyPendingMutations([local], [local], new Set(['game1']), new Set(['game1']));
+    expect(out).toEqual([]);
+  });
 });
 
 describe('pending-mutations registry protects local edits (Limitation 1)', () => {
@@ -186,6 +192,83 @@ describe('pending-mutations registry protects local edits (Limitation 1)', () =>
 
     const stored = await StorageService.loadGames();
     expect(stored[0].players.map(p => p.id)).toEqual(['A', 'B', 'C']);   // no longer protected
+  });
+
+  it('keeps protection until the LAST of multiple in-flight saves confirms (ref-counted)', async () => {
+    const T1 = new Date('2026-07-01T00:00:00Z');
+    const T2 = new Date('2026-07-02T00:00:00Z');
+    const original = { ...makeGame([{ id: 'A', name: 'Alice' }, { id: 'B', name: 'Bob' }]), syncedAt: T1 } as Game;
+    await StorageService.saveGames([original]);
+
+    // Two rapid edits to the SAME game; BOTH Firestore writes are held in flight so we
+    // control the confirmation order.
+    let resolveSave1!: () => void;
+    let resolveSave2!: () => void;
+    (saveGameToFirestore as jest.Mock)
+      .mockReturnValueOnce(new Promise<void>(res => { resolveSave1 = res; }))
+      .mockReturnValueOnce(new Promise<void>(res => { resolveSave2 = res; }));
+
+    await SyncService.saveGame(UID, { ...original, players: [{ id: 'A', name: 'Alice' }] } as Game);                          // edit #1: remove B
+    await SyncService.saveGame(UID, { ...original, players: [{ id: 'A', name: 'Alice' }, { id: 'C', name: 'Cara' }] } as Game); // edit #2: add C (B still gone)
+
+    // Only the FIRST write confirms. With a plain Set this would delete the shared id and
+    // drop protection; with ref-counting the count goes 2 -> 1 and protection holds.
+    resolveSave1();
+    await flush();
+
+    let resolveFetch!: (games: Game[]) => void;
+    (fetchGamesFromFirestore as jest.Mock).mockReturnValue(new Promise<Game[]>(res => { resolveFetch = res; }));
+    await SyncService.loadGames(UID, () => {});
+    // Strictly-newer remote still has B and lacks C — must NOT clobber the still-pending edit #2.
+    resolveFetch([{ ...original, players: [{ id: 'A', name: 'Alice' }, { id: 'B', name: 'Bob' }], syncedAt: T2 } as Game]);
+    await flush();
+
+    const stored = await StorageService.loadGames();
+    expect(stored[0].players.map(p => p.id)).toEqual(['A', 'C']);   // edit #2 still protected
+  });
+
+  it('does not protect a mutation made while signed out (uid null → no registry entry)', async () => {
+    const T1 = new Date('2026-07-01T00:00:00Z');
+    const T2 = new Date('2026-07-02T00:00:00Z');
+    const original = { ...makeGame([{ id: 'A', name: 'Alice' }, { id: 'B', name: 'Bob' }]), syncedAt: T1 } as Game;
+    await StorageService.saveGames([original]);
+
+    // Signed-out local edit — must NOT mark the registry.
+    await SyncService.saveGame(null, { ...original, players: [{ id: 'A', name: 'Alice' }] } as Game);
+
+    // A later signed-in background merge with strictly-newer remote should win (no protection).
+    let resolveFetch!: (games: Game[]) => void;
+    (fetchGamesFromFirestore as jest.Mock).mockReturnValue(new Promise<Game[]>(res => { resolveFetch = res; }));
+    await SyncService.loadGames(UID, () => {});
+    resolveFetch([{ ...original, players: [{ id: 'A', name: 'Alice' }, { id: 'B', name: 'Bob' }, { id: 'C', name: 'Cara' }], syncedAt: T2 } as Game]);
+    await flush();
+
+    const stored = await StorageService.loadGames();
+    expect(stored[0].players.map(p => p.id)).toEqual(['A', 'B', 'C']);   // remote won — not protected
+  });
+
+  it('releases protection if the LOCAL write fails (no permanent strand)', async () => {
+    const T1 = new Date('2026-07-01T00:00:00Z');
+    const T2 = new Date('2026-07-02T00:00:00Z');
+    const original = { ...makeGame([{ id: 'A', name: 'Alice' }, { id: 'B', name: 'Bob' }]), syncedAt: T1 } as Game;
+    await StorageService.saveGames([original]);
+
+    // Force the local AsyncStorage write to reject exactly once (the saveGame RMW).
+    const saveSpy = jest.spyOn(StorageService, 'saveGames').mockRejectedValueOnce(new Error('disk full'));
+    await expect(
+      SyncService.saveGame(UID, { ...original, players: [{ id: 'A', name: 'Alice' }] } as Game),
+    ).rejects.toThrow('disk full');
+    saveSpy.mockRestore();
+
+    // The failed save must not have left game1 protected — a newer remote should win.
+    let resolveFetch!: (games: Game[]) => void;
+    (fetchGamesFromFirestore as jest.Mock).mockReturnValue(new Promise<Game[]>(res => { resolveFetch = res; }));
+    await SyncService.loadGames(UID, () => {});
+    resolveFetch([{ ...original, players: [{ id: 'A', name: 'Alice' }, { id: 'B', name: 'Bob' }, { id: 'C', name: 'Cara' }], syncedAt: T2 } as Game]);
+    await flush();
+
+    const stored = await StorageService.loadGames();
+    expect(stored[0].players.map(p => p.id)).toEqual(['A', 'B', 'C']);   // remote won — mark released on failure
   });
 });
 
