@@ -146,6 +146,33 @@ export class GameService {
   }
 
   /**
+   * Switch settlement mode. In 'optimal' (Direct) mode the remembered
+   * bankerPlayerId is RETAINED so toggling back to banker is one tap. In
+   * 'banker' mode, pass bankerId to (re)assign the banker; omit it to keep the
+   * remembered one. Invariant: callers must not enter 'banker' mode without a
+   * valid banker — use hasRememberedBanker() to decide whether to prompt first.
+   */
+  static setSettlementMode(
+    game: Game,
+    mode: 'optimal' | 'banker',
+    bankerId?: string,
+  ): void {
+    game.settlementMode = mode;
+    if (mode === 'banker' && bankerId) {
+      game.bankerPlayerId = bankerId;
+    }
+    this.clearSettlementCache(game);
+  }
+
+  /** True when a valid banker is remembered (id set and still in the roster). */
+  static hasRememberedBanker(game: Game): boolean {
+    return (
+      !!game.bankerPlayerId &&
+      game.players.some(p => p.id === game.bankerPlayerId)
+    );
+  }
+
+  /**
    * Mark a player as completed (left the game)
    * Clears settlement cache if game is completed
    */

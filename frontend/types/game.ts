@@ -42,7 +42,11 @@ export interface Game {
   /** Settlement mode. Absent = 'optimal' (peer-to-peer solver). 'banker' = star through bankerPlayerId. */
   settlementMode?: 'optimal' | 'banker';
 
-  /** The player acting as banker/hub. Required when settlementMode === 'banker'. */
+  /**
+   * The player acting as banker/hub. Required when settlementMode === 'banker'.
+   * May also persist while settlementMode === 'optimal' as the remembered choice,
+   * so toggling back to banker is one tap. Cleared when that player is removed.
+   */
   bankerPlayerId?: string;
 
   // Settlement cache

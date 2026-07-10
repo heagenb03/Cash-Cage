@@ -487,3 +487,45 @@ describe('GameService settlement cache', () => {
     expect(game.transactionHash).toBeUndefined();
   });
 });
+
+// ---- setSettlementMode / hasRememberedBanker ----
+
+describe('GameService.setSettlementMode', () => {
+  it('retains bankerPlayerId when switching to optimal (Direct)', () => {
+    const game = createTestGame({ settlementMode: 'banker', bankerPlayerId: 'p1' });
+    GameService.setSettlementMode(game, 'optimal');
+    expect(game.settlementMode).toBe('optimal');
+    expect(game.bankerPlayerId).toBe('p1'); // remembered, NOT cleared
+  });
+
+  it('assigns bankerPlayerId when entering banker mode with an id', () => {
+    const game = createTestGame({ settlementMode: 'optimal' });
+    GameService.setSettlementMode(game, 'banker', 'p2');
+    expect(game.settlementMode).toBe('banker');
+    expect(game.bankerPlayerId).toBe('p2');
+  });
+
+  it('keeps the remembered banker when entering banker mode without an id', () => {
+    const game = createTestGame({ settlementMode: 'optimal', bankerPlayerId: 'p3' });
+    GameService.setSettlementMode(game, 'banker');
+    expect(game.settlementMode).toBe('banker');
+    expect(game.bankerPlayerId).toBe('p3');
+  });
+});
+
+describe('GameService.hasRememberedBanker', () => {
+  it('is false when no bankerPlayerId is set', () => {
+    const game = createTestGame({ players: [{ id: 'p1', name: 'A' }] });
+    expect(GameService.hasRememberedBanker(game)).toBe(false);
+  });
+
+  it('is false when the remembered banker is no longer in the roster', () => {
+    const game = createTestGame({ bankerPlayerId: 'gone', players: [{ id: 'p1', name: 'A' }] });
+    expect(GameService.hasRememberedBanker(game)).toBe(false);
+  });
+
+  it('is true when the remembered banker is still in the roster', () => {
+    const game = createTestGame({ bankerPlayerId: 'p1', players: [{ id: 'p1', name: 'A' }] });
+    expect(GameService.hasRememberedBanker(game)).toBe(true);
+  });
+});
