@@ -64,9 +64,9 @@ test('device-slide renders at iPhone and iPad sizes', async () => {
   }
 });
 
-test('full config renders 10 slides at correct sizes (placeholder captures)', async () => {
+test('full config renders 12 slides at correct sizes (placeholder captures)', async () => {
   const { DEVICES, SLIDES } = await import('../slides.config.mjs');
-  assert.equal(SLIDES.length, 5);
+  assert.equal(SLIDES.length, 6);
   const browser = await puppeteer.launch();
   try {
     const cap = path.join(here, 'fixtures', 'placeholder-capture.png');

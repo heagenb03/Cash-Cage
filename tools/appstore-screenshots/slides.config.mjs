@@ -30,13 +30,28 @@ export const SLIDES = [
     perDevice: { ipad: { capture: '../captures/ipad/slide1-summary.png', cards: [{ x: 60, y: 900, w: 1900, h: 620, left: 60, top: 1500, scale: 0.85, captureWidth: 2048 }] } },
   },
   {
-    n: 2, template: 'message-slide.html',
+    // Banker co-headline (slide 2): active-game "game setup" card showing the
+    // Direct | Banker segmented toggle with Banker selected and the
+    // "Everyone settles with <name> ›" caption. The toggle is the subject —
+    // no popped cards; the device alone shows it.
+    n: 2, template: 'device-slide.html',
+    kicker: 'Two Ways to Settle', headline: ['Direct Or Banker —', 'Your Call'],
+    capture: '../captures/iphone/slide2-banker.png', tilt: true,
+    cards: [],
+    perDevice: { ipad: { capture: '../captures/ipad/slide2-banker.png', cards: [] } },
+  },
+  {
+    n: 3, template: 'message-slide.html',
     kicker: 'Share It', headline: ['Get Paid In', 'The Group Chat'],
     shareText: SHARE_TEXT, tilt: false, cards: [],
     perDevice: {},
   },
+  // NOTE: the source capture filenames below (slide3/4/5-*) are historical and were
+  // deliberately NOT renumbered when the banker slide was inserted at n:2. Only the
+  // output slide-<n>.png sequence and array order matter for the App Store upload;
+  // keeping these names avoids churn in the ASO plan's Task 4 staging checklist.
   {
-    n: 3, template: 'device-slide.html',
+    n: 4, template: 'device-slide.html',
     kicker: 'Cash Games', headline: ['Amounts That Match', 'Real Bills'],
     capture: '../captures/iphone/slide3-cashunit.png', tilt: true,
     cards: [
@@ -45,7 +60,7 @@ export const SLIDES = [
     perDevice: { ipad: { capture: '../captures/ipad/slide3-cashunit.png', cards: [] } },
   },
   {
-    n: 4, template: 'device-slide.html',
+    n: 5, template: 'device-slide.html',
     kicker: 'Saved Players', headline: ['Your Table,', 'On Every Device'],
     capture: '../captures/iphone/slide4-savedplayers.png', tilt: true,
     cards: [
@@ -54,7 +69,7 @@ export const SLIDES = [
     perDevice: { ipad: { capture: '../captures/ipad/slide4-savedplayers.png', cards: [] } },
   },
   {
-    n: 5, template: 'device-slide.html',
+    n: 6, template: 'device-slide.html',
     kicker: 'Game Night', headline: ['Track Every', 'Buy-In & Cashout'],
     capture: '../captures/iphone/slide5-active.png', tilt: true,
     cards: [
