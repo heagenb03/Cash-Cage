@@ -95,6 +95,7 @@ export function GameProvider({ children }: { children: ReactNode }) {
       if (prevUid !== undefined && prevUid !== uid) {
         setGames([]);
         setActiveGameState(null);
+        SyncService.clearPendingMutations();
         try {
           await StorageService.clearAll();
         } catch (err) {
