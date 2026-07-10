@@ -22,7 +22,7 @@ import PaywallModal from '@/components/PaywallModal';
 import CashUnitPickerModal from '@/components/CashUnitPickerModal';
 import SettlementModePicker from '@/components/SettlementModePicker';
 import PaymentEditorModal from '@/components/PaymentEditorModal';
-import AppModal, { AppModalCard, appModalStyles } from '@/components/AppModal';
+import AppModal, { appModalStyles } from '@/components/AppModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { useReduceMotion } from '@/hooks/useReduceMotion';
@@ -30,6 +30,7 @@ import { EXACT_CASH_UNIT, resolveCashUnit } from '@/constants/CashUnits';
 import { computeRoundingDistortion, PlayerDistortion } from '@/utils/roundingUtils';
 import { getPaymentMethodMeta } from '@/constants/PaymentMethods';
 import { formatHandleForDisplay } from '@/utils/paymentLinks';
+import { isNameTakenInGame, matchSavedByExactName, filterSavedByQuery } from '@/utils/addPlayer';
 
 function HudSectionHeader({ label, onAction, actionIcon }: { label: string; onAction?: () => void; actionIcon?: string }) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
@@ -212,19 +213,13 @@ export default function ActiveGameScreen() {
   const [paywallMessage, setPaywallMessage] = useState(PLAYERS_PAYWALL_MESSAGE);
   const [savePlayerToggle, setSavePlayerToggle] = useState(true);
   const [savedPlayers, setSavedPlayers] = useState<SavedPlayer[]>([]);
-  const [playerSuggestions, setPlayerSuggestions] = useState<SavedPlayer[]>([]);
   const [renameSuggestions, setRenameSuggestions] = useState<SavedPlayer[]>([]);
   // Identity of the saved player the user picked from suggestions (null = typed freely).
   const [selectedSavedId, setSelectedSavedId] = useState<string | null>(null);
-  // When an Add matches 2+ saved people and none was picked, hold the candidates for the
-  // in-place disambiguation overlay (rendered inside the already-open Add modal).
-  const [disambiguation, setDisambiguation] = useState<SavedPlayer[] | null>(null);
-  // Distinct-name prompt for creating a second saved person who shares a first name.
-  const [newPersonPrompt, setNewPersonPrompt] = useState<string | null>(null); // original (colliding) name
-  const [newPersonName, setNewPersonName] = useState('');
-  const newPersonRef = useRef(false);
   // Synchronous re-entry guard for commitAddPlayer (state-based `disabled` has a race window).
   const addingPlayerRef = useRef(false);
+  const nameInputRef = useRef<TextInput>(null);
+  const buyInInputRef = useRef<TextInput>(null);
 
   // Game completion modal state
   const [showCompletionModal, setShowCompletionModal] = useState(false);
@@ -358,32 +353,101 @@ export default function ActiveGameScreen() {
   const completedPlayers = activeGame.players.filter(p => p.completedAt);
 
   // Save-toggle state for the Add Player modal (spec: the cap is never silent).
-  const typedNameLower = newPlayerName.trim().toLowerCase();
-  const nameAlreadySaved =
-    typedNameLower.length > 0 && savedPlayers.some(p => p.name.toLowerCase() === typedNameLower);
   const savedListFull = !canAddMoreSavedPlayers(savedPlayers.length, isPro);
-  const newPersonTrimmed = newPersonName.trim();
-  const newPersonIsDistinct =
-    newPersonTrimmed.length > 0 &&
-    !savedPlayers.some(p => p.name.toLowerCase() === newPersonTrimmed.toLowerCase());
+  const trimmedName = newPlayerName.trim();
+  const filteredSaved = filterSavedByQuery(savedPlayers, newPlayerName);
+  const isTypedNew =
+    trimmedName.length > 0 &&
+    !selectedSavedId &&
+    matchSavedByExactName(savedPlayers, newPlayerName).length === 0;
+  const atPlayerCap = !isPro && activeGame.players.length >= 12;
 
-  const commitAddPlayer = async (bound: SavedPlayer | null, nameOverride?: string) => {
+  const closeAddModal = () => {
+    setNewPlayerName('');
+    setNewPlayerBuyIn('');
+    setSelectedSavedId(null);
+    setSavePlayerToggle(true);
+    setShowAddPlayer(false);
+    setPendingBankerDesignation(false);
+  };
+
+  // Tapping a saved player selects (does not commit) them, so a buy-in can ride
+  // along in the same Add. Focus moves to the buy-in field.
+  const handleSelectSaved = (p: SavedPlayer) => {
+    setNewPlayerName(p.name);
+    setSelectedSavedId(p.id);
+    requestAnimationFrame(() => buyInInputRef.current?.focus());
+  };
+
+  // Editing the name un-selects any tapped saved player.
+  const handleNameChange = (text: string) => {
+    setNewPlayerName(text);
+    setSelectedSavedId(null);
+  };
+
+  const commitAddPlayer = async () => {
     if (addingPlayerRef.current) return;
+
+    // Pro gate: free tier caps at 12 players. Enforced on EVERY add because the
+    // modal stays open for multiple adds (not just when opening the modal).
+    if (!isPro && activeGame.players.length >= 12) {
+      setShowAddPlayer(false);
+      setPendingBankerDesignation(false);
+      setPaywallMessage(PLAYERS_PAYWALL_MESSAGE);
+      setShowPaywall(true);
+      return;
+    }
+
+    const name = newPlayerName.trim();
+    if (!name) {
+      Alert.alert('Error', 'Please enter a player name');
+      return;
+    }
+    if (newPlayerBuyIn.trim() && !isValidNumericInput(newPlayerBuyIn)) {
+      Alert.alert('Error', 'Please enter a valid numeric amount (digits and decimal point only) or leave it empty');
+      return;
+    }
+    const buyInAmount = parseFloat(newPlayerBuyIn);
+    if (newPlayerBuyIn.trim() && (isNaN(buyInAmount) || buyInAmount < 0)) {
+      Alert.alert('Error', 'Please enter a valid buy-in amount or leave it empty');
+      return;
+    }
+
+    // Hard-lock: names must be unique within the game (active + completed).
+    if (isNameTakenInGame(activeGame.players, name)) {
+      Alert.alert(
+        'Name already used',
+        `You already have a player named "${name}" in this game. Add a last initial (e.g. "${name} R") so you can tell them apart.`,
+      );
+      return;
+    }
+
+    // Resolve which saved identity (if any) to bind.
+    let bound: SavedPlayer | null = selectedSavedId
+      ? savedPlayers.find(p => p.id === selectedSavedId) ?? null
+      : null;
+    if (!bound) {
+      const exact = matchSavedByExactName(savedPlayers, name);
+      if (exact.length === 1) {
+        bound = exact[0];
+      } else if (exact.length >= 2) {
+        // Legacy duplicate saved names — cannot auto-pick. Steer to tap one.
+        Alert.alert('Which one?', `Tap the "${name}" you mean in the list above.`);
+        return;
+      }
+    }
+
     addingPlayerRef.current = true;
     try {
-      const name = (nameOverride ?? newPlayerName).trim();
       const player = GameService.addPlayer(activeGame, name);
 
-      // Resolve which saved entry (if any) this player is bound to, and its payment.
       let savedId: string | undefined = bound?.id;
-      let payment = bound?.preferredPayment;
+      const payment = bound?.preferredPayment;
 
       if (uid) {
         if (bound) {
-          // Existing person → recency bump (no new entry).
-          updateSavedPlayer(uid, bound.id, {}).catch(() => {});
+          updateSavedPlayer(uid, bound.id, {}).catch(() => {}); // recency bump
         } else if (savePlayerToggle && !savedListFull) {
-          // Brand-new person: create only if the Save toggle is on and there's room.
           const res = await createSavedPlayer(uid, name, undefined, savedCapFor(isPro));
           if (res.ok) savedId = res.id;
         }
@@ -400,7 +464,6 @@ export default function ActiveGameScreen() {
         }
       }
 
-      const buyInAmount = parseFloat(newPlayerBuyIn);
       if (!isNaN(buyInAmount) && buyInAmount > 0) {
         GameService.addTransaction(activeGame, player.id, 'buyin', buyInAmount);
       }
@@ -409,91 +472,21 @@ export default function ActiveGameScreen() {
         activeGame.settlementMode = 'banker';
         activeGame.bankerPlayerId = player.id;
         GameService.clearSettlementCache(activeGame);
+        setPendingBankerDesignation(false);
       }
-      await updateGame(activeGame);
 
+      await updateGame(activeGame);
+      refreshSavedNames(); // reflect the new/bumped saved entry + recency order
+
+      // Reset for the next add; keep the modal open.
       setNewPlayerName('');
       setNewPlayerBuyIn('');
-      setPlayerSuggestions([]);
       setSelectedSavedId(null);
-      setDisambiguation(null);
-      setShowAddPlayer(false);
-      setPendingBankerDesignation(false);
+      setSavePlayerToggle(true);
+      requestAnimationFrame(() => nameInputRef.current?.focus());
     } finally {
       addingPlayerRef.current = false;
     }
-  };
-
-  // Tapped the "+ New person named X" row. Toggle on + room → prompt for a distinct name and
-  // create a saved entry; otherwise add a game-only duplicate (allowed), unbound.
-  const handleAddNewPerson = () => {
-    const name = newPlayerName.trim();
-    if (!name) return;
-    setPlayerSuggestions([]);
-    setSelectedSavedId(null);
-    if (savePlayerToggle && !savedListFull) {
-      setNewPersonName(name);
-      setNewPersonPrompt(name);
-    } else {
-      commitAddPlayer(null); // game-only duplicate (toggle off or list full)
-    }
-  };
-
-  const handleCommitNewPerson = async () => {
-    if (newPersonRef.current) return;
-    newPersonRef.current = true;
-    try {
-      const name = newPersonName.trim();
-      if (!name) return;
-      setNewPersonPrompt(null);
-      await commitAddPlayer(null, name); // distinct name → createSavedPlayer succeeds + binds
-    } finally {
-      newPersonRef.current = false;
-    }
-  };
-
-  const handleAddPlayer = async () => {
-    if (!newPlayerName.trim()) {
-      Alert.alert('Error', 'Please enter a player name');
-      return;
-    }
-    if (newPlayerBuyIn.trim() && !isValidNumericInput(newPlayerBuyIn)) {
-      Alert.alert('Error', 'Please enter a valid numeric amount (digits and decimal point only) or leave it empty');
-      return;
-    }
-    const buyInAmount = parseFloat(newPlayerBuyIn);
-    if (newPlayerBuyIn.trim() && (isNaN(buyInAmount) || buyInAmount < 0)) {
-      Alert.alert('Error', 'Please enter a valid buy-in amount or leave it empty');
-      return;
-    }
-
-    const name = newPlayerName.trim();
-
-    // Picked from suggestions → bind that exact entry.
-    if (selectedSavedId && uid) {
-      const bound = savedPlayers.find(p => p.id === selectedSavedId) ?? null;
-      await commitAddPlayer(bound);
-      return;
-    }
-
-    // Typed freely: resolve matches.
-    const matches = uid ? await getSavedPlayersByName(uid, name) : [];
-    if (matches.length >= 2) {
-      setDisambiguation(matches); // require the user to choose (or add new person)
-      return;
-    }
-    await commitAddPlayer(matches[0] ?? null);
-  };
-
-  const handlePlayerNameChange = (text: string) => {
-    setNewPlayerName(text);
-    setSelectedSavedId(null); // typing invalidates any prior pick
-    if (text.trim().length === 0) {
-      setPlayerSuggestions([]);
-      return;
-    }
-    const lower = text.toLowerCase();
-    setPlayerSuggestions(savedPlayers.filter(p => p.name.toLowerCase().startsWith(lower)).slice(0, 4));
   };
 
   const handleAddTransaction = async () => {
@@ -641,11 +634,11 @@ export default function ActiveGameScreen() {
   };
 
   const handleAddBanker = (name: string) => {
-    // Delegate to the standard Add Player flow (disambiguation + distinct-name prompt)
-    // instead of adding directly, so this player is subject to the same hardened
-    // save/bind invariants as any other add. The picker (a native Modal) closes right
-    // after this via its own onClose, in the same batched update that opens the Add
-    // Player AppModal below — matching the existing paywall close-then-open precedent.
+    // Delegate to the standard Add Player flow instead of adding directly, so this
+    // player is subject to the same hardened save/bind invariants as any other add.
+    // The picker (a native Modal) closes right after this via its own onClose, in the
+    // same batched update that opens the Add Player AppModal below — matching the
+    // existing paywall close-then-open precedent.
     setPendingBankerDesignation(true);
     setNewPlayerName(name.trim());
     setShowAddPlayer(true);
@@ -911,165 +904,115 @@ export default function ActiveGameScreen() {
       {/* Add Player Modal */}
       <AppModal
         visible={showAddPlayer}
-        title="Add Player"
-        onClose={() => { setDisambiguation(null); setNewPersonPrompt(null); setSelectedSavedId(null); setShowAddPlayer(false); setPendingBankerDesignation(false); }}
+        title="Add Players"
+        onClose={closeAddModal}
         contentStyle={appModalStyles.centeredContent}
-        overlay={
-          <>
-            {disambiguation && (
-              <AppModalCard
-                title={`Which ${newPlayerName.trim()}?`}
-                onClose={() => setDisambiguation(null)}
-              >
-                <Text style={styles.disambigSub}>You have more than one saved player with this name.</Text>
-                {disambiguation.map(p => {
-                  const b = savedBadge(p);
-                  return (
-                    <TouchableOpacity key={p.id} style={styles.disambigRow} onPress={() => commitAddPlayer(p)}>
-                      <Text style={styles.disambigName}>{p.name}</Text>
-                      <Text style={styles.disambigBadge} numberOfLines={1}>{b ?? 'No payment set'}</Text>
-                    </TouchableOpacity>
-                  );
-                })}
-                <TouchableOpacity style={styles.disambigRow} onPress={() => { setDisambiguation(null); handleAddNewPerson(); }}>
-                  <Text style={styles.disambigNewText}>+ Add as a new person</Text>
-                </TouchableOpacity>
-                <View style={styles.modalButtons}>
-                  <ModalButton variant="cancel" title="Cancel" onPress={() => setDisambiguation(null)} />
-                </View>
-              </AppModalCard>
-            )}
-            {newPersonPrompt !== null && (
-              <AppModalCard title="New person" onClose={() => setNewPersonPrompt(null)}>
-                <Text style={styles.disambigSub}>
-                  You already have a saved player named "{newPersonPrompt}". Add a last initial so you can tell them apart.
-                </Text>
-                <TextInput
-                  style={styles.input}
-                  value={newPersonName}
-                  onChangeText={setNewPersonName}
-                  placeholder="Name"
-                  placeholderTextColor="#666"
-                  autoFocus
-                  autoCapitalize="words"
-                  returnKeyType="done"
-                  onSubmitEditing={() => { if (newPersonIsDistinct) handleCommitNewPerson(); }}
-                />
-                <View style={styles.modalButtons}>
-                  <ModalButton variant="cancel" title="Cancel" onPress={() => setNewPersonPrompt(null)} />
-                  <ModalButton
-                    variant="confirm"
-                    title="Add"
-                    disabled={!newPersonIsDistinct}
-                    onPress={handleCommitNewPerson}
-                  />
-                </View>
-              </AppModalCard>
-            )}
-          </>
-        }
       >
-            {pendingBankerDesignation && (
-              <Text style={styles.bankerPendingHint}>This person will be set as banker</Text>
-            )}
-            <TextInput
-              style={[styles.input, playerSuggestions.length > 0 && styles.inputWithSuggestions]}
-              value={newPlayerName}
-              onChangeText={handlePlayerNameChange}
-              placeholder="Name"
-              placeholderTextColor="#666"
-              autoFocus
-              returnKeyType="next"
-            />
-            {playerSuggestions.length > 0 && (
-              <View style={styles.suggestionsContainer}>
-                {playerSuggestions.map((p, index) => {
-                  const b = savedBadge(p);
+        {pendingBankerDesignation && (
+          <Text style={styles.bankerPendingHint}>This person will be set as banker</Text>
+        )}
+
+        <TextInput
+          ref={nameInputRef}
+          style={styles.input}
+          value={newPlayerName}
+          onChangeText={handleNameChange}
+          placeholder="Search saved or type a name"
+          placeholderTextColor="#666"
+          autoFocus
+          autoCapitalize="words"
+          returnKeyType="next"
+        />
+
+        {/* Pick-first saved list — hidden once a saved player is selected. */}
+        {!selectedSavedId && savedPlayers.length > 0 && (
+          <>
+            <Text style={styles.pickerLabel}>SAVED · {savedPlayers.length}</Text>
+            {filteredSaved.length === 0 ? (
+              <Text style={styles.pickerEmpty}>No saved players match “{trimmedName}”.</Text>
+            ) : (
+              <View style={styles.pickerList}>
+                {filteredSaved.map((p, index) => {
+                  const inGame = isNameTakenInGame(activeGame.players, p.name);
+                  const badge = savedBadge(p);
                   return (
                     <TouchableOpacity
                       key={p.id}
+                      disabled={inGame || atPlayerCap}
+                      onPress={() => handleSelectSaved(p)}
                       style={[
-                        styles.suggestionItem,
-                        index === playerSuggestions.length - 1 && styles.suggestionItemLast,
+                        styles.pickerRow,
+                        index === filteredSaved.length - 1 && styles.pickerRowLast,
+                        (inGame || atPlayerCap) && styles.pickerRowDisabled,
                       ]}
-                      onPress={() => {
-                        setNewPlayerName(p.name);
-                        setSelectedSavedId(p.id);
-                        setPlayerSuggestions([]);
-                      }}
                     >
-                      <Text style={styles.suggestionText}>{p.name}</Text>
-                      {b ? <Text style={styles.suggestionBadge} numberOfLines={1}>{b}</Text> : null}
+                      <Text style={styles.pickerRowName}>{p.name}</Text>
+                      {inGame ? (
+                        <Text style={styles.pickerAddedTag}>Added ✓</Text>
+                      ) : badge ? (
+                        <Text style={styles.pickerRowBadge} numberOfLines={1}>{badge}</Text>
+                      ) : null}
                     </TouchableOpacity>
                   );
                 })}
               </View>
             )}
-            {nameAlreadySaved && (
-              <TouchableOpacity style={styles.newPersonRow} onPress={handleAddNewPerson}>
-                <Text style={styles.newPersonText}>+ New person named "{newPlayerName.trim()}"</Text>
-              </TouchableOpacity>
-            )}
-            <TextInput
-              style={styles.input}
-              value={newPlayerBuyIn}
-              onChangeText={setNewPlayerBuyIn}
-              placeholder="Buy-In"
-              placeholderTextColor="#666"
-              keyboardType="decimal-pad"
-              returnKeyType="done"
-              onSubmitEditing={handleAddPlayer}
-            />
-            {typedNameLower.length > 0 &&
-              (savedListFull ? (
-                <TouchableOpacity
-                  style={styles.saveToggleRow}
-                  disabled={isPro}
-                  onPress={() => {
-                    // iOS shows one native modal at a time: close this one, then open the paywall
-                    // (same direct close-then-open pattern as the distortion → completion modal swap).
-                    setShowAddPlayer(false);
-                    setPendingBankerDesignation(false);
-                    setPaywallMessage(SAVED_CAP_PAYWALL_MESSAGE);
-                    setShowPaywall(true);
-                  }}
-                >
-                  <Ionicons name="lock-closed" size={14} color="#B072BB" />
-                  <Text style={styles.saveToggleFullText}>
-                    Saved players full · {savedPlayers.length}/{savedCapFor(isPro)}
-                  </Text>
-                </TouchableOpacity>
-              ) : (
-                <TouchableOpacity style={styles.saveToggleRow} onPress={() => setSavePlayerToggle(v => !v)}>
-                  <Ionicons
-                    name={savePlayerToggle ? 'checkbox' : 'square-outline'}
-                    size={18}
-                    color={savePlayerToggle ? '#B072BB' : '#666'}
-                  />
-                  <Text style={styles.saveToggleText}>Save player</Text>
-                </TouchableOpacity>
-              ))}
-            <View style={styles.modalButtons}>
-              <ModalButton
-                variant="cancel"
-                title="Cancel"
-                onPress={() => {
-                  setNewPlayerName('');
-                  setNewPlayerBuyIn('');
-                  setPlayerSuggestions([]);
-                  setSelectedSavedId(null);
-                  setDisambiguation(null);
-                  setNewPersonPrompt(null);
-                  setShowAddPlayer(false);
-                  setPendingBankerDesignation(false);
-                }}
+          </>
+        )}
+
+        {selectedSavedId && (
+          <Text style={styles.pickHint}>Adding {trimmedName} — enter their buy-in (optional).</Text>
+        )}
+
+        <TextInput
+          ref={buyInInputRef}
+          style={styles.input}
+          value={newPlayerBuyIn}
+          onChangeText={setNewPlayerBuyIn}
+          placeholder="Buy-In"
+          placeholderTextColor="#666"
+          keyboardType="decimal-pad"
+          returnKeyType="done"
+          onSubmitEditing={commitAddPlayer}
+        />
+
+        {/* Save-player opt-in — only when adding a genuinely new name. */}
+        {isTypedNew &&
+          (savedListFull ? (
+            <TouchableOpacity
+              style={styles.saveToggleRow}
+              disabled={isPro}
+              onPress={() => {
+                setShowAddPlayer(false);
+                setPendingBankerDesignation(false);
+                setPaywallMessage(SAVED_CAP_PAYWALL_MESSAGE);
+                setShowPaywall(true);
+              }}
+            >
+              <Ionicons name="lock-closed" size={14} color="#B072BB" />
+              <Text style={styles.saveToggleFullText}>
+                Saved players full · {savedPlayers.length}/{savedCapFor(isPro)}
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity style={styles.saveToggleRow} onPress={() => setSavePlayerToggle(v => !v)}>
+              <Ionicons
+                name={savePlayerToggle ? 'checkbox' : 'square-outline'}
+                size={18}
+                color={savePlayerToggle ? '#B072BB' : '#666'}
               />
-              <ModalButton
-                variant="confirm"
-                title="Add"
-                onPress={handleAddPlayer}
-              />
-            </View>
+              <Text style={styles.saveToggleText}>Save player</Text>
+            </TouchableOpacity>
+          ))}
+
+        {atPlayerCap && (
+          <Text style={styles.pickHint}>Free limit reached · 12 players. Upgrade to Pro for unlimited.</Text>
+        )}
+
+        <View style={styles.modalButtons}>
+          <ModalButton variant="cancel" title="Done" onPress={closeAddModal} />
+          <ModalButton variant="confirm" title="Add" onPress={commitAddPlayer} />
+        </View>
       </AppModal>
 
       {/* Add Transaction Modal */}
@@ -1727,20 +1670,55 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.75)',
     fontSize: 15,
   },
-  suggestionBadge: { fontSize: 11, color: 'rgba(176,114,187,0.9)', fontFamily: 'SpaceMono', marginLeft: 12, flexShrink: 1, textAlign: 'right' },
-  newPersonRow: {
-    paddingVertical: 12,
-    paddingHorizontal: 14,
-    marginBottom: 12,
+  pickerLabel: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: 'rgba(176,114,187,0.7)',
+    letterSpacing: 1.5,
+    alignSelf: 'flex-start',
+    marginBottom: 8,
+  },
+  pickerList: {
+    width: '100%',
+    backgroundColor: '#0A0A0A',
     borderRadius: 8,
     borderWidth: 1,
-    borderColor: '#49264F',
-    backgroundColor: '#161616',
+    borderColor: '#2A2A2A',
+    marginBottom: 16,
+    overflow: 'hidden',
   },
-  newPersonText: {
-    color: '#B072BB',
-    fontSize: 15,
-    fontWeight: '600',
+  pickerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.05)',
+  },
+  pickerRowLast: { borderBottomWidth: 0 },
+  pickerRowDisabled: { opacity: 0.4 },
+  pickerRowName: { color: '#FFFFFF', fontSize: 15, fontWeight: '600' },
+  pickerRowBadge: {
+    fontSize: 11,
+    color: 'rgba(176,114,187,0.9)',
+    fontFamily: 'SpaceMono',
+    flexShrink: 1,
+    textAlign: 'right',
+  },
+  pickerAddedTag: { fontSize: 12, color: '#00D66F', fontFamily: 'SpaceMono' },
+  pickerEmpty: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.4)',
+    alignSelf: 'flex-start',
+    marginBottom: 16,
+  },
+  pickHint: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.55)',
+    alignSelf: 'flex-start',
+    marginBottom: 12,
   },
   bankerPendingHint: {
     fontSize: 13,
@@ -1749,11 +1727,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 10,
   },
-  disambigSub: { fontSize: 13, color: 'rgba(255,255,255,0.5)', textAlign: 'center', marginBottom: 12 },
-  disambigRow: { paddingVertical: 12, paddingHorizontal: 14, borderRadius: 10, borderWidth: 1, borderColor: '#242424', backgroundColor: '#161616', marginBottom: 8 },
-  disambigName: { fontSize: 16, color: '#FFFFFF', fontWeight: '600' },
-  disambigBadge: { fontSize: 12, color: 'rgba(176,114,187,0.9)', fontFamily: 'SpaceMono', marginTop: 3 },
-  disambigNewText: { fontSize: 15, color: '#B072BB', fontWeight: '600', textAlign: 'center' },
   cashUnitRow: {
     flexDirection: 'row',
     alignItems: 'center',
