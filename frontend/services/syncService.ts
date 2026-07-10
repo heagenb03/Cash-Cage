@@ -23,6 +23,12 @@ import {
 //     block the local operation or surface errors to the user.
 // ---------------------------------------------------------------------------
 
+// Games with a local write/delete not yet confirmed in Firestore. The background
+// merge must keep the local version for these (the in-flight remote is stale for
+// them), otherwise a strictly-newer remote silently reverts the local mutation.
+const pendingSaves = new Set<string>();
+const pendingDeletes = new Set<string>();
+
 export class SyncService {
   /**
    * Load games from AsyncStorage immediately (offline-first), then kick off a
@@ -50,9 +56,10 @@ export class SyncService {
           // resurrect it. Reading fresh local here folds that edit into the merge.
           const currentLocal = (await StorageService.loadGames()).map(deserializeSyncedAt);
           const merged = SyncService.mergeGames(currentLocal, remote);
-          await StorageService.saveGames(merged);
+          const reconciled = applyPendingMutations(merged, currentLocal, pendingSaves, pendingDeletes);
+          await StorageService.saveGames(reconciled);
           if (signal?.aborted) return;
-          onRemoteUpdate?.(merged);
+          onRemoteUpdate?.(reconciled);
         } catch (err) {
           if (signal?.aborted) return;
           // Offline errors are expected — the app is offline-first and the user
@@ -74,6 +81,11 @@ export class SyncService {
    * Firestore if the user is signed in.
    */
   static async saveGame(uid: string | null, game: Game): Promise<void> {
+    if (uid) {
+      pendingSaves.add(game.id);
+      pendingDeletes.delete(game.id);
+    }
+
     // Read current local state, patch the target game, write back
     const current = await StorageService.loadGames();
     const withDates = current.map(deserializeSyncedAt);
@@ -85,13 +97,17 @@ export class SyncService {
 
     // Fire-and-forget Firestore write
     if (uid) {
-      saveGameToFirestore(uid, game).catch(err => {
-        if (isFirestoreOfflineError(err)) {
-          console.debug('SyncService: skipping Firestore save — device offline');
-          return;
-        }
-        console.warn('SyncService: Firestore save failed', err);
-      });
+      saveGameToFirestore(uid, game)
+        .then(() => {
+          pendingSaves.delete(game.id);
+        })
+        .catch(err => {
+          if (isFirestoreOfflineError(err)) {
+            console.debug('SyncService: skipping Firestore save — device offline');
+            return;
+          }
+          console.warn('SyncService: Firestore save failed', err);
+        });
     }
   }
 
@@ -99,19 +115,37 @@ export class SyncService {
    * Remove a game locally and asynchronously delete it from Firestore.
    */
   static async deleteGame(uid: string | null, gameId: string): Promise<void> {
+    if (uid) {
+      pendingDeletes.add(gameId);
+      pendingSaves.delete(gameId);
+    }
+
     const current = await StorageService.loadGames();
     const updated = current.filter(g => g.id !== gameId);
     await StorageService.saveGames(updated);
 
     if (uid) {
-      deleteGameFromFirestore(uid, gameId).catch(err => {
-        if (isFirestoreOfflineError(err)) {
-          console.debug('SyncService: skipping Firestore delete — device offline');
-          return;
-        }
-        console.warn('SyncService: Firestore delete failed', err);
-      });
+      deleteGameFromFirestore(uid, gameId)
+        .then(() => {
+          pendingDeletes.delete(gameId);
+        })
+        .catch(err => {
+          if (isFirestoreOfflineError(err)) {
+            console.debug('SyncService: skipping Firestore delete — device offline');
+            return;
+          }
+          console.warn('SyncService: Firestore delete failed', err);
+        });
     }
+  }
+
+  /**
+   * Drop all pending-mutation tracking. Call on user switch / sign-out so stale
+   * gameIds can't protect or exclude a same-id game belonging to the next user.
+   */
+  static clearPendingMutations(): void {
+    pendingSaves.clear();
+    pendingDeletes.clear();
   }
 
   /**

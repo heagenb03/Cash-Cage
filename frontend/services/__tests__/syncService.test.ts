@@ -12,7 +12,11 @@ jest.mock('@/services/firebaseService', () => ({
 import { Game } from '@/types/game';
 import { SyncService, applyPendingMutations } from '@/services/syncService';
 import { StorageService } from '@/services/storageService';
-import { fetchGamesFromFirestore } from '@/services/firebaseService';
+import {
+  fetchGamesFromFirestore,
+  saveGameToFirestore,
+  deleteGameFromFirestore,
+} from '@/services/firebaseService';
 
 const UID = 'user1';
 
@@ -39,6 +43,10 @@ function makeGame(players: { id: string; name: string }[]): Game {
 beforeEach(async () => {
   await AsyncStorage.clear();
   jest.clearAllMocks();
+  SyncService.clearPendingMutations();
+  (fetchGamesFromFirestore as jest.Mock).mockResolvedValue([]);
+  (saveGameToFirestore as jest.Mock).mockResolvedValue(undefined);
+  (deleteGameFromFirestore as jest.Mock).mockResolvedValue(undefined);
 });
 
 describe('background-sync race: a local edit during the sync window survives (the bug)', () => {
@@ -111,5 +119,96 @@ describe('applyPendingMutations (pure reconciliation)', () => {
     const other = g('game2', [{ id: 'C', name: 'Cara' }]);
     const out = applyPendingMutations([other], [], new Set(), new Set());
     expect(out).toEqual([other]);
+  });
+});
+
+describe('pending-mutations registry protects local edits (Limitation 1)', () => {
+  it('keeps a local edit when a strictly-newer remote would otherwise revert it', async () => {
+    const T1 = new Date('2026-07-01T00:00:00Z');
+    const T2 = new Date('2026-07-02T00:00:00Z');
+    const original = { ...makeGame([{ id: 'A', name: 'Alice' }, { id: 'B', name: 'Bob' }]), syncedAt: T1 } as Game;
+    await StorageService.saveGames([original]);
+
+    // The local edit's Firestore write is still in flight when the merge runs.
+    (saveGameToFirestore as jest.Mock).mockReturnValue(new Promise<void>(() => {}));
+    const edited = { ...original, players: [{ id: 'A', name: 'Alice' }] } as Game;   // B removed
+    await SyncService.saveGame(UID, edited);
+
+    let resolveFetch!: (games: Game[]) => void;
+    (fetchGamesFromFirestore as jest.Mock).mockReturnValue(new Promise<Game[]>(res => { resolveFetch = res; }));
+    const delivered: Game[][] = [];
+    await SyncService.loadGames(UID, merged => { delivered.push(merged); });
+
+    // Another device's newer state still has B (and a C) — must NOT clobber the local delete of B.
+    resolveFetch([{ ...original, players: [{ id: 'A', name: 'Alice' }, { id: 'B', name: 'Bob' }, { id: 'C', name: 'Cara' }], syncedAt: T2 } as Game]);
+    await flush();
+
+    const stored = await StorageService.loadGames();
+    expect(stored[0].players.map(p => p.id)).toEqual(['A']);
+    expect(delivered[delivered.length - 1][0].players.map(p => p.id)).toEqual(['A']);
+  });
+
+  it('releases protection once the Firestore write confirms (no permanent lock)', async () => {
+    const T1 = new Date('2026-07-01T00:00:00Z');
+    const T2 = new Date('2026-07-02T00:00:00Z');
+    const original = { ...makeGame([{ id: 'A', name: 'Alice' }, { id: 'B', name: 'Bob' }]), syncedAt: T1 } as Game;
+    await StorageService.saveGames([original]);
+
+    (saveGameToFirestore as jest.Mock).mockResolvedValue(undefined);   // confirms immediately
+    await SyncService.saveGame(UID, { ...original, players: [{ id: 'A', name: 'Alice' }] } as Game);
+    await flush();   // let the .then clear pendingSaves
+
+    let resolveFetch!: (games: Game[]) => void;
+    (fetchGamesFromFirestore as jest.Mock).mockReturnValue(new Promise<Game[]>(res => { resolveFetch = res; }));
+    await SyncService.loadGames(UID, () => {});
+    resolveFetch([{ ...original, players: [{ id: 'A', name: 'Alice' }, { id: 'B', name: 'Bob' }, { id: 'C', name: 'Cara' }], syncedAt: T2 } as Game]);
+    await flush();
+
+    const stored = await StorageService.loadGames();
+    expect(stored[0].players.map(p => p.id)).toEqual(['A', 'B', 'C']);   // remote won — protection released
+  });
+
+  it('clearPendingMutations() drops protection immediately', async () => {
+    const T1 = new Date('2026-07-01T00:00:00Z');
+    const T2 = new Date('2026-07-02T00:00:00Z');
+    const original = { ...makeGame([{ id: 'A', name: 'Alice' }, { id: 'B', name: 'Bob' }]), syncedAt: T1 } as Game;
+    await StorageService.saveGames([original]);
+
+    (saveGameToFirestore as jest.Mock).mockReturnValue(new Promise<void>(() => {}));   // stays pending
+    await SyncService.saveGame(UID, { ...original, players: [{ id: 'A', name: 'Alice' }] } as Game);
+    SyncService.clearPendingMutations();
+
+    let resolveFetch!: (games: Game[]) => void;
+    (fetchGamesFromFirestore as jest.Mock).mockReturnValue(new Promise<Game[]>(res => { resolveFetch = res; }));
+    await SyncService.loadGames(UID, () => {});
+    resolveFetch([{ ...original, players: [{ id: 'A', name: 'Alice' }, { id: 'B', name: 'Bob' }, { id: 'C', name: 'Cara' }], syncedAt: T2 } as Game]);
+    await flush();
+
+    const stored = await StorageService.loadGames();
+    expect(stored[0].players.map(p => p.id)).toEqual(['A', 'B', 'C']);   // no longer protected
+  });
+});
+
+describe('pending-mutations registry protects local deletes', () => {
+  it('does not resurrect a game deleted locally while its Firestore delete is in flight', async () => {
+    const T1 = new Date('2026-07-01T00:00:00Z');
+    const T2 = new Date('2026-07-02T00:00:00Z');
+    const game = { ...makeGame([{ id: 'A', name: 'Alice' }]), syncedAt: T1 } as Game;
+    await StorageService.saveGames([game]);
+
+    (deleteGameFromFirestore as jest.Mock).mockReturnValue(new Promise<void>(() => {}));
+    await SyncService.deleteGame(UID, game.id);
+
+    let resolveFetch!: (games: Game[]) => void;
+    (fetchGamesFromFirestore as jest.Mock).mockReturnValue(new Promise<Game[]>(res => { resolveFetch = res; }));
+    const delivered: Game[][] = [];
+    await SyncService.loadGames(UID, merged => { delivered.push(merged); });
+
+    resolveFetch([{ ...game, syncedAt: T2 } as Game]);   // remote still has it, newer
+    await flush();
+
+    const stored = await StorageService.loadGames();
+    expect(stored).toEqual([]);
+    expect(delivered[delivered.length - 1]).toEqual([]);
   });
 });
