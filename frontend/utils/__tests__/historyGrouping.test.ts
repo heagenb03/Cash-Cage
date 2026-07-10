@@ -6,6 +6,11 @@ function mkGame(id: string, dateISO: string): Game {
   return { id, date: new Date(dateISO) } as unknown as Game;
 }
 
+// All date fixtures are pinned to noon UTC so day-of-month resolves the same
+// under any local timezone the impl's local getters run in. NOTE: this holds
+// only because no fixture sits on a month boundary — a day-1 or last-day
+// fixture could still roll a day at extreme (+13/+14) offsets. Keep new
+// fixtures off month boundaries, or pin them mid-day in the target month.
 const NOW = new Date('2026-07-10T12:00:00Z');
 
 describe('monthLabel', () => {
