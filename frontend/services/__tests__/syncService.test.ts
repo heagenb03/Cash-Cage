@@ -10,7 +10,7 @@ jest.mock('@/services/firebaseService', () => ({
 }));
 
 import { Game } from '@/types/game';
-import { SyncService, applyPendingMutations } from '@/services/syncService';
+import { SyncService, applyPendingMutations, withStorageLock } from '@/services/syncService';
 import { StorageService } from '@/services/storageService';
 import {
   fetchGamesFromFirestore,
@@ -210,5 +210,23 @@ describe('pending-mutations registry protects local deletes', () => {
     const stored = await StorageService.loadGames();
     expect(stored).toEqual([]);
     expect(delivered[delivered.length - 1]).toEqual([]);
+  });
+});
+
+describe('withStorageLock (write serialization, Limitation 2)', () => {
+  const delay = (ms: number) => new Promise<void>(res => { setTimeout(res, ms); });
+
+  it('runs concurrently-submitted ops one at a time in submission order', async () => {
+    const order: string[] = [];
+    const p1 = withStorageLock(async () => { order.push('1-start'); await delay(20); order.push('1-end'); });
+    const p2 = withStorageLock(async () => { order.push('2-start'); await delay(0); order.push('2-end'); });
+    await Promise.all([p1, p2]);
+    expect(order).toEqual(['1-start', '1-end', '2-start', '2-end']);
+  });
+
+  it('returns the op result and runs the next op even after a rejection', async () => {
+    await expect(withStorageLock(async () => { throw new Error('boom'); })).rejects.toThrow('boom');
+    const result = await withStorageLock(async () => 42);
+    expect(result).toBe(42);
   });
 });

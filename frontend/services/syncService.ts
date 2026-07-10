@@ -29,6 +29,18 @@ import {
 const pendingSaves = new Set<string>();
 const pendingDeletes = new Set<string>();
 
+// Serialize AsyncStorage read-modify-write sequences. AsyncStorage has no
+// transactions, so a concurrent saveGame and background merge can otherwise
+// interleave across awaits and clobber each other. Ops run one at a time in
+// submission order; a rejected op is isolated so it can't deadlock the chain.
+let storageLock: Promise<unknown> = Promise.resolve();
+
+export function withStorageLock<T>(op: () => Promise<T>): Promise<T> {
+  const run = storageLock.then(op, op);
+  storageLock = run.then(() => {}, () => {});
+  return run;
+}
+
 export class SyncService {
   /**
    * Load games from AsyncStorage immediately (offline-first), then kick off a
@@ -54,10 +66,13 @@ export class SyncService {
           // player right after an app reload) has already been written to
           // AsyncStorage; merging the stale load-time snapshot would silently
           // resurrect it. Reading fresh local here folds that edit into the merge.
-          const currentLocal = (await StorageService.loadGames()).map(deserializeSyncedAt);
-          const merged = SyncService.mergeGames(currentLocal, remote);
-          const reconciled = applyPendingMutations(merged, currentLocal, pendingSaves, pendingDeletes);
-          await StorageService.saveGames(reconciled);
+          const reconciled = await withStorageLock(async () => {
+            const currentLocal = (await StorageService.loadGames()).map(deserializeSyncedAt);
+            const merged = SyncService.mergeGames(currentLocal, remote);
+            const next = applyPendingMutations(merged, currentLocal, pendingSaves, pendingDeletes);
+            await StorageService.saveGames(next);
+            return next;
+          });
           if (signal?.aborted) return;
           onRemoteUpdate?.(reconciled);
         } catch (err) {
@@ -87,13 +102,15 @@ export class SyncService {
     }
 
     // Read current local state, patch the target game, write back
-    const current = await StorageService.loadGames();
-    const withDates = current.map(deserializeSyncedAt);
-    const exists = withDates.some(g => g.id === game.id);
-    const updated = exists
-      ? withDates.map(g => (g.id === game.id ? game : g))
-      : [...withDates, game];
-    await StorageService.saveGames(updated);
+    await withStorageLock(async () => {
+      const current = await StorageService.loadGames();
+      const withDates = current.map(deserializeSyncedAt);
+      const exists = withDates.some(g => g.id === game.id);
+      const updated = exists
+        ? withDates.map(g => (g.id === game.id ? game : g))
+        : [...withDates, game];
+      await StorageService.saveGames(updated);
+    });
 
     // Fire-and-forget Firestore write
     if (uid) {
@@ -120,9 +137,11 @@ export class SyncService {
       pendingSaves.delete(gameId);
     }
 
-    const current = await StorageService.loadGames();
-    const updated = current.filter(g => g.id !== gameId);
-    await StorageService.saveGames(updated);
+    await withStorageLock(async () => {
+      const current = await StorageService.loadGames();
+      const updated = current.filter(g => g.id !== gameId);
+      await StorageService.saveGames(updated);
+    });
 
     if (uid) {
       deleteGameFromFirestore(uid, gameId)
