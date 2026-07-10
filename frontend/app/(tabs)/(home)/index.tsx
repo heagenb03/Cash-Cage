@@ -13,6 +13,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Game } from '@/types/game';
 import { useReduceMotion } from '@/hooks/useReduceMotion';
 import { getTrialLabel } from '@/utils/trialUtils';
+import { groupGamesByMonth } from '@/utils/historyGrouping';
+import HistoryMonthHeader from '@/components/HistoryMonthHeader';
 
 function HudSectionHeader({ label }: { label: string }) {
   return (
@@ -40,6 +42,7 @@ const MAX_ANIMATED_CARDS = 5;
 
 type ListItem =
   | { type: 'header'; label: string; key: string }
+  | { type: 'monthHeader'; label: string; key: string }
   | { type: 'empty'; label: string; key: string }
   | { type: 'game'; game: Game; isCompleted: boolean; entryIndex: number; key: string }
   | { type: 'upgrade'; hiddenCount: number; key: string };
@@ -58,36 +61,37 @@ export default function HomeScreen() {
   const showTrialBanner = isTrialing && trialDaysRemaining <= 2 && !trialBannerDismissed;
 
   const listData = useMemo<ListItem[]>(() => {
-    const byNewest = (a: Game, b: Game) => b.createdAt.getTime() - a.createdAt.getTime();
-    const activeGames = games.filter(g => g.status === 'active').sort(byNewest);
-    const completedGames = games.filter(g => g.status === 'completed').sort(byNewest);
+    const byCreatedDesc = (a: Game, b: Game) => b.createdAt.getTime() - a.createdAt.getTime();
+    const byDateDesc = (a: Game, b: Game) => new Date(b.date).getTime() - new Date(a.date).getTime();
+
+    const activeGames = games.filter(g => g.status === 'active').sort(byCreatedDesc);
+    const completedGames = games.filter(g => g.status === 'completed').sort(byDateDesc);
     const visibleCompleted = isPro ? completedGames : completedGames.slice(0, FREE_HISTORY_LIMIT);
     const hiddenCount = isPro ? 0 : Math.max(0, completedGames.length - FREE_HISTORY_LIMIT);
 
     const items: ListItem[] = [];
+    let entryIndex = 0;
 
     // Active section
     items.push({ type: 'header', label: 'Active', key: 'header-active' });
     if (activeGames.length === 0) {
       items.push({ type: 'empty', label: 'Active', key: 'empty-active' });
     } else {
-      activeGames.forEach((game, i) => {
-        items.push({ type: 'game', game, isCompleted: false, entryIndex: i, key: game.id });
+      activeGames.forEach((game) => {
+        items.push({ type: 'game', game, isCompleted: false, entryIndex: entryIndex++, key: game.id });
       });
     }
 
-    // History section
+    // History section — grouped by month of game.date, newest first
     items.push({ type: 'header', label: 'History', key: 'header-history' });
     if (visibleCompleted.length === 0) {
       items.push({ type: 'empty', label: 'History', key: 'empty-history' });
     } else {
-      visibleCompleted.forEach((game, i) => {
-        items.push({
-          type: 'game',
-          game,
-          isCompleted: true,
-          entryIndex: activeGames.length + i,
-          key: game.id,
+      const groups = groupGamesByMonth(visibleCompleted, new Date());
+      groups.forEach((group) => {
+        items.push({ type: 'monthHeader', label: group.label, key: group.key });
+        group.games.forEach((game) => {
+          items.push({ type: 'game', game, isCompleted: true, entryIndex: entryIndex++, key: game.id });
         });
       });
     }
@@ -140,6 +144,8 @@ export default function HomeScreen() {
     switch (item.type) {
       case 'header':
         return <HudSectionHeader label={item.label} />;
+      case 'monthHeader':
+        return <HistoryMonthHeader label={item.label} />;
       case 'empty':
         return <EmptyState label={item.label} />;
       case 'game':
