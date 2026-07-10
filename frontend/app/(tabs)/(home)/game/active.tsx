@@ -155,6 +155,7 @@ function SolvingOverlay() {
 
 const PLAYERS_PAYWALL_MESSAGE = 'Upgrade to Pro for unlimited players per game.';
 const SAVED_CAP_PAYWALL_MESSAGE = `You've saved ${FREE_SAVED_CAP} players — the free limit. Upgrade to Pro to save up to ${PRO_SAVED_CAP}.`;
+const PICKER_LIMIT = 25;
 
 export default function ActiveGameScreen() {
   const { activeGame, updateGame, setActiveGame, createGame } = useGame();
@@ -356,6 +357,7 @@ export default function ActiveGameScreen() {
   const savedListFull = !canAddMoreSavedPlayers(savedPlayers.length, isPro);
   const trimmedName = newPlayerName.trim();
   const filteredSaved = filterSavedByQuery(savedPlayers, newPlayerName);
+  const visibleSaved = filteredSaved.slice(0, PICKER_LIMIT);
   const isTypedNew =
     trimmedName.length > 0 &&
     !selectedSavedId &&
@@ -932,7 +934,7 @@ export default function ActiveGameScreen() {
               <Text style={styles.pickerEmpty}>No saved players match “{trimmedName}”.</Text>
             ) : (
               <View style={styles.pickerList}>
-                {filteredSaved.map((p, index) => {
+                {visibleSaved.map((p, index) => {
                   const inGame = isNameTakenInGame(activeGame.players, p.name);
                   const badge = savedBadge(p);
                   return (
@@ -942,7 +944,7 @@ export default function ActiveGameScreen() {
                       onPress={() => handleSelectSaved(p)}
                       style={[
                         styles.pickerRow,
-                        index === filteredSaved.length - 1 && styles.pickerRowLast,
+                        index === visibleSaved.length - 1 && styles.pickerRowLast,
                         (inGame || atPlayerCap) && styles.pickerRowDisabled,
                       ]}
                     >
@@ -956,6 +958,11 @@ export default function ActiveGameScreen() {
                   );
                 })}
               </View>
+            )}
+            {filteredSaved.length > PICKER_LIMIT && (
+              <Text style={styles.pickHint}>
+                Showing {PICKER_LIMIT} of {filteredSaved.length} — type to narrow
+              </Text>
             )}
           </>
         )}
